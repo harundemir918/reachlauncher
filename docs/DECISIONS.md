@@ -10,9 +10,13 @@ decision, consequences. Deviations from the spec are marked **[deviation]**.
 AGP 9.4.1, Gradle 9.6.0, compileSdk/targetSdk 37, minSdk 28, package
 `com.baklavapp.reachlauncher`.
 **Decision.** Keep package, Gradle wrapper and SDK levels; bump libraries to the latest
-stable releases found on Google Maven / Maven Central on 2026-11-14 (AGP 9.5.1, Kotlin
-2.4.21, KSP 2.3.14, Hilt 2.60.1, Compose BOM 2026.09.00, Room 2.8.5, DataStore 1.3.0…).
+stable releases found on Google Maven / Maven Central on 2026-11-14 (Kotlin 2.4.21,
+KSP 2.3.14, Hilt 2.60.1, Compose BOM 2026.09.00, Room 2.8.5, DataStore 1.3.0…).
 Google Play currently requires new apps to target API 36; 37 satisfies "or newer".
+**AGP stays on the 9.4 line (9.4.1).** AGP 9.5.1 is the newest on Google Maven, but
+Android Studio refuses to sync a project whose AGP is newer than the IDE supports
+("incompatible version (AGP 9.5.1)… Latest supported version is AGP 9.4.0"). AGP is
+capped by the owner's Android Studio, not by Maven: bump it only after updating Studio.
 **Consequences.** Version bumps are a deliberate task: Lint's `GradleDependency` /
 `NewerVersionAvailable` checks are disabled so a new library release doesn't break the build.
 
