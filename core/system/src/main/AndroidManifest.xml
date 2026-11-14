@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    :core:system's manifest. Library manifests are merged into the app's at build time,
+    so permissions and <queries> live next to the code that needs them.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Normal (install-time) permission. Apps targeting API 28+ need it to open the
+        system uninstall confirmation (ACTION_DELETE / ACTION_UNINSTALL_PACKAGE) from the
+        All Apps long-press menu. It doesn't let Reach uninstall anything by itself:
+        the system always asks the user.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
+    <!--
+        Package visibility (Android 11+): the hand-off targets Reach may start or, later,
+        check for ("is there a web-search app?"). Starting an activity works without
+        these, but resolving one (to hide a row that would do nothing) needs them.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="vnd.android.cursor.item/contact" />
+        </intent>
+    </queries>
+
+</manifest>

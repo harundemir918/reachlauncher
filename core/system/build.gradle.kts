@@ -43,10 +43,5 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
-}
-
-// Gradle 9 fails a test task that finds no tests. This module gets its first tests in a
-// later milestone; remove this block then.
-tasks.withType<Test>().configureEach {
-    failOnNoDiscoveredTests = false
+    testImplementation(libs.androidx.test.ext.junit)
 }
