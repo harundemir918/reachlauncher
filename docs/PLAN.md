@@ -103,9 +103,21 @@ Each milestone ends with: `./gradlew build test lint` green at the root, docs up
   (§4); the catalog excludes Reach's own LAUNCHER entry; add `<queries>` for
   `WEB_SEARCH`, `DIAL` and `SENDTO` intents before `AppLauncher.perform` resolves them;
   the `AppLauncher` implementation tracks the resumed Activity (D11).
-- **M4:** pass `SystemBarStyle` built from the *resolved* Reach theme to
-  `enableEdgeToEdge()`, so forced Dark/Light doesn't leave status-bar icons invisible.
-- **M5:** verify private-space APIs/permissions (D13); revisit R8 `packageScope` (D16).
+- ~~M4: `SystemBarStyle` from the resolved Reach theme~~ — done in M1 (`MainActivity`).
+- **M2:** replace `SearchPlaceholder` / `AllAppsPlaceholder` in `feature/home/.../ui/PlaceholderSurfaces.kt`;
+  press-slide-release attaches via `HomeScreen(wordModifier = …)` and must consume pointer
+  moves once the fan opens (Home scroll/swipe detection, D29) and avoid
+  `WindowInsets.systemGestures`; launch origins via `rememberLaunchOrigin()` /
+  `Modifier.trackLaunchOrigin()`.
+- **M3:** Home context line slot (calendar) and the Now Playing card slot are marked in
+  `HomeScreen` / `IntentDetailScreen`.
+- **M4:** replace `AppearancePlaceholderSheet`; app-row long-press "Move to… / Hide" (TODO in
+  `IntentDetailScreen`); avoid the one-frame theme flash for users who forced Light/Dark
+  (settings arrive from DataStore a few ms after the first frame — needs a synchronous
+  settings snapshot); consider a `LaunchResult` type (D32).
+- **M5:** verify private-space APIs/permissions (D13); revisit R8 `packageScope` (D16);
+  the owner reviews all Turkish strings (agents' wording kept until then, e.g. "amaç"
+  for intent, "Yazıp aç" for Type to launch).
 
 ### Rules for every sub-agent prompt
 1. Exact files/modules it owns; files it must not touch (always: `gradle/libs.versions.toml`

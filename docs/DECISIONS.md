@@ -241,3 +241,44 @@ are stored at record time and never recomputed. Launching an app of a paused wor
 asks the system to resume the profile and returns without launching; the user taps again.
 Profile-change broadcasts are registered per API level (`ACTION_PROFILE_AVAILABLE/UNAVAILABLE`
 exist from API 35, not 31).
+
+## D28 — Surface state machine instead of navigation; surface not saved (M1)
+**Decision.** `HomeViewModel` owns a `MutableStateFlow<HomeSurface>`; `HomeRoute` switches on
+it with `AnimatedContent` (Home and Appearance share a content key so the sheet opens over
+Home; chip switches update the detail in place). Back is always consumed (`BackHandler`):
+sub-surfaces → Home, Home → no-op. `onNewIntent` (singleTask HOME) → `onHomePressed()` →
+Home + hide keyboard. The surface is not persisted (`stateNotNeeded`): after process death
+Home is always correct. After a successful launch the surface returns to Home.
+
+## D29 — Home swipes from nested-scroll leftovers (M1)
+**Decision.** Home scrolls (200 % font must reflow, §6.10), so pull-down/swipe-up are
+detected from the drag the scroll *couldn't* use, via a `NestedScrollConnection` (72dp past
+the edge, or a ≥ 1200dp/s flick with ≥ 16dp travel) — not a second, competing drag
+detector. Overscroll stretch is off on Home. TalkBack users get "All apps" as a custom
+action on the search pill (swipe-up has no tap alternative otherwise).
+
+## D30 — Clock ticks and long-press timing (M1)
+**Decision.** The clock re-reads the time on `ACTION_TIME_TICK`, `ACTION_TIME_CHANGED` (also
+fired by the 12/24h toggle), `ACTION_TIMEZONE_CHANGED` and every resume — no timers.
+Long-press uses `max(450ms, system long-press timeout)` via a `LocalViewConfiguration`
+override, so the accessibility "touch & hold delay" is never shortened. The clock
+auto-sizes (min 40sp) instead of wrapping at large font scales.
+
+## D31 — Unread totals per package-in-profile (M1)
+**Decision.** An intent's badge = sum of `countsByApp` over the *distinct* `PackageUser`s
+of its visible apps (an app with two launcher activities counts once; personal and work
+copies count separately). Hidden apps don't contribute.
+
+## D32 — Paused-profile tap doesn't count as a launch (M1)
+**Decision.** For a paused work-profile app, `launchApp` only requests the profile to resume
+(D27); `HomeViewModel` records no history and keeps the current surface so the user can
+tap again. (A future `LaunchResult` type — Launched / ResumingProfile / Failed — would make
+this explicit instead of checking `isProfilePaused` in the ViewModel.)
+
+## D33 — Small M1 wording/UX choices (M1)
+- Turkish intent words: Konuş, Dinle, Git, **Üret** (create/produce — "Yap" is a vague
+  "do"), Oyna, Araçlar. Pending the owner's review of all Turkish strings (M5).
+- The Now label is just "NOW" (spec) rather than the mockup's "NOW · LEARNS YOUR ROUTINE".
+- An empty intent detail shows "No apps here yet."
+- The intent detail list is a plain `Column` in a scroll (tens of apps at most), which keeps
+  the list and the intent chips anchored at the bottom in the thumb zone.
