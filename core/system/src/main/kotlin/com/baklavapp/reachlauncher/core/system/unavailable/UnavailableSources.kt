@@ -62,7 +62,7 @@ class UnavailableShortcutSource
         ): Boolean = false
     }
 
-/** Usage access off. Replaced in M4 by a `UsageStatsManager`-backed source. */
+/** Usage access off. Replaced in M3 by a `UsageStatsManager`-backed source. */
 class UnavailableUsageStatsSource
     @Inject
     constructor() : UsageStatsSource {
@@ -97,7 +97,7 @@ class UnavailableWallpaperColorSource
         override val primaryColor: Flow<Int?> = flowOf(null)
     }
 
-/** Accessibility service off. Replaced in M4 by the opt-in accessibility service. */
+/** Accessibility service off. Replaced in M5 by the opt-in accessibility service. */
 class UnavailableScreenActionsSource
     @Inject
     constructor() : ScreenActionsSource {

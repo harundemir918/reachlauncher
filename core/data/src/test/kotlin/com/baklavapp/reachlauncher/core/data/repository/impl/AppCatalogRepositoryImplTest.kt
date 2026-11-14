@@ -1,15 +1,21 @@
 package com.baklavapp.reachlauncher.core.data.repository.impl
 
 import android.content.Context
+import android.database.sqlite.SQLiteCantOpenDatabaseException
+import android.database.sqlite.SQLiteFullException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.baklavapp.reachlauncher.core.data.db.AppAssignmentEntity
+import com.baklavapp.reachlauncher.core.data.db.AppCacheDao
+import com.baklavapp.reachlauncher.core.data.db.CachedAppEntity
 import com.baklavapp.reachlauncher.core.data.db.ReachDatabase
 import com.baklavapp.reachlauncher.core.data.db.cachedAppEntity
 import com.baklavapp.reachlauncher.core.data.fake.FakeDefaultAppsSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeProfileSource
 import com.baklavapp.reachlauncher.core.data.source.InstalledAppsSource
+import com.baklavapp.reachlauncher.core.data.source.ProfileSource
 import com.baklavapp.reachlauncher.core.model.AppCategory
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -19,10 +25,16 @@ import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -34,6 +46,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Clock
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Robolectric + in-memory Room: the real SQL and change notifications, with fake system
@@ -65,17 +78,20 @@ class AppCatalogRepositoryImplTest {
         )
     private val roles = FakeDefaultAppsSource()
 
-    private fun TestScope.repository() =
-        AppCatalogRepositoryImpl(
-            cacheDao = db.appCacheDao(),
-            assignmentDao = db.appAssignmentDao(),
-            launchEventDao = db.launchEventDao(),
-            installedAppsSource = installed,
-            profileSource = profiles,
-            defaultAppsSource = roles,
-            appScope = backgroundScope,
-            ioDispatcher = StandardTestDispatcher(testScheduler),
-        )
+    private fun TestScope.repository(
+        cacheDao: AppCacheDao = db.appCacheDao(),
+        profileSource: ProfileSource = profiles,
+        installedAppsSource: InstalledAppsSource = installed,
+    ) = AppCatalogRepositoryImpl(
+        cacheDao = cacheDao,
+        assignmentDao = db.appAssignmentDao(),
+        launchEventDao = db.launchEventDao(),
+        installedAppsSource = installedAppsSource,
+        profileSource = profileSource,
+        defaultAppsSource = roles,
+        appScope = backgroundScope,
+        ioDispatcher = StandardTestDispatcher(testScheduler),
+    )
 
     private fun installedApp(
         label: String,
@@ -228,7 +244,8 @@ class AppCatalogRepositoryImplTest {
             profiles.setQuietMode(10, enabled = true)
             val repo = repository()
             installed.state.value = listOf(installedApp("Mail", serial = 10, profile = ProfileType.WORK), installedApp("Mail"))
-            val apps = repo.apps.awaitFirst { it.size == 2 }
+            // The very first emission may predate the profile answer (cache-first); wait for it.
+            val apps = repo.apps.awaitFirst { list -> list.size == 2 && list.any { it.isProfilePaused } }
             assertThat(apps.single { it.profile == ProfileType.WORK }.isProfilePaused).isTrue()
             assertThat(apps.single { it.profile == ProfileType.PERSONAL }.isProfilePaused).isFalse()
         }
@@ -280,4 +297,180 @@ class AppCatalogRepositoryImplTest {
             history.recordLaunch(app.key, 2_000)
             assertThat(repo.apps.awaitFirst { it.single().launchCount == 2 }).hasSize(1)
         }
+
+    @Test
+    fun `the first emission needs only Room, not the profile source`() =
+        runTest {
+            val work = installedApp("Mail", serial = 10, profile = ProfileType.WORK)
+            val personal = installedApp("Notes")
+            val secret = installedApp("Secret", serial = 11, profile = ProfileType.PRIVATE)
+            db.appCacheDao().upsert(listOf(work, personal, secret).map { cachedAppEntity(it, ReachIntent.TOOLS) })
+            val silentProfiles = SilentProfileSource()
+            val repo = repository(profileSource = silentProfiles)
+
+            repo.apps.test {
+                // UserManager hasn't answered: private apps stay hidden (fail closed), personal
+                // and work apps show, nobody is marked paused yet.
+                val first = awaitItem()
+                assertThat(first.map { it.label }).containsExactly("Mail", "Notes").inOrder()
+                assertThat(first.none { it.isProfilePaused }).isTrue()
+
+                silentProfiles.state.emit(
+                    listOf(
+                        ProfileState(0, ProfileType.PERSONAL, isQuietModeEnabled = false),
+                        ProfileState(10, ProfileType.WORK, isQuietModeEnabled = true),
+                        ProfileState(11, ProfileType.PRIVATE, isQuietModeEnabled = true),
+                    ),
+                )
+                val known = awaitItem()
+                assertThat(known.map { it.label }).containsExactly("Mail", "Notes").inOrder()
+                assertThat(known.single { it.label == "Mail" }.isProfilePaused).isTrue()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a full disk during sync keeps the cache serving, and the next sync recovers`() =
+        runTest {
+            db.appCacheDao().upsert(listOf(cachedAppEntity(installedApp("Cached"), ReachIntent.TOOLS)))
+            val failing = FailingCacheDao(db.appCacheDao())
+            val repo = repository(cacheDao = failing)
+
+            repo.apps.test {
+                assertThat(awaitItem().map { it.label }).containsExactly("Cached")
+                installed.state.value = listOf(installedApp("Fresh"))
+                realTime { while (repo.lastSyncError == null) delay(10) }
+                assertThat(repo.lastSyncError).isInstanceOf(SQLiteFullException::class.java)
+                // Still serving: nothing re-emitted, nothing crashed (runTest would fail on an
+                // exception escaping the application scope).
+                expectNoEvents()
+
+                failing.failWrites = false
+                installed.state.value = listOf(installedApp("Fresh"), installedApp("Fresher"))
+                assertThat(awaitItem().map { it.label }).containsExactly("Fresh", "Fresher").inOrder()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a refresh on a full disk doesn't throw`() =
+        runTest {
+            val failing = FailingCacheDao(db.appCacheDao())
+            val repo = repository(cacheDao = failing)
+            installed.state.value = listOf(installedApp("Fresh"))
+            repo.refresh()
+            assertThat(repo.lastSyncError).isInstanceOf(SQLiteFullException::class.java)
+        }
+
+    @Test
+    fun `a refresh whose system read fails doesn't throw`() =
+        runTest {
+            val broken =
+                object : InstalledAppsSource {
+                    override val installedApps: Flow<List<InstalledApp>> = flow { throw IllegalStateException("dead binder") }
+                }
+            val repo = repository(installedAppsSource = broken)
+            repo.refresh()
+            assertThat(repo.lastSyncError).isInstanceOf(IllegalStateException::class.java)
+        }
+
+    @Test
+    fun `an observed query that can't open the database is retried`() =
+        runTest {
+            db.appCacheDao().upsert(listOf(cachedAppEntity(installedApp("Cached"), ReachIntent.TOOLS)))
+            val flaky = FailingCacheDao(db.appCacheDao(), failFirstObserve = true)
+            val repo = repository(cacheDao = flaky)
+            assertThat(repo.apps.awaitFirst { it.isNotEmpty() }.map { it.label }).containsExactly("Cached")
+            assertThat(repo.lastSyncError).isInstanceOf(SQLiteCantOpenDatabaseException::class.java)
+        }
+
+    @Test
+    fun `refresh re-sorts after a language change`() =
+        runTest {
+            Locale.setDefault(Locale.US)
+            val repo = repository()
+            installed.state.value = listOf("cuz", "çay").map { installedApp(it) }
+            repo.apps.test {
+                // English collation: ç is an accented c, so "çay" < "cuz" (a < u).
+                assertThat(nextMatching { it.size == 2 }.map { it.label }).containsExactly("çay", "cuz").inOrder()
+                Locale.setDefault(Locale.forLanguageTag("tr"))
+                repo.refresh()
+                // Turkish: ç is its own letter after c.
+                assertThat(nextMatching { it.first().label == "cuz" }.map { it.label }).containsExactly("cuz", "çay").inOrder()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `Home and predictions share one catalog pipeline`() =
+        runTest {
+            val counting = CountingProfileSource(profiles)
+            val repo = repository(profileSource = counting)
+            installed.state.value = listOf(installedApp("Notes"))
+            val a = backgroundScope.launch(Dispatchers.Default) { repo.apps.collect {} }
+            val b = backgroundScope.launch(Dispatchers.Default) { repo.apps.collect {} }
+            repo.apps.awaitFirst { it.isNotEmpty() }
+            assertThat(counting.subscriptions.get()).isEqualTo(1)
+            a.cancel()
+            b.cancel()
+        }
+
+    /** Waits (wall clock) for the next emission matching [predicate] and returns it. */
+    private suspend fun <T> ReceiveTurbine<T>.nextMatching(predicate: (T) -> Boolean): T =
+        realTime {
+            var item = awaitItem()
+            while (!predicate(item)) item = awaitItem()
+            item
+        }
+
+    /** A profile source that hasn't answered yet; tests emit into [state] by hand. */
+    private class SilentProfileSource : ProfileSource {
+        val state = MutableSharedFlow<List<ProfileState>>()
+        override val profiles: Flow<List<ProfileState>> = state
+
+        override fun setQuietMode(
+            userSerial: Long,
+            enabled: Boolean,
+        ) = false
+    }
+
+    /** Counts how often [ProfileSource.profiles] is subscribed: once per catalog pipeline. */
+    private class CountingProfileSource(
+        private val real: ProfileSource,
+    ) : ProfileSource by real {
+        val subscriptions = AtomicInteger()
+        override val profiles: Flow<List<ProfileState>> = real.profiles.onStart { subscriptions.incrementAndGet() }
+    }
+
+    /**
+     * The real DAO, except that writes throw `SQLiteFullException` while [failWrites] is set
+     * (a full disk), and optionally the first observed query throws
+     * `SQLiteCantOpenDatabaseException`.
+     */
+    private class FailingCacheDao(
+        private val real: AppCacheDao,
+        failFirstObserve: Boolean = false,
+    ) : AppCacheDao() {
+        @Volatile
+        var failWrites = !failFirstObserve
+        private val observeFailures = AtomicInteger(if (failFirstObserve) 1 else 0)
+
+        override fun observeAll(): Flow<List<CachedAppEntity>> =
+            flow {
+                if (observeFailures.getAndDecrement() > 0) throw SQLiteCantOpenDatabaseException("unable to open database file")
+                emitAll(real.observeAll())
+            }
+
+        override suspend fun getAll(): List<CachedAppEntity> = real.getAll()
+
+        override suspend fun upsert(rows: List<CachedAppEntity>) {
+            if (failWrites) throw SQLiteFullException("database or disk is full")
+            real.upsert(rows)
+        }
+
+        override suspend fun delete(rows: List<CachedAppEntity>) {
+            if (failWrites) throw SQLiteFullException("database or disk is full")
+            real.delete(rows)
+        }
+    }
 }

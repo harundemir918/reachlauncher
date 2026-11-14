@@ -37,6 +37,10 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        // Robolectric needs the merged resources and manifest (MainActivity, its theme).
+        unitTests.isIncludeAndroidResources = true
+    }
     lint {
         warningsAsErrors = true
         abortOnError = true
@@ -69,6 +73,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    // Robolectric runs MainActivity with the real Hilt graph on the JVM (no Hilt testing
+    // artifact needed: the real ReachApplication creates the component).
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.ext.junit)

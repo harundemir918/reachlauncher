@@ -82,7 +82,7 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindShortcutSource(impl: UnavailableShortcutSource): ShortcutSource
 
-    /** M4 placeholder. */
+    /** M3 placeholder. */
     @Binds
     @Singleton
     abstract fun bindUsageStatsSource(impl: UnavailableUsageStatsSource): UsageStatsSource
@@ -102,7 +102,7 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindWallpaperColorSource(impl: UnavailableWallpaperColorSource): WallpaperColorSource
 
-    /** M4 placeholder. */
+    /** M5 placeholder. */
     @Binds
     @Singleton
     abstract fun bindScreenActionsSource(impl: UnavailableScreenActionsSource): ScreenActionsSource

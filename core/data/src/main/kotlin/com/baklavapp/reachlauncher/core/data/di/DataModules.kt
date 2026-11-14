@@ -1,6 +1,7 @@
 package com.baklavapp.reachlauncher.core.data.di
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -28,6 +29,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -71,12 +73,21 @@ object DatabaseModule {
      * The one database instance (opening Room is expensive; several instances on one file
      * would also break its change notifications). The file is created lazily on first query,
      * on a background thread, so this doesn't slow down app start.
+     *
+     * `fallbackToDestructiveMigrationOnDowngrade`: installing an *older* debug build over a
+     * newer one would otherwise crash on open ("downgrade not supported"); the cache and
+     * history are wiped instead. Upgrades are not covered — every schema bump needs a real
+     * `Migration` (docs/DECISIONS.md D37).
      */
     @Provides
     @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
-    ): ReachDatabase = Room.databaseBuilder(context, ReachDatabase::class.java, ReachDatabase.NAME).build()
+    ): ReachDatabase =
+        Room
+            .databaseBuilder(context, ReachDatabase::class.java, ReachDatabase.NAME)
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+            .build()
 
     /** App cache DAO. */
     @Provides
@@ -133,13 +144,24 @@ object CoroutinesModule {
     /**
      * See [ApplicationScope]. `SupervisorJob`: one failing child (e.g. a sync) must not
      * cancel its siblings (e.g. the DataStore).
+     *
+     * [loggingExceptionHandler] is the backstop: without a handler, an exception escaping a
+     * coroutine in this scope goes to the thread's uncaught-exception handler and kills the
+     * process — for the home screen, a crash loop (e.g. on a full disk). Code is still
+     * expected to handle its own failures; this only turns a missed case into a log line.
      */
     @Provides
     @Singleton
     @ApplicationScope
     fun provideApplicationScope(
         @DefaultDispatcher dispatcher: CoroutineDispatcher,
-    ): CoroutineScope = CoroutineScope(SupervisorJob() + dispatcher)
+    ): CoroutineScope = CoroutineScope(SupervisorJob() + dispatcher + loggingExceptionHandler)
+
+    /** Logs instead of crashing; see [provideApplicationScope]. */
+    internal val loggingExceptionHandler =
+        CoroutineExceptionHandler { _, error ->
+            Log.e("ReachAppScope", "Uncaught exception in the application scope", error)
+        }
 
     /** Wall clock in the current zone; tests replace it. */
     @Provides

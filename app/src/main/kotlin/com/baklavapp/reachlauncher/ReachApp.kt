@@ -32,13 +32,15 @@ fun ReachApp(
     viewModel: HomeViewModel,
     onDarkSystemBars: (isDark: Boolean) -> Unit,
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Only the theme choice, not the whole Home state: a catalog or prediction update must
+    // not recompose the theme root (≈ `BlocSelector` instead of `BlocBuilder`).
+    val theme by viewModel.theme.collectAsStateWithLifecycle()
     LifecycleResumeEffect(viewModel) {
         viewModel.onResume()
         onPauseOrDispose { }
     }
     val isDark =
-        when (state.themeMode) {
+        when (theme.themeMode) {
             ThemeMode.AUTO -> isSystemInDarkTheme()
             ThemeMode.DARK -> true
             ThemeMode.LIGHT -> false
@@ -47,7 +49,7 @@ fun ReachApp(
     LaunchedEffect(isDark) { currentOnDarkSystemBars(isDark) }
 
     // Wallpaper accent (spec §6.9) is passed here from M4 on.
-    ReachTheme(palette = state.palette, themeMode = state.themeMode) {
+    ReachTheme(palette = theme.palette, themeMode = theme.themeMode) {
         HomeRoute(viewModel)
     }
 }

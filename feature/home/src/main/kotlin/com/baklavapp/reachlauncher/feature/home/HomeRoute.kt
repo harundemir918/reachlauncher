@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -83,8 +85,13 @@ fun HomeRoute(
     viewModel: HomeViewModel,
     modifier: Modifier = Modifier,
 ) {
+    // Two separate subscriptions on purpose: the surface is always current (it has no
+    // upstream to restart after WhileSubscribed's timeout), so the first frame after Home is
+    // pressed in the background already shows Home, even while the data state catches up.
+    val surface by viewModel.surface.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var failedLabel by remember { mutableStateOf<String?>(null) }
+    var failure by remember { mutableStateOf<LaunchFailure?>(null) }
+    var scrollToTopRequests by remember { mutableIntStateOf(0) }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -98,62 +105,85 @@ fun HomeRoute(
                         focusManager.clearFocus(force = true)
                     }
 
+                    HomeEvent.ScrollToTop -> {
+                        scrollToTopRequests++
+                    }
+
                     is HomeEvent.LaunchFailed -> {
-                        failedLabel = event.label
+                        failure = LaunchFailure(event.label)
                     }
                 }
             }
         }
     }
-    LaunchedEffect(failedLabel) {
-        if (failedLabel != null) {
+    // Keyed on the LaunchFailure *instance*: a second failure for the same app is a new
+    // object, so the 3 s timer restarts instead of hiding the new message early.
+    LaunchedEffect(failure) {
+        if (failure != null) {
             delay(MESSAGE_DURATION_MILLIS)
-            failedLabel = null
+            failure = null
         }
     }
     BackHandler(enabled = true) { viewModel.onBack() }
 
     Box(modifier = modifier.fillMaxSize().background(ReachTheme.colors.bg)) {
-        HomeSurfaces(state, viewModel)
-        failedLabel?.let { LaunchFailedMessage(it, Modifier.align(Alignment.BottomCenter)) }
+        HomeSurfaces(HomeFrame(surface, state), viewModel, scrollToTopRequests)
+        failure?.let { LaunchFailedMessage(it.label, Modifier.align(Alignment.BottomCenter)) }
     }
 }
 
+/**
+ * One shown launch-failure message. Deliberately *not* a data class: two failures for the
+ * same label must be unequal so `LaunchedEffect(failure)` restarts its timer.
+ */
+private class LaunchFailure(
+    val label: String,
+)
+
+/** What one frame of [HomeSurfaces] shows: the active surface plus the data snapshot. */
+@Immutable
+private data class HomeFrame(
+    val surface: HomeSurface,
+    val state: HomeUiState,
+)
+
 @Composable
 private fun HomeSurfaces(
-    state: HomeUiState,
+    frame: HomeFrame,
     viewModel: HomeViewModel,
+    scrollToTopRequests: Int,
 ) {
     val reducedMotion = rememberReducedMotion()
-    // targetState is the whole UI state, so an exiting surface keeps rendering the snapshot
-    // it was showing (e.g. the detail list) while it fades out. contentKey decides when a
+    // targetState is the whole frame, so an exiting surface keeps rendering the snapshot it
+    // was showing (e.g. the detail list) while it fades out. contentKey decides when a
     // transition runs: switching intents via the chips updates detail in place, and the
     // Appearance sheet opens *over* Home, so both share Home's key.
     AnimatedContent(
-        targetState = state,
+        targetState = frame,
         contentKey = { it.surface.contentKey() },
         transitionSpec = { surfaceTransition(reducedMotion) },
         label = "surface",
     ) { shown ->
+        val state = shown.state
         when (val surface = shown.surface) {
             HomeSurface.Home, HomeSurface.Appearance -> {
                 HomeScreen(
-                    intents = shown.intents,
-                    now = shown.now,
-                    thumbSide = shown.thumbSide,
+                    intents = state.intents,
+                    now = state.now,
+                    catalogLoaded = state.catalogLoaded,
+                    thumbSide = state.thumbSide,
                     onIntentSelected = viewModel::onIntentSelected,
                     onLaunch = viewModel::launch,
                     onSearch = viewModel::onSearchRequested,
                     onAllApps = viewModel::onAllAppsRequested,
                     onAppearance = viewModel::onAppearanceRequested,
+                    scrollToTopRequests = scrollToTopRequests,
                 )
             }
 
             is HomeSurface.IntentDetail -> {
-                // detail is non-null whenever the surface is IntentDetail (built together).
-                val detail = shown.detail ?: IntentDetailUi(surface.intent, emptyList(), emptyList())
                 IntentDetailScreen(
-                    detail = detail,
+                    detail = state.detailFor(surface.intent),
                     onBack = viewModel::onBack,
                     onLaunch = viewModel::launch,
                     onLaunchShortcut = viewModel::launchShortcut,
@@ -171,7 +201,7 @@ private fun HomeSurfaces(
         }
     }
     AnimatedVisibility(
-        visible = state.surface == HomeSurface.Appearance,
+        visible = frame.surface == HomeSurface.Appearance,
         enter = if (reducedMotion) fadeIn() else fadeIn() + slideInVertically { it / 2 },
         exit = if (reducedMotion) fadeOut() else fadeOut() + slideOutVertically { it / 2 },
         label = "appearance",
@@ -194,7 +224,7 @@ private fun HomeSurface.contentKey(): String =
  * and detail from below). With "Remove animations" on, only a cross-fade remains: what
  * moves changes, not just how fast (spec §6.10).
  */
-private fun AnimatedContentTransitionScope<HomeUiState>.surfaceTransition(reducedMotion: Boolean): ContentTransform {
+private fun AnimatedContentTransitionScope<HomeFrame>.surfaceTransition(reducedMotion: Boolean): ContentTransform {
     val enterFade = fadeIn(tween(ENTER_MILLIS))
     val exitFade = fadeOut(tween(EXIT_MILLIS))
     if (reducedMotion) return enterFade togetherWith exitFade

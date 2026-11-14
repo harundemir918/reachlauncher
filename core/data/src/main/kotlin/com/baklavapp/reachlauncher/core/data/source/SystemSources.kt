@@ -7,6 +7,7 @@ import com.baklavapp.reachlauncher.core.model.Contact
 import com.baklavapp.reachlauncher.core.model.ExternalAction
 import com.baklavapp.reachlauncher.core.model.InstalledApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.ProfileState
@@ -60,20 +61,21 @@ interface ProfileSource {
  * Implementation note: launch animations (`ActivityOptions.makeClipRevealAnimation`) and
  * the role request dialog (`startActivityForResult`) need the current Activity and its
  * View. The `:core:system` implementation is a singleton that tracks the resumed Activity
- * through a weak reference (registered by `MainActivity`), so ViewModels can call it
+ * through a weak reference (registered in `ReachApplication.onCreate`), so ViewModels can call it
  * without holding any Android object. Without a resumed Activity it launches without
  * animation.
  */
 interface AppLauncher {
     /**
-     * Launches [key] with an animation that grows from [origin] when given. A paused work
-     * profile is asked to resume first.
-     * @return false if the activity no longer exists or the profile is locked.
+     * Launches [key] with an animation that grows from [origin] when given. If the app's
+     * work profile is paused (checked live), the system is asked to resume it instead and
+     * nothing launches yet.
+     * @return what actually happened; only [LaunchResult.LAUNCHED] counts as a launch.
      */
     fun launchApp(
         key: AppKey,
         origin: LaunchOrigin?,
-    ): Boolean
+    ): LaunchResult
 
     /** Opens the system "App info" screen for [key]. */
     fun openAppInfo(key: AppKey)
@@ -88,7 +90,7 @@ interface AppLauncher {
     fun perform(action: ExternalAction): Boolean
 }
 
-/** Default dialer/SMS apps (`RoleManager`), which auto-assignment puts into Talk. */
+/** Default dialer/SMS apps (Telecom/Telephony APIs, D23), which auto-assignment puts into Talk. */
 interface DefaultAppsSource {
     /** Package names currently holding the dialer or SMS role. */
     suspend fun talkRolePackages(): Set<String>

@@ -79,29 +79,22 @@ class LauncherAppsInstalledAppsSource
 
         private fun readAll(): List<InstalledApp> = profiles.visibleProfiles().flatMap(::readProfile)
 
-        private fun readProfile(user: UserHandle): List<InstalledApp> {
-            val type = profiles.typeOf(user)
-            // Privacy: a locked private space contributes nothing, not even labels.
-            if (type == ProfileType.PRIVATE && profiles.isQuietMode(user)) return emptyList()
-            val serial = profiles.serialOf(user)
-            if (serial < 0) return emptyList() // Profile removed while we were reading.
-            val activities =
-                try {
-                    launcherApps.getActivityList(null, user)
-                } catch (e: SecurityException) {
-                    return emptyList() // Profile became inaccessible meanwhile.
-                }
-            return activities
-                .filter { it.componentName.packageName != context.packageName }
-                .map { info ->
-                    InstalledApp(
-                        key = AppKey(info.componentName.packageName, info.componentName.className, serial),
+        private fun readProfile(user: UserHandle): List<InstalledApp> =
+            profileApps(
+                type = profiles.typeOf(user),
+                isQuietMode = { profiles.isQuietMode(user) },
+                serial = profiles.serialOf(user),
+                ownPackage = context.packageName,
+            ) {
+                launcherApps.getActivityList(null, user).map { info ->
+                    LauncherEntry(
+                        packageName = info.componentName.packageName,
+                        className = info.componentName.className,
                         label = info.label.toString(),
-                        category = appCategoryOf(info.applicationInfo.category),
-                        profile = type,
+                        category = info.applicationInfo.category,
                     )
                 }
-        }
+            }
 
         /** Every package/profile change just triggers a full re-read. */
         private class PokingCallback(
@@ -145,3 +138,51 @@ class LauncherAppsInstalledAppsSource
             ) = poke()
         }
     }
+
+/** What Reach needs from one `LauncherActivityInfo`, as plain values (see [profileApps]). */
+internal data class LauncherEntry(
+    val packageName: String,
+    val className: String,
+    val label: String,
+    /** `ApplicationInfo.category`. */
+    val category: Int,
+)
+
+/**
+ * The apps one profile contributes — the filtering rules of [LauncherAppsInstalledAppsSource],
+ * pulled out as a pure function so they are testable without a system that has profiles:
+ * - **Privacy:** a private space in quiet mode (locked) contributes nothing, not even
+ *   labels, and [readActivities] isn't even called.
+ * - A negative [serial] means the profile was removed while we were reading.
+ * - A `SecurityException` from [readActivities] (the profile became inaccessible
+ *   meanwhile) yields an empty list instead of failing the whole read.
+ * - Reach's own launcher entry ([ownPackage]) is excluded.
+ *
+ * [isQuietMode] is a function so the system is only asked for private profiles.
+ */
+internal fun profileApps(
+    type: ProfileType,
+    isQuietMode: () -> Boolean,
+    serial: Long,
+    ownPackage: String,
+    readActivities: () -> List<LauncherEntry>,
+): List<InstalledApp> {
+    if (type == ProfileType.PRIVATE && isQuietMode()) return emptyList()
+    if (serial < 0) return emptyList()
+    val entries =
+        try {
+            readActivities()
+        } catch (e: SecurityException) {
+            return emptyList()
+        }
+    return entries
+        .filter { it.packageName != ownPackage }
+        .map { entry ->
+            InstalledApp(
+                key = AppKey(entry.packageName, entry.className, serial),
+                label = entry.label,
+                category = appCategoryOf(entry.category),
+                profile = type,
+            )
+        }
+}

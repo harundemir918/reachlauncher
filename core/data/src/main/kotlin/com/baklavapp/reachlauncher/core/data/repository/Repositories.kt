@@ -24,13 +24,17 @@ import kotlinx.coroutines.flow.Flow
  * The launchable apps Reach knows about, with their intent assignment and visibility.
  *
  * Performance contract: [apps] must emit the **cached** catalog (from Room) immediately,
- * before any system query, so Home renders instantly when the Home button is pressed.
- * Fresh data from the system follows as a second emission when it differs.
+ * before any system query — including the profile lookup — so Home renders instantly when
+ * the Home button is pressed. Fresh data from the system follows as a second emission when
+ * it differs.
  *
  * Privacy contract: apps of a **locked private space are never emitted**, not even from
- * the cache. Every emission (cached or fresh) is filtered against the current
- * `ProfileSource.profiles` state, and apps of a paused work profile are marked with
- * [CatalogApp.isProfilePaused]. Predictions and search build on [apps], so they inherit this.
+ * the cache. Every emission (cached or fresh) is filtered against the `ProfileSource.profiles`
+ * state known so far; before the first profile answer that state is "no profile known", so
+ * private-space apps are hidden (fail closed) and nothing is marked paused yet. Apps of a
+ * paused work profile are marked with [CatalogApp.isProfilePaused] — a display hint only;
+ * launching decides from live state (`AppLauncher.launchApp`'s `LaunchResult`). Predictions
+ * and search build on [apps], so they inherit this.
  */
 interface AppCatalogRepository {
     /** All apps including hidden ones, sorted by label (locale-aware). Never completes. */

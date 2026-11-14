@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.SearchManager
 import android.app.role.RoleManager
 import android.content.Intent
+import android.graphics.Rect
 import android.net.Uri
 import android.os.UserHandle
 import android.os.UserManager
@@ -13,6 +14,8 @@ import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.ExternalAction
+import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.system.ActivityTracker
 import com.baklavapp.reachlauncher.core.system.profile.Profiles
@@ -135,7 +138,23 @@ class SystemAppLauncherTest {
 
     @Test
     fun `launching an app of a removed profile fails`() {
-        assertThat(launcher.launchApp(AppKey("com.example", "com.example.Main", userSerial = 999), origin = null)).isFalse()
+        assertThat(launcher.launchApp(AppKey("com.example", "com.example.Main", userSerial = 999), origin = null))
+            .isEqualTo(LaunchResult.FAILED)
+    }
+
+    @Test
+    fun `launching an app of the personal profile reports launched`() {
+        assertThat(launcher.launchApp(AppKey("com.example", "com.example.Main", userSerial = 0), origin = LaunchOrigin(1, 2, 3, 4)))
+            .isEqualTo(LaunchResult.LAUNCHED)
+    }
+
+    @Test
+    fun `source bounds are the origin moved by the window's position on screen`() {
+        val origin = LaunchOrigin(left = 40, top = 900, width = 300, height = 120)
+        // Full-screen Home: window and screen coordinates are the same.
+        assertThat(SystemAppLauncher.sourceBoundsOnScreen(origin, 0, 0)).isEqualTo(Rect(40, 900, 340, 1020))
+        // Split-screen bottom half / freeform: the window starts at (16, 1200) on screen.
+        assertThat(SystemAppLauncher.sourceBoundsOnScreen(origin, 16, 1200)).isEqualTo(Rect(56, 2100, 356, 2220))
     }
 
     @Test
@@ -146,8 +165,11 @@ class SystemAppLauncherTest {
         shadowOf(userManager).setSerialNumberForUser(work, 10)
         assertThat(userManager.isQuietModeEnabled(work)).isTrue()
 
-        assertThat(launcher.launchApp(AppKey("com.example", "com.example.Main", userSerial = 10), origin = null)).isTrue()
+        assertThat(launcher.launchApp(AppKey("com.example", "com.example.Main", userSerial = 10), origin = null))
+            .isEqualTo(LaunchResult.RESUMING_PROFILE)
         assertThat(shadowOf(app).nextStartedActivity).isNull()
+        // The resume request reached the system (Robolectric's UserManager applies it at once).
+        assertThat(userManager.isQuietModeEnabled(work)).isFalse()
     }
 
     private companion object {

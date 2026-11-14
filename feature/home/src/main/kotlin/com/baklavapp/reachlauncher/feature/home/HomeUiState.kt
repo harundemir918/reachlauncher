@@ -24,23 +24,38 @@ import com.baklavapp.reachlauncher.core.model.ThumbSide
  */
 
 /**
- * Everything the Home surface renders. The default value is a valid first frame (all six
- * intents with zero apps, no predictions): Home never shows a spinner.
+ * Everything Home's surfaces render, except *which* surface is active (that is
+ * `HomeViewModel.surface`, kept separate so it is always current — see the ViewModel KDoc).
+ * The default value is a valid first frame (all six intents, no counts yet, no predictions):
+ * Home never shows a spinner.
  *
- * @property surface which surface is active (see [HomeSurface]).
+ * @property catalogLoaded false until the first catalog emission. Until then the intent
+ *   rows show no trailing count (not a misleading "0") and the NOW block stays hidden.
  * @property intents all six intents, always in [ReachIntent] order, even with 0 apps.
  * @property now up to three Now-row predictions; empty hides the whole NOW block.
- * @property detail data for [HomeSurface.IntentDetail]; null on every other surface.
+ * @property details the intent-detail content of every intent, precomputed so switching
+ *   intents (word tap, chip) never waits for a recomputation; read it with [detailFor].
  */
 @Immutable
 data class HomeUiState(
-    val surface: HomeSurface = HomeSurface.Home,
+    val catalogLoaded: Boolean = false,
     val thumbSide: ThumbSide = ThumbSide.LEFT,
-    val themeMode: ThemeMode = ThemeMode.AUTO,
-    val palette: PaletteId = PaletteId.DEFAULT,
     val intents: List<IntentSummary> = ReachIntent.entries.map { IntentSummary(it, appCount = 0, unreadCount = 0) },
     val now: List<NowItem> = emptyList(),
-    val detail: IntentDetailUi? = null,
+    val details: Map<ReachIntent, IntentDetailUi> = emptyMap(),
+) {
+    /** Detail content for [intent]; empty (not null) before the catalog has loaded. */
+    fun detailFor(intent: ReachIntent): IntentDetailUi = details[intent] ?: IntentDetailUi(intent, emptyList(), emptyList())
+}
+
+/**
+ * The theme choice the root `ReachTheme` needs — a small, separate state so the theme root
+ * only recomposes when these two values change.
+ */
+@Immutable
+data class HomeTheme(
+    val themeMode: ThemeMode = ThemeMode.AUTO,
+    val palette: PaletteId = PaletteId.DEFAULT,
 )
 
 /**
@@ -98,6 +113,9 @@ data class IntentDetailUi(
 sealed interface HomeEvent {
     /** Close the soft keyboard and drop focus (Home pressed while searching). */
     data object HideKeyboard : HomeEvent
+
+    /** Home pressed while already on Home: scroll Home back to the top. */
+    data object ScrollToTop : HomeEvent
 
     /** An app or shortcut couldn't be opened (uninstalled, disabled, locked profile). */
     data class LaunchFailed(

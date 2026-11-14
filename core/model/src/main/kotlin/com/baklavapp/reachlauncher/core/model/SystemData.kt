@@ -75,6 +75,22 @@ data class LaunchOrigin(
 )
 
 /**
+ * Outcome of asking the system to launch an app. The launcher decides from *live* profile
+ * state, so callers must react to this result rather than to a possibly stale
+ * `CatalogApp.isProfilePaused` snapshot (docs/DECISIONS.md D32).
+ */
+enum class LaunchResult {
+    /** The activity was started; record it in launch history and return Home. */
+    LAUNCHED,
+
+    /** The app's work profile was paused; the system was asked to resume it. Nothing launched yet. */
+    RESUMING_PROFILE,
+
+    /** Not launched: the activity is gone, the profile is locked, or the system refused. */
+    FAILED,
+}
+
+/**
  * System screens Reach sends the user to, e.g. to grant an optional permission.
  * A domain type instead of `android.content.Intent`, so callers stay JVM-testable;
  * `:core:system` turns each into the right Intent.

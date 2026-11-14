@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
@@ -35,6 +36,7 @@ import com.baklavapp.reachlauncher.core.designsystem.component.NowTile
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.component.SearchPill
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
+import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.ReachIntent
@@ -66,7 +68,11 @@ private const val NOW_ROW_SLOTS = 3
 /**
  * Stateless Home content.
  *
+ * @param catalogLoaded false until the catalog's first emission: the intent rows then show
+ *   no count (rather than a wrong "0") and the NOW block stays hidden.
  * @param onLaunch launches an app; the [LaunchOrigin] is the tapped tile's window bounds.
+ * @param scrollToTopRequests incremented each time Home is pressed while already on Home;
+ *   every new value scrolls Home back to the top.
  * @param wordModifier per-intent modifier for the intent word's tappable area — the hook for
  *   M2's press-slide-release gesture (passed through to `IntentWordRow(wordModifier = …)`).
  */
@@ -74,6 +80,7 @@ private const val NOW_ROW_SLOTS = 3
 internal fun HomeScreen(
     intents: List<IntentSummary>,
     now: List<NowItem>,
+    catalogLoaded: Boolean,
     thumbSide: ThumbSide,
     onIntentSelected: (ReachIntent) -> Unit,
     onLaunch: (CatalogApp, LaunchOrigin?) -> Unit,
@@ -81,10 +88,20 @@ internal fun HomeScreen(
     onAllApps: () -> Unit,
     onAppearance: () -> Unit,
     modifier: Modifier = Modifier,
+    scrollToTopRequests: Int = 0,
     wordModifier: (ReachIntent) -> Modifier = { Modifier },
 ) {
     val swipe = rememberVerticalSwipeConnection(onSwipeUp = onAllApps, onSwipeDown = onSearch)
     val reading by rememberWallClock()
+    val scroll = rememberScrollState()
+    val reducedMotion = rememberReducedMotion()
+    // ≈ a `didUpdateWidget` that reacts to a new request number. 0 = no request yet; a fresh
+    // Home (e.g. after leaving intent detail) starts at the top anyway.
+    LaunchedEffect(scrollToTopRequests) {
+        if (scrollToTopRequests > 0) {
+            if (reducedMotion) scroll.scrollTo(0) else scroll.animateScrollTo(0)
+        }
+    }
     BoxWithConstraints(
         modifier =
             modifier
@@ -96,7 +113,7 @@ internal fun HomeScreen(
             modifier =
                 Modifier
                     // No overscroll stretch: pulling past the edge means "open Search", not "bounce".
-                    .verticalScroll(rememberScrollState(), overscrollEffect = null)
+                    .verticalScroll(scroll, overscrollEffect = null)
                     .heightIn(min = maxHeight)
                     .padding(start = ReachTheme.dimens.gutter, end = ReachTheme.dimens.gutter, top = TopPadding, bottom = BottomPadding),
             verticalArrangement = Arrangement.SpaceBetween,
@@ -107,12 +124,12 @@ internal fun HomeScreen(
                     HomeClock(reading, onOpenAppearance = onAppearance)
                     // Context line (next calendar event, spec §6.3 item 3) goes here in M3.
                 }
-                if (now.isNotEmpty()) {
+                if (catalogLoaded && now.isNotEmpty()) {
                     NowRow(now, onLaunch, Modifier.padding(top = NowTopGap))
                 }
             }
             Column {
-                IntentWords(intents, thumbSide, onIntentSelected, wordModifier)
+                IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier)
                 val allAppsLabel = stringResource(R.string.home_all_apps_action)
                 SearchPill(
                     onClick = onSearch,
@@ -171,6 +188,7 @@ private fun NowRow(
 @Composable
 private fun IntentWords(
     intents: List<IntentSummary>,
+    catalogLoaded: Boolean,
     thumbSide: ThumbSide,
     onIntentSelected: (ReachIntent) -> Unit,
     wordModifier: (ReachIntent) -> Modifier,
@@ -180,7 +198,12 @@ private fun IntentWords(
         intents.forEach { summary ->
             IntentWordRow(
                 word = intentWord(summary.intent),
-                trailing = IntentRowTrailing.of(appCount = summary.appCount, unreadCount = summary.unreadCount),
+                trailing =
+                    if (catalogLoaded) {
+                        IntentRowTrailing.of(appCount = summary.appCount, unreadCount = summary.unreadCount)
+                    } else {
+                        IntentRowTrailing.None // Not "0": the cached catalog is milliseconds away.
+                    },
                 onClick = { onIntentSelected(summary.intent) },
                 thumbSide = thumbSide,
                 onClickLabel = openLabel,

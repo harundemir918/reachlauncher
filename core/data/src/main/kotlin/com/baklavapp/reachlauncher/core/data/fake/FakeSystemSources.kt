@@ -20,6 +20,7 @@ import com.baklavapp.reachlauncher.core.model.Contact
 import com.baklavapp.reachlauncher.core.model.ExternalAction
 import com.baklavapp.reachlauncher.core.model.InstalledApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.ProfileState
@@ -77,15 +78,15 @@ class FakeAppLauncher : AppLauncher {
     /** Actions passed to [perform], in order. */
     val performed = mutableListOf<ExternalAction>()
 
-    /** What [launchApp] returns; set false to simulate a removed app. */
-    var launchSucceeds = true
+    /** What [launchApp] returns; set FAILED to simulate a removed app, RESUMING_PROFILE for a paused profile. */
+    var result: LaunchResult = LaunchResult.LAUNCHED
 
     override fun launchApp(
         key: AppKey,
         origin: LaunchOrigin?,
-    ): Boolean {
+    ): LaunchResult {
         launched += key
-        return launchSucceeds
+        return result
     }
 
     override fun openAppInfo(key: AppKey) = Unit

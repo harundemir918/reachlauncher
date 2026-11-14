@@ -1,6 +1,8 @@
 # Flutter → Compose (and Android) for Reach
 
-**v1 (M0) — extended each milestone.**
+**v2 (M1) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaces the
+illustrative examples with real code from the M1 launcher and adds the patterns M1
+introduced (events, lifecycle effects, `callbackFlow`, nested scroll, semantics, UI tests).
 
 ## How to read this
 
@@ -10,12 +12,19 @@ Compose, coroutines/Flow, Hilt, Room and DataStore.
 
 - The **quick map** gives you the one-line equivalent of each concept.
 - Each **section** then shows a short Kotlin example (and Dart where it helps).
-- Names in `code` that exist in this repo today are **real** — you can jump to them.
-  Examples marked *(illustrative, M1+)* show code that will exist later; they use the real
-  interface names but the implementation isn't written yet.
+- Example labels: **(real)** = copied from the repo; **(simplified from `<file>`)** = real
+  code with imports, KDoc and unrelated parameters trimmed; **(illustrative)** = not in the
+  repo (yet), shown only to explain the concept.
 - Kotlin syntax primer in one breath: `val` = `final`, `var` = mutable, `fun` = function,
   types after names (`label: String`), `data class` ≈ a freezed/equatable class with
-  `copy()`, `object` = a singleton, trailing lambdas: `Column { … }` is `Column(content = { … })`.
+  `copy()`, `object` = a singleton, `sealed interface` ≈ a Dart `sealed class`, trailing
+  lambdas: `Column { … }` is `Column(content = { … })`.
+- For the big picture (modules, data flows, state machine) read
+  [ARCHITECTURE.md](ARCHITECTURE.md); for system APIs, [ANDROID_APIS.md](ANDROID_APIS.md).
+
+`…` in paths = the `src/main/kotlin/com/baklavapp/reachlauncher/<module>` part, e.g.
+`core/data/…/db/Daos.kt` = `core/data/src/main/kotlin/com/baklavapp/reachlauncher/core/data/db/Daos.kt`
+and `app/…/MainActivity.kt` = `app/src/main/kotlin/com/baklavapp/reachlauncher/MainActivity.kt`.
 
 ---
 
@@ -26,29 +35,40 @@ Compose, coroutines/Flow, Hilt, Room and DataStore.
 | `Widget` | `@Composable` function |
 | `StatelessWidget` / `StatefulWidget` | composable function + `remember` / `rememberSaveable` |
 | `setState` | `mutableStateOf` (writes trigger recomposition) |
-| BLoC / Cubit | `ViewModel` + `StateFlow<UiState>` |
-| `BlocBuilder` / `BlocListener` | `collectAsStateWithLifecycle()` / collecting an event `Flow` in `LaunchedEffect` |
+| BLoC / Cubit | `ViewModel` + `StateFlow<UiState>` (`HomeViewModel`) |
+| `BlocBuilder` | `collectAsStateWithLifecycle()` |
+| `BlocListener` | collecting an event `Flow` (backed by a `Channel`) in `LaunchedEffect` + `repeatOnLifecycle` |
 | `Stream` / `BehaviorSubject` | `Flow` (cold) / `StateFlow` (hot, has a current value) |
+| `StreamController` wrapping a platform callback / `EventChannel` | `callbackFlow { register…; awaitClose { unregister… } }` |
 | `Future` / `async`/`await` | `suspend fun` + coroutines; `viewModelScope` ≈ BLoC lifetime |
-| get_it / injectable | Hilt (`@Inject constructor`, `@Module @InstallIn`, `@Binds`, `@HiltViewModel`) |
-| `shared_preferences` | DataStore |
+| get_it / injectable | Hilt (`@Inject constructor`, `@Module @InstallIn`, `@Binds`, `@Provides`, `@HiltViewModel`) |
+| `shared_preferences` | DataStore (`SettingsRepositoryImpl`) |
 | sqflite / drift | Room (`@Entity`, `@Dao`, `@Database`); KSP ≈ build_runner |
 | `Theme.of(context)` / `ThemeExtension` | `CompositionLocal` — `ReachTheme.colors` reads `LocalReachColors` |
-| `Column` / `Row` / `Stack` | `Column` / `Row` / `Box` |
+| `Column` / `Row` / `Stack` / `Wrap` | `Column` / `Row` / `Box` / `FlowRow` |
 | `Padding` / `SizedBox` / `Container` | `Modifier` chains (order matters) |
+| `SingleChildScrollView` | `Modifier.verticalScroll(rememberScrollState())` |
 | `ListView.builder` | `LazyColumn` |
-| `GestureDetector` | `Modifier.clickable`, `Modifier.pointerInput` |
-| `Navigator` | not used — a state machine in `HomeViewModel` |
-| `MethodChannel` | not needed — call Android APIs directly |
+| `GestureDetector` | `Modifier.clickable`, `combinedClickable`, `Modifier.pointerInput` |
+| `NotificationListener<OverscrollNotification>` | `NestedScrollConnection` (Home's swipes) |
+| `Semantics` / `CustomSemanticsAction` / `MergeSemantics` | `Modifier.semantics` / `CustomAccessibilityAction` / `clearAndSetSemantics` |
+| `Navigator` | not used — a state machine in `HomeViewModel` (`HomeSurface`) |
+| `PopScope` / `WillPopScope` | `BackHandler` |
+| `AnimatedSwitcher` | `AnimatedContent` |
+| `MethodChannel` | not needed — call Android APIs directly (in `:core:system`) |
+| `initState` / `dispose` pair | `DisposableEffect(key) { …; onDispose { … } }` |
+| `WidgetsBindingObserver.didChangeAppLifecycleState` | `LifecycleResumeEffect { …; onPauseOrDispose { } }` |
 | `pubspec.yaml` | `gradle/libs.versions.toml` + each module's `build.gradle.kts` |
 | `flutter run` / `test` / `analyze` | `./gradlew installDebug` / `test` / `lint`, or Android Studio Run |
 | `AnimatedContainer`, implicit animations | `animate*AsState`, `AnimatedContent`, `AnimatedVisibility` |
 | hot reload | Live Edit + Compose Preview (`@Preview`) |
 | `BuildContext` | none — composition locals, e.g. `LocalContext.current` |
 | `main()` / `runApp()` | `MainActivity.setContent { … }` |
-| `MediaQuery.padding` / `SafeArea` | `WindowInsets`, `Modifier.safeDrawingPadding()`, edge-to-edge |
+| `MediaQuery.padding` / `SafeArea` | `WindowInsets`, `Modifier.windowInsetsPadding(WindowInsets.safeDrawing)`, edge-to-edge |
 | `intl` / ARB files | `res/values/strings.xml` + `res/values-tr/strings.xml` |
 | `const` widgets, avoiding rebuilds | recomposition skipping, `@Immutable` / `@Stable` |
+| `testWidgets` + `WidgetTester` | `createComposeRule()` (on the JVM via Robolectric) |
+| `bloc_test` / `expectLater(stream, emitsInOrder(…))` | Turbine: `flow.test { awaitItem() }` |
 
 ---
 
@@ -60,22 +80,34 @@ A composable is a **function** that emits UI; there is no widget object you cons
 keep. Name it in PascalCase like a widget (ktlint is configured to allow that).
 
 ```kotlin
-// app/.../MainActivity.kt (real)
+// (simplified from feature/home/…/ui/IntentDetailScreen.kt) — the accent dot + "Talk" title
 @Composable
-private fun FoundationPlaceholder() {
-    val colors = ReachTheme.colors
-    Column(Modifier.fillMaxSize().background(colors.bg)) {
-        Text(text = stringResource(R.string.foundation_title), style = ReachTheme.typography.clock, color = colors.fg)
+private fun DetailTitle(intent: ReachIntent, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(14.dp).background(ReachTheme.colors.accentInk, CircleShape))
+        Text(text = intentWord(intent), style = ReachTheme.typography.intentTitle, color = ReachTheme.colors.fg,
+             modifier = Modifier.semantics { heading() })
     }
 }
 ```
 
 ```dart
-class FoundationPlaceholder extends StatelessWidget {
+class DetailTitle extends StatelessWidget {
+  const DetailTitle({required this.intent});
+  final ReachIntent intent;
   @override
-  Widget build(BuildContext context) => Column(children: [Text('Reach')]);
+  Widget build(BuildContext context) => Row(children: [
+        Container(width: 14, height: 14, decoration: BoxDecoration(shape: BoxShape.circle, color: ...)),
+        Semantics(header: true, child: Text(intentWord(intent))),
+      ]);
 }
 ```
+
+Reach splits screens the Flutter way: **stateless composables** take state as parameters
+and report interactions through callbacks (`HomeScreen(intents, now, thumbSide,
+onIntentSelected, onLaunch, …)`), and one **route** (`HomeRoute`) connects them to the
+ViewModel. Composables with a `@Composable () -> Unit` parameter (e.g. `IntentWordRow`'s
+`extraContent`) take a *slot* — Flutter's `Widget child`.
 
 ### StatelessWidget / StatefulWidget ↔ composables + `remember` / `rememberSaveable`
 
@@ -84,16 +116,14 @@ There's no Stateless/Stateful split. A composable that needs local state asks fo
 changes and process death, like `RestorationMixin`).
 
 ```kotlin
-@Composable
-fun Counter() {
-    var count by remember { mutableIntStateOf(0) }          // ≈ int count = 0 in State<T>
-    var query by rememberSaveable { mutableStateOf("") }    // ≈ a restorable field
-    Text("$count", Modifier.clickable { count++ })
-}
+// (simplified from feature/home/…/HomeRoute.kt) — local, visual-only state
+var failedLabel by remember { mutableStateOf<String?>(null) }   // the "Couldn't open X" message
 ```
 
-Reach's rule: **screen state lives in ViewModels**, `remember` is for purely visual,
-local state (a pressed highlight, a scroll offset).
+Reach's rule: **screen state lives in ViewModels**; `remember` is for purely visual, local
+state (a message being shown, a scroll position, a remembered helper object such as
+`LaunchOriginHolder`). Reach uses no `rememberSaveable` for the surface on purpose: after
+process death Home must start on Home (`stateNotNeeded`, D28).
 
 ### `setState` ↔ `mutableStateOf`
 
@@ -101,25 +131,31 @@ Writing to a `MutableState` *is* the `setState` call: Compose tracks which compo
 read it and re-runs only those.
 
 ```kotlin
-var expanded by remember { mutableStateOf(false) }
-Text(if (expanded) "Less" else "More", Modifier.clickable { expanded = !expanded })
+// (simplified from feature/home/…/HomeRoute.kt)
+LaunchedEffect(failedLabel) {          // restarts whenever failedLabel changes
+    if (failedLabel != null) {
+        delay(3_000)
+        failedLabel = null              // ≈ setState(() => failedLabel = null)
+    }
+}
 ```
 
-```dart
-setState(() => expanded = !expanded);
-```
-
-### Column / Row / Stack ↔ Column / Row / Box
+### Column / Row / Stack / Wrap ↔ Column / Row / Box / FlowRow
 
 ```kotlin
 Column(verticalArrangement = Arrangement.Bottom) { /* ≈ MainAxisAlignment.end */ }
 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { }
 Box(contentAlignment = Alignment.BottomStart) {     // ≈ Stack(alignment: …)
-    Image(/* … */)
     Text("on top", Modifier.align(Alignment.TopEnd)) // ≈ Positioned / Align
 }
 Spacer(Modifier.weight(1f))                          // ≈ Spacer() / Expanded inside a Column/Row
+FlowRow { /* ≈ Wrap */ }
 ```
+
+Real uses: `HomeRoute` stacks the surface and the failure message in a `Box`;
+`IntentWordRow` is a `FlowRow` so the Listen row's inline player wraps under the word at
+200 % font (D22); the Now row uses `Row(Modifier.height(IntrinsicSize.Min))` + tiles with
+`fillMaxHeight()` ≈ `IntrinsicHeight` + `CrossAxisAlignment.stretch`.
 
 ### Padding / SizedBox / Container ↔ `Modifier` chains (order matters)
 
@@ -134,29 +170,40 @@ Modifier.background(colors.surface).padding(16.dp)
 // Padding first: a 16dp transparent margin, then the colour — like
 // Padding(padding: 16, child: ColoredBox(color: …))
 Modifier.padding(16.dp).background(colors.surface)
-
-// Same for taps: clip → clickable gives a ripple clipped to the pill shape;
-// clickable → clip lets the ripple spill outside it.
-Modifier.clip(CircleShape).clickable { }.padding(12.dp)
 ```
 
 `SizedBox(width: 42, height: 42)` ↔ `Modifier.size(42.dp)`;
 `ConstrainedBox(minHeight: 48)` ↔ `Modifier.heightIn(min = 48.dp)`;
 `Expanded` ↔ `Modifier.weight(1f)` (only inside `Row`/`Column`).
 
-Real example from `MainActivity`: background → system-bar insets → gutter padding.
+Real example — Home's layout: a `SingleChildScrollView` whose child is at least as tall as
+the screen, with `spaceBetween`, so the words sit at the bottom in the thumb zone and
+everything scrolls at 200 % font instead of clipping.
 
 ```kotlin
-Modifier
-    .fillMaxSize()
-    .background(colors.bg)              // paint edge to edge, behind the system bars
-    .safeDrawingPadding()               // then keep content out of bars/cutout/IME
-    .padding(ReachTheme.dimens.gutter)  // then the 24dp gutter
+// (simplified from feature/home/…/ui/HomeScreen.kt)
+BoxWithConstraints(                                  // ≈ LayoutBuilder: gives maxHeight
+    Modifier.fillMaxSize()
+        .nestedScroll(swipe)                         // see "Nested scroll" below
+        .windowInsetsPadding(WindowInsets.safeDrawing),  // ≈ SafeArea
+) {
+    Column(
+        Modifier
+            .verticalScroll(rememberScrollState(), overscrollEffect = null) // ≈ SingleChildScrollView
+            .heightIn(min = maxHeight)               // ≈ ConstrainedBox(minHeight: constraints.maxHeight)
+            .padding(start = ReachTheme.dimens.gutter, end = ReachTheme.dimens.gutter),
+        verticalArrangement = Arrangement.SpaceBetween,  // ≈ MainAxisAlignment.spaceBetween
+    ) {
+        Column { HomeDateLine(reading); HomeClock(reading, onOpenAppearance = onAppearance) /* + Now row */ }
+        Column { IntentWords(…); SearchPill(onClick = onSearch) }
+    }
+}
 ```
 
 ### `ListView.builder` ↔ `LazyColumn`
 
 ```kotlin
+// (illustrative — All Apps in M2 will use a lazy list)
 LazyColumn {
     items(apps, key = { it.key }) { app ->   // key ≈ ValueKey: keeps item state stable
         Text(app.label)
@@ -168,17 +215,39 @@ LazyColumn {
 `LazyColumn` inside a vertically scrolling `Column` (same "unbounded height" trap as
 nesting `ListView` in `Column` without `shrinkWrap`).
 
-### GestureDetector ↔ `Modifier.clickable` / `Modifier.pointerInput`
+M1 deliberately uses **no** lazy list: an intent holds tens of apps, so intent detail is a
+plain `Column` inside the scroll (D33), which keeps the list and the intent chips anchored
+at the bottom. In a non-lazy `forEach`, wrap each item in `key(item.app.key) { … }` (≈ a
+`ValueKey`) so remembered per-item state follows the item when the list reorders — see
+`AppList` and `NowRow`.
+
+### GestureDetector ↔ `Modifier.clickable` / `combinedClickable` / `Modifier.pointerInput`
 
 Simple taps: `Modifier.clickable { }` / `Modifier.combinedClickable(onLongClick = …) { }`
-— these also give semantics for TalkBack. Anything custom goes in `pointerInput`:
+— these also give semantics for TalkBack. Reach wraps them in one recipe,
+`Modifier.reachClickable` (D19, see [Accessibility](#accessibility)).
+Anything custom goes in `pointerInput`:
 
 ```kotlin
+// (simplified from feature/home/…/ui/HomeClock.kt) — ≈ GestureDetector(onLongPress: …)
 Modifier.pointerInput(Unit) {
-    detectTapGestures(onDoubleTap = { /* lock */ }, onLongPress = { /* appearance */ })
+    detectTapGestures(
+        onLongPress = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            open()                                     // → HomeViewModel.onAppearanceRequested()
+        },
+    )
 }
+```
 
-// Low level (press-slide-release in M2 is built like this):
+The clock's 450 ms long-press is set by overriding `LocalViewConfiguration` around it
+(never shorter than the system's own "touch & hold delay", D30) — Compose's equivalent of
+`kLongPressTimeout`.
+
+Low level (press-slide-release in M2 will be built like this):
+
+```kotlin
+// (illustrative, M2)
 Modifier.pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown()
@@ -193,17 +262,75 @@ modifier tree, each handler sees them in order, and a handler **consumes** a cha
 (`change.consume()`) to tell others "this is mine". Others check `isConsumed` and back
 off. The full step-by-step write-up comes in `docs/GESTURES.md` (M2).
 
-### `AnimatedContainer` / implicit animations ↔ `animate*AsState` / `AnimatedContent`
+### Nested scroll ↔ `NotificationListener<OverscrollNotification>`
+
+Home *scrolls* (it must, at 200 % font), and pull-down → Search / swipe-up → All Apps must
+not fight that scroll (D29). In Flutter you'd listen for `OverscrollNotification`s bubbling
+up from the scroll view. Compose's equivalent is a `NestedScrollConnection` placed *above*
+the scrollable with `Modifier.nestedScroll(connection)`: after the scroll consumed what it
+could, `onPostScroll` receives the leftover (`available`).
 
 ```kotlin
-val bg by animateColorAsState(if (selected) colors.accent else colors.surface, label = "rowBg")
-val height by animateDpAsState(if (expanded) 120.dp else 58.dp, label = "rowHeight")
-Box(Modifier.height(height).background(bg))
+// (simplified from feature/home/…/ui/HomeGestures.kt)
+internal class VerticalSwipeConnection(/* distancePx, fling thresholds, callbacks */) : NestedScrollConnection {
+    private var accumulated = 0f
+    private var fired = false
 
-AnimatedContent(targetState = surface, label = "surface") { s ->  // ≈ AnimatedSwitcher
-    when (s) { /* Home, IntentDetail, Search… */ }
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.UserInput || fired) return Offset.Zero
+        if (consumed.y != 0f) accumulated = 0f          // content scrolled: measure from the edge
+        accumulated += available.y                       // +y = finger moving down
+        when {
+            accumulated >= distancePx -> fire(down = true)   // pull down → Search
+            accumulated <= -distancePx -> fire(down = false) // swipe up → All Apps
+        }
+        return Offset.Zero                               // we only observe; consume nothing
+    }
+
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        // finger lifted: a fast flick with a little travel also counts; then reset
+        accumulated = 0f; fired = false
+        return Velocity.Zero
+    }
 }
-AnimatedVisibility(visible = isPlaying) { /* play/pause button */ }
+```
+
+`rememberVerticalSwipeConnection` keeps the latest callbacks in `rememberUpdatedState` —
+the Compose way to read "the current `widget.onX`" from a long-lived object.
+
+### `AnimatedSwitcher` / implicit animations ↔ `AnimatedContent` / `animate*AsState`
+
+```kotlin
+// (simplified from feature/home/…/HomeRoute.kt) — ≈ AnimatedSwitcher keyed by the surface
+val surface by viewModel.surface.collectAsStateWithLifecycle()   // which screen
+val state by viewModel.uiState.collectAsStateWithLifecycle()     // what's on it
+
+AnimatedContent(
+    targetState = HomeFrame(surface, state),    // surface + data snapshot for one frame
+    contentKey = { it.surface.contentKey() },   // ≈ the child's Key: same key → no transition
+    transitionSpec = { surfaceTransition(reducedMotion) },
+    label = "surface",
+) { shown ->
+    when (val s = shown.surface) {
+        HomeSurface.Home, HomeSurface.Appearance -> HomeScreen(/* … */)
+        is HomeSurface.IntentDetail -> IntentDetailScreen(detail = shown.state.detailFor(s.intent) /* … */)
+        HomeSurface.Search -> SearchPlaceholder(onClose = viewModel::onBack)
+        HomeSurface.AllApps -> AllAppsPlaceholder(onClose = viewModel::onBack)
+    }
+}
+AnimatedVisibility(visible = surface == HomeSurface.Appearance /* … */) {
+    AppearancePlaceholderSheet(onClose = viewModel::onBack)    // the sheet slides in *over* Home
+}
+```
+
+`targetState` is the whole frame (surface + data), so a surface that's fading out keeps
+rendering the snapshot it showed. With "Remove animations" on, `rememberReducedMotion()` (a
+`ContentObserver` on `ANIMATOR_DURATION_SCALE`) turns the transition into a plain
+cross-fade. Implicit property animations work as in Flutter:
+
+```kotlin
+// (illustrative)
+val bg by animateColorAsState(if (selected) colors.accent else colors.surface, label = "rowBg")
 ```
 
 The `label` parameter only names the animation in Android Studio's animation inspector.
@@ -214,44 +341,101 @@ The `label` parameter only names the animation in Android Studio's animation ins
 
 ### BLoC / Cubit ↔ `ViewModel` + `StateFlow`
 
-*(illustrative, M1+ — `HomeViewModel` doesn't exist yet; the repository interfaces do)*
-
 ```kotlin
-@HiltViewModel
+// (simplified from feature/home/…/HomeViewModel.kt)
+@HiltViewModel                                            // ≈ @injectable + BlocProvider factory
 class HomeViewModel @Inject constructor(
-    catalog: AppCatalogRepository,                      // real interface in :core:data
+    private val catalogRepository: AppCatalogRepository,  // interfaces from :core:data only
+    private val historyRepository: LaunchHistoryRepository,
+    predictionRepository: PredictionRepository,
+    settingsRepository: SettingsRepository,
+    notificationCountSource: NotificationCountSource,
+    private val appLauncher: AppLauncher,
+    private val clock: Clock,
+    // … ShortcutSource, HomeRoleSource
 ) : ViewModel() {
-    val uiState: StateFlow<HomeUiState> =               // ≈ the Cubit's state stream
-        catalog.apps
-            .map { apps -> HomeUiState(apps = apps.filterNot { it.isHidden }) }
+    private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
+    val surface: StateFlow<HomeSurface> = _surface.asStateFlow()   // which screen — always current
+
+    val uiState: StateFlow<HomeUiState> =                 // ≈ the Cubit's state stream (data only)
+        combine(settingsRepository.settings, catalog, predictionRepository.predictions(3)) {
+            settings, catalog, predictions -> buildUiState(settings, catalog, predictions)
+        }.flowOn(defaultDispatcher)                       // build/sort off the main thread
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
-    private val _events = Channel<HomeEvent>(Channel.BUFFERED)
-    val events = _events.receiveAsFlow()                 // one-off events (each delivered once)
+    val theme: StateFlow<HomeTheme> = /* settings → (themeMode, palette), distinctUntilChanged */
 
-    fun onIntentTapped(intent: ReachIntent) { /* ≈ add(IntentTapped(intent)) / emit(...) */ }
+    fun onIntentSelected(intent: ReachIntent) { _surface.value = HomeSurface.IntentDetail(intent) } // ≈ add(IntentTapped(intent))
+    fun onBack() { _surface.value = HomeSurface.Home }
 }
 ```
 
-In a composable:
+- `combine` ≈ `Rx.combineLatest`: a new `HomeUiState` whenever any input emits.
+- `stateIn(scope, WhileSubscribed(5_000), initial)` turns the cold pipeline into a hot
+  `StateFlow` with a current value (≈ a `BehaviorSubject` seeded with `initial`). It runs
+  while someone collects and **5 s longer** — a quick app switch doesn't restart it, but Home
+  in the background stops working. The initial `HomeUiState()` is a valid first frame
+  (`catalogLoaded = false`: intent rows without counts, no Now row), so Home never shows a
+  spinner or a misleading "0".
+- **Why `surface` is a separate `StateFlow`:** after those 5 s the `combine` is stopped, and a
+  `stateIn` value only updates when its inputs re-emit. If the surface lived inside
+  `uiState`, pressing Home after a while away would show the *previous* screen for a frame.
+  A plain `MutableStateFlow` is always current (D39).
+- The data is one immutable `@Immutable data class HomeUiState(catalogLoaded, thumbSide,
+  intents, now, details)` (`HomeUiState.kt`) ≈ a freezed state class; `details` holds all six
+  intent details precomputed, read with `detailFor(intent)`.
+- A ViewModel survives configuration changes (rotation, dark mode) — like a BLoC provided
+  above the `MaterialApp`, not inside the route. `MainActivity` obtains it with
+  `by viewModels()` and passes it down (≈ one root `BlocProvider`).
+
+### `BlocBuilder` / `BlocListener` ↔ `collectAsStateWithLifecycle` / an event `Channel`
+
+State that should *replay* (what Home shows) goes into `uiState`. Things that must happen
+**once** — hide the keyboard, show "Couldn't open X" — are events, sent through a `Channel`:
 
 ```kotlin
+// (real, feature/home/…/HomeViewModel.kt)
+// A Channel (not a SharedFlow) so an event sent while the UI isn't collecting (e.g.
+// HideKeyboard from onNewIntent before onResume) is buffered and delivered once.
+private val eventChannel = Channel<HomeEvent>(Channel.BUFFERED)
+val events: Flow<HomeEvent> = eventChannel.receiveAsFlow()
+
+fun onHomePressed() {
+    surface.value = HomeSurface.Home
+    eventChannel.trySend(HomeEvent.HideKeyboard)
+}
+```
+
+```kotlin
+// (simplified from feature/home/…/HomeRoute.kt)
 @Composable
-fun HomeRoute(viewModel: HomeViewModel = hiltViewModel()) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()   // ≈ BlocBuilder
-    LaunchedEffect(Unit) {                                          // ≈ BlocListener
-        viewModel.events.collect { event -> /* show a toast, open settings… */ }
+fun HomeRoute(viewModel: HomeViewModel, modifier: Modifier = Modifier) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()        // ≈ BlocBuilder
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(viewModel, lifecycleOwner) {                          // ≈ BlocListener
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.events.collect { event ->
+                when (event) {
+                    HomeEvent.HideKeyboard -> { keyboard?.hide(); focusManager.clearFocus(force = true) }
+                    is HomeEvent.LaunchFailed -> failedLabel = event.label
+                }
+            }
+        }
     }
-    HomeScreen(state, onIntentTapped = viewModel::onIntentTapped)
+    BackHandler(enabled = true) { viewModel.onBack() }                  // ≈ PopScope, see below
+    Box(modifier.fillMaxSize().background(ReachTheme.colors.bg)) { HomeSurfaces(state, viewModel) }
 }
 ```
 
 - `collectAsStateWithLifecycle()` (from `lifecycle-runtime-compose`) stops collecting when
   the app is in the background — prefer it over plain `collectAsState()`.
-- `hiltViewModel()` comes from `androidx.hilt.lifecycle.viewmodel.compose` (≈
-  `BlocProvider(create: (_) => getIt<HomeCubit>())`).
-- A ViewModel survives configuration changes (rotation, dark mode) — like a BLoC provided
-  above the `MaterialApp`, not inside the route.
+- `repeatOnLifecycle(STARTED)` does the same for the event collector.
+- Why `Channel` and not `SharedFlow`: a `SharedFlow` without subscribers *drops* emissions;
+  a buffered `Channel` keeps them until someone receives — each event exactly once, like a
+  `BlocListener` that never misses a state.
 
 ### Streams ↔ `Flow`
 
@@ -259,44 +443,77 @@ fun HomeRoute(viewModel: HomeViewModel = hiltViewModel()) {
 |---|---|
 | single-subscription `Stream` (e.g. `async*`) | cold `Flow` — runs its producer per collector |
 | `BehaviorSubject` / `ValueStream` (rxdart) | `StateFlow` — hot, always has `.value`, replays latest, skips equal values |
-| `PublishSubject` / broadcast stream | `SharedFlow` |
+| `PublishSubject` / broadcast stream | `SharedFlow` (`shareIn`) |
+| `shareReplay(1)` | `shareIn(scope, WhileSubscribed(…), replay = 1)` (`PredictionRepositoryImpl`) |
 | `stream.listen(…)` | `flow.collect { … }` (a `suspend` call, runs in a coroutine) |
-| `StreamController` | `MutableStateFlow` / `MutableSharedFlow` / `Channel` |
+| `StreamController` | `MutableStateFlow` / `MutableSharedFlow` / `Channel` / `callbackFlow` |
+| `switchMap` / `combineLatest` / `distinct` | `flatMapLatest` / `combine` / `distinctUntilChanged` |
+| `Stream.periodic` | a `flow { while (true) { emit(…); delay(…) } }` (`hourTicks`) |
 
 Real contract and fake:
 
 ```kotlin
-// :core:data — the catalog is a never-ending stream of the current app list
+// (simplified from core/data/…/repository/Repositories.kt)
 interface AppCatalogRepository {
+    /** All apps including hidden ones, sorted by label (locale-aware). Never completes. */
     val apps: Flow<List<CatalogApp>>
     suspend fun refresh()
+    suspend fun moveToIntent(key: AppKey, intent: ReachIntent)
+    suspend fun setHidden(key: AppKey, hidden: Boolean)
 }
 
-// :core:data fake — a MutableStateFlow exposed as Flow (≈ a BehaviorSubject behind a Stream getter)
+// (simplified from core/data/…/fake/FakeRepositories.kt) — ≈ a BehaviorSubject behind a Stream getter
 class FakeAppCatalogRepository(initial: List<CatalogApp> = emptyList()) : AppCatalogRepository {
-    val state = MutableStateFlow(initial)
-    override val apps: Flow<List<CatalogApp>> = state
+    val state = MutableStateFlow(initial)          // tests push new lists to simulate installs
+    override val apps: Flow<List<CatalogApp>> = state.map { it.sortedWith(/* Collator */) }
     // …
 }
 ```
 
-Operators read like rxdart: `map`, `filter`, `combine` (≈ `Rx.combineLatest`),
-`flatMapLatest` (≈ `switchMap`), `distinctUntilChanged`, `debounce`.
+### `StreamController` around a platform callback ↔ `callbackFlow`
+
+When a plugin wraps a native listener in an `EventChannel`, the Dart side is a stream
+whose `onListen` registers the listener and `onCancel` unregisters it. `callbackFlow` is
+exactly that, without the channel:
+
+```kotlin
+// (simplified from core/system/…/util/BroadcastFlow.kt)
+internal fun Context.broadcasts(actions: Collection<String>): Flow<Intent> =
+    callbackFlow {                                        // ≈ StreamController(onListen: …)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) { trySend(intent) } // ≈ controller.add
+        }
+        val filter = IntentFilter().apply { actions.forEach(::addAction) }
+        ContextCompat.registerReceiver(this@broadcasts, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        awaitClose { unregisterReceiver(receiver) }       // ≈ onCancel
+    }
+```
+
+`LauncherAppsInstalledAppsSource` does the same with `LauncherApps.registerCallback`; its
+callback only *pokes* a `Channel(Channel.CONFLATED)` and a collector re-reads the full app
+list on the IO dispatcher, so a burst of callbacks collapses into one or two reads.
 
 ### `Future` / `async`/`await` ↔ `suspend` + coroutines
 
 ```kotlin
-suspend fun refresh()                // ≈ Future<void> refresh()
-viewModelScope.launch {              // ≈ fire-and-forget inside a BLoC; cancelled in onCleared()
-    catalog.refresh()                // no `await` keyword — suspend calls await implicitly
+// (real, feature/home/…/HomeViewModel.kt)
+fun onResume() {
+    homeRoleSource.recheck()
+    viewModelScope.launch { catalogRepository.refresh() }   // ≈ unawaited(repo.refresh()) inside a BLoC
 }
-val a = async { loadA() }            // ≈ Future.wait([...])
-val b = async { loadB() }
-use(a.await(), b.await())
+
+// (real, core/data/…/repository/impl/AppCatalogRepositoryImpl.kt)
+override suspend fun refresh() {                              // ≈ Future<void> refresh() async
+    withContext(ioDispatcher) { safeSync(installedAppsSource.installedApps.first()) }  // ≈ await stream.first
+}
 ```
 
 - `viewModelScope` ≈ the BLoC's lifetime: everything launched in it is cancelled when the
   ViewModel is cleared (no manual `StreamSubscription.cancel()`).
+- Work that must outlive every screen (keeping the app cache in sync) runs in an injected
+  `@ApplicationScope CoroutineScope` instead (`core/data/…/di/DataModules.kt`).
+- `withContext(Dispatchers.IO) { … }` ≈ `compute()`/an isolate hop for blocking work —
+  but on a real thread pool, not a separate isolate.
 - Composables use `LaunchedEffect` / `rememberCoroutineScope()` for their own coroutines.
 - Cancellation is cooperative and structured: cancelling a scope cancels its children.
 
@@ -304,78 +521,151 @@ use(a.await(), b.await())
 
 | injectable | Hilt |
 |---|---|
-| `configureDependencies()` in `main()` | `@HiltAndroidApp` on `ReachApplication` (real) |
-| `@injectable` class | `class X @Inject constructor(…)` |
-| `@module abstract class` | `@Module @InstallIn(SingletonComponent::class)` |
-| `@LazySingleton(as: Repo)` | `@Binds @Singleton abstract fun bind(impl: Impl): Repo` |
-| `getIt<HomeCubit>()` | `@HiltViewModel` + `hiltViewModel()` |
-| — | `@AndroidEntryPoint` on `MainActivity` (real): lets Hilt inject into the Activity |
+| `configureDependencies()` in `main()` | `@HiltAndroidApp` on `ReachApplication` |
+| `@injectable` / `@lazySingleton` class | `class X @Inject constructor(…)` (+ `@Singleton`) |
+| `@module abstract class RegisterModule` | `@Module @InstallIn(SingletonComponent::class)` |
+| `@LazySingleton(as: Repo)` | `@Binds abstract fun bind(impl: Impl): Repo` |
+| a module getter that builds a third-party object | `@Provides fun provide…(): T` |
+| `@Named('io')` | a `@Qualifier` annotation (`@IoDispatcher`, `@ApplicationScope`) |
+| `getIt<HomeCubit>()` | `@HiltViewModel` + `by viewModels()` / `hiltViewModel()` |
+| — | `@AndroidEntryPoint` on `MainActivity`: lets Hilt inject into the Activity |
 | build_runner | KSP (`ksp(libs.hilt.compiler)`) generates the graph at compile time |
 
 ```kotlin
-// app/.../ReachApplication.kt (real)
-@HiltAndroidApp
-class ReachApplication : Application()
-
-// (illustrative, M1+) binding the real interface to a future implementation
+// (simplified from core/data/…/di/DataModules.kt)
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class DataModule {
+abstract class RepositoryModule {
+    @Binds abstract fun bindAppCatalogRepository(impl: AppCatalogRepositoryImpl): AppCatalogRepository
+    @Binds abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+    // …
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+    @Provides @Singleton
+    fun provideDatabase(@ApplicationContext context: Context): ReachDatabase =
+        Room.databaseBuilder(context, ReachDatabase::class.java, ReachDatabase.NAME).build()
+
+    @Provides fun provideAppCacheDao(db: ReachDatabase): AppCacheDao = db.appCacheDao()
+}
+
+// (simplified from core/system/…/di/SystemModule.kt) — real implementations and M1 stubs
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class SystemModule {
+    @Binds @Singleton abstract fun bindAppLauncher(impl: SystemAppLauncher): AppLauncher
+    /** M3 placeholder. */
     @Binds @Singleton
-    abstract fun bindCatalog(impl: RoomAppCatalogRepository): AppCatalogRepository
+    abstract fun bindNotificationCountSource(impl: UnavailableNotificationCountSource): NotificationCountSource
+}
+
+// (real, app/…/ReachApplication.kt) — field injection where there's no constructor to inject
+@HiltAndroidApp
+class ReachApplication : Application() {
+    @Inject lateinit var activityTracker: ActivityTracker
+    override fun onCreate() {
+        super.onCreate() // Hilt injects the fields above here.
+        registerActivityLifecycleCallbacks(activityTracker)
+    }
 }
 ```
 
-Unlike get_it, a missing binding is a **compile error**, not a runtime crash.
+The modules sit next to their code (`:core:data`, `:core:system`); `:app` depends on both, so
+Hilt sees every `@InstallIn` module there and assembles one graph. Unlike get_it, a missing
+binding is a **compile error**, not a runtime crash.
 
 ### `shared_preferences` ↔ DataStore
 
-DataStore is async and Flow-based (no synchronous `getString`). It will back
-`SettingsRepository` in M4. *(illustrative)*
+DataStore is async and Flow-based (no synchronous `getString`); every `edit` emits a new
+snapshot, so the UI re-themes live with no "reload".
 
 ```kotlin
-private val Context.settingsStore by preferencesDataStore(name = "settings")
-private val PALETTE = stringPreferencesKey("palette")
+// (simplified from core/data/…/di/DataModules.kt) — exactly one instance per file, hence @Singleton
+@Provides @Singleton
+fun providePreferencesDataStore(@ApplicationContext context: Context, /* scope, io */): DataStore<Preferences> =
+    PreferenceDataStoreFactory.create(
+        corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },  // corrupt file → defaults
+        produceFile = { context.preferencesDataStoreFile("settings") },
+    )
 
-val palette: Flow<PaletteId> =
-    context.settingsStore.data.map { prefs -> PaletteId.fromStorageKey(prefs[PALETTE]) }
+// (simplified from core/data/…/repository/impl/SettingsRepositoryImpl.kt)
+override val settings: Flow<AppearanceSettings> =
+    dataStore.data                                                  // ≈ a Stream of the whole prefs map
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs.toSettings() }                        // PaletteId.fromStorageKey(prefs[PALETTE]) …
+        .distinctUntilChanged()
 
-suspend fun setPalette(p: PaletteId) {
-    context.settingsStore.edit { it[PALETTE] = p.storageKey }   // stored by name, never colours
+override suspend fun setPalette(palette: PaletteId) = put(Keys.PALETTE, palette.storageKey)  // by name, never colours
+
+private object Keys {                                               // never rename: these strings are on disk
+    val PALETTE = stringPreferencesKey("palette")
+    val THUMB_SIDE = stringPreferencesKey("thumb_side")
 }
 ```
+
+In M1 the settings are only *read* (theme, palette, thumb side flow into `HomeUiState`); the
+Appearance sheet that writes them arrives in M4.
 
 ### sqflite / drift ↔ Room
 
 Room ≈ drift: annotated classes, generated code, queries checked at compile time,
 `Flow` results that re-emit when tables change (≈ drift's `watch()`). Code generation runs
-through **KSP** (≈ `build_runner`, but automatic on every build). Reach uses Room in M1 for
-launch history and intent assignments. *(illustrative)*
+through **KSP** (≈ `build_runner`, but automatic on every build).
 
 ```kotlin
-@Entity(tableName = "launch_events")
+// (simplified from core/data/…/db/Entities.kt) — ≈ class LaunchEvents extends Table
+@Entity(tableName = "launch_events", indices = [Index(value = ["epoch_millis"])])
 data class LaunchEventEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
     // The three parts of AppKey: an app is package + activity + profile, not just a package.
-    val packageName: String,
-    val activityName: String,
-    val userSerial: Long,
-    val epochMillis: Long,
+    @ColumnInfo(name = "package_name") val packageName: String,
+    @ColumnInfo(name = "activity_name") val activityName: String,
+    @ColumnInfo(name = "user_serial") val userSerial: Long,
+    @ColumnInfo(name = "epoch_millis") val epochMillis: Long,
+    @ColumnInfo(name = "hour_of_day") val hourOfDay: Int,     // captured at launch time (D27)
+    @ColumnInfo(name = "day_of_week") val dayOfWeek: Int,
 )
 
+// (simplified from core/data/…/db/Daos.kt)
 @Dao
-interface LaunchEventDao {
-    @Insert suspend fun insert(e: LaunchEventEntity)
-    @Query("SELECT * FROM launch_events WHERE epochMillis >= :since ORDER BY epochMillis")
-    fun since(since: Long): Flow<List<LaunchEventEntity>>   // ≈ drift .watch()
+abstract class LaunchEventDao {
+    @Insert abstract suspend fun insert(event: LaunchEventEntity)                 // ≈ into(t).insert → Future
+
+    @Query("SELECT * FROM launch_events WHERE epoch_millis >= :sinceEpochMillis ORDER BY epoch_millis ASC, id ASC")
+    abstract fun observeSince(sinceEpochMillis: Long): Flow<List<LaunchEventEntity>>  // ≈ .watch()
 }
 
-@Database(entities = [LaunchEventEntity::class], version = 1)
-abstract class ReachDatabase : RoomDatabase() { abstract fun launchEvents(): LaunchEventDao }
+@Dao
+abstract class AppCacheDao {
+    @Upsert abstract suspend fun upsert(rows: List<CachedAppEntity>)
+    @Delete abstract suspend fun delete(rows: List<CachedAppEntity>)
+
+    @Transaction                                       // ≈ db.transaction(() async { … })
+    open suspend fun applyDiff(upserts: List<CachedAppEntity>, deletes: List<CachedAppEntity>) {
+        if (upserts.isNotEmpty()) upsert(upserts)
+        if (deletes.isNotEmpty()) delete(deletes)
+    }
+}
+
+// (simplified from core/data/…/db/ReachDatabase.kt) — ≈ @DriftDatabase(tables: [...])
+@Database(entities = [CachedAppEntity::class, AppAssignmentEntity::class, LaunchEventEntity::class], version = 1, exportSchema = true)
+abstract class ReachDatabase : RoomDatabase() {
+    abstract fun appCacheDao(): AppCacheDao
+    abstract fun appAssignmentDao(): AppAssignmentDao
+    abstract fun launchEventDao(): LaunchEventDao
+}
 ```
 
-Schemas are exported to `core/data/schemas` (see `room { schemaDirectory(…) }` in
-`core/data/build.gradle.kts`) so migrations can be tested.
+- Column names are fixed with `@ColumnInfo`, and enums are stored by stable string keys
+  (`ReachIntent.storageKey`), never by `name`/ordinal — renaming a Kotlin property or enum
+  constant must never change what's on disk.
+- Schemas are exported to `core/data/schemas` (see `room { schemaDirectory(…) }` in
+  `core/data/build.gradle.kts`) and committed, so future migrations can be tested against the
+  exact v1 schema (≈ drift's schema dumps).
+- `abstract class` DAOs (not interfaces) because `@Transaction` methods with a body are
+  simplest there.
 
 ### `Theme.of(context)` / `ThemeExtension` ↔ `CompositionLocal`
 
@@ -384,14 +674,16 @@ into the tree; `LocalX.current` reads the nearest one. Reach's tokens (`ReachCol
 the equivalent of a `ThemeExtension`.
 
 ```kotlin
-// core/designsystem/.../ReachTheme.kt (real, abridged)
-val LocalReachColors = staticCompositionLocalOf { ReachColors.of(PaletteId.DEFAULT, isDark = true) }
+// (simplified from core/designsystem/…/theme/ReachTheme.kt)
+// No default: reading it outside ReachTheme throws, so a missing theme is caught at once (D17).
+val LocalReachColors = staticCompositionLocalOf<ReachColors> { error("No ReachTheme: wrap content in ReachTheme { … }") }
 
 @Composable
-fun ReachTheme(colors: ReachColors, typography: ReachTypography = ReachTypography.Default, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = /* mapped from colors */) {
-        CompositionLocalProvider(LocalReachColors provides colors, LocalReachTypography provides typography, content = content)
-    }
+fun ReachTheme(palette: PaletteId = PaletteId.DEFAULT, themeMode: ThemeMode = ThemeMode.AUTO,
+               wallpaperAccent: Color? = null, content: @Composable () -> Unit) {
+    val isDark = when (themeMode) { ThemeMode.AUTO -> isSystemInDarkTheme(); ThemeMode.DARK -> true; ThemeMode.LIGHT -> false }
+    val colors = remember(palette, isDark, wallpaperAccent) { /* palette → derived tokens */ }
+    ReachTheme(colors = colors, content = content)   // → MaterialTheme(mapped) + CompositionLocalProvider(LocalReachColors provides colors, …)
 }
 
 object ReachTheme {
@@ -402,6 +694,11 @@ object ReachTheme {
 Text("Talk", color = ReachTheme.colors.fg)        // ≈ Theme.of(context).extension<ReachColors>()!.fg
 ```
 
+`ReachApp` (`app/…/ReachApp.kt`) is the `MaterialApp(theme: …)`: it collects the small
+`HomeViewModel.theme` flow (`themeMode` + `palette` only, `distinctUntilChanged`) and passes
+it to `ReachTheme`, so a settings change re-themes everything live while catalog or
+prediction updates don't recompose the theme root.
+
 **`staticCompositionLocalOf` vs `compositionLocalOf`:**
 - `compositionLocalOf` tracks *who reads it*; changing the value recomposes only those readers.
   Good for values that change often and are read in a few places.
@@ -410,36 +707,36 @@ Text("Talk", color = ReachTheme.colors.fg)        // ≈ Theme.of(context).exten
   they're read almost everywhere and change rarely (palette/theme switch), when a full
   recomposition is what we want anyway.
 
-Material 3 is used only as infrastructure; `ReachTheme` maps Reach's tokens onto
-`MaterialTheme.colorScheme` so text fields and ripples already look like Reach.
+Material 3 is used only as infrastructure; `ReachTheme` maps *every* Reach token onto
+`MaterialTheme.colorScheme` and the 15 type styles, so text fields, ripples and switches
+never show stock purple or Roboto (D17).
 
-### `Navigator` ↔ a state machine in `HomeViewModel`
+### `Navigator` / `PopScope` ↔ a state machine + `BackHandler`
 
-Reach deliberately has **no Navigation Compose**. Home, IntentDetail, Search, AllApps and
-the Appearance sheet are states of one surface (see [PLAN.md §3](PLAN.md#3-surface-state-machine-in-homeviewmodel)):
+Reach deliberately has **no Navigation Compose** (D28). Home, IntentDetail, Search, AllApps
+and the Appearance sheet are states of one surface:
 
 ```kotlin
-// (illustrative, M1)
+// (simplified from feature/home/…/HomeSurface.kt)
+@Immutable
 sealed interface HomeSurface {
     data object Home : HomeSurface
     data class IntentDetail(val intent: ReachIntent) : HomeSurface
-    data object Search : HomeSurface
-    data object AllApps : HomeSurface
-    data object Appearance : HomeSurface
+    data object Search : HomeSurface       // real screen: :feature:search (M2)
+    data object AllApps : HomeSurface      // real screen: :feature:allapps (M2)
+    data object Appearance : HomeSurface   // real sheet: :feature:appearance (M4)
 }
 
-when (val s = state.surface) {          // ≈ a BlocBuilder switching on a sealed state
-    HomeSurface.Home -> HomeScreen(…)
-    is HomeSurface.IntentDetail -> IntentDetailScreen(s.intent, …)
-    …
-}
-BackHandler(enabled = state.surface != HomeSurface.Home) { viewModel.onBack() }  // ≈ PopScope
+// (real, feature/home/…/HomeRoute.kt) — ≈ PopScope(canPop: false, onPopInvokedWithResult: …)
+BackHandler(enabled = true) { viewModel.onBack() }
 ```
 
-Why: a launcher has a single surface, the **Home button must always return to Home**
-(`MainActivity.onNewIntent` → `HomeViewModel.onHomePressed()`), Back steps one level and
-does nothing on Home. That is a five-state machine, easier to test as plain ViewModel
-logic than a back stack.
+`HomeRoute` switches on `viewModel.surface` inside `AnimatedContent` (see above). Back is
+**always** consumed: sub-surfaces go to Home, Home ignores it (letting it through would
+finish the launcher Activity). The Home button goes through `MainActivity.onNewIntent` →
+`HomeViewModel.onHomePressed()`. That's a five-state machine, easier to test as plain
+ViewModel logic than a back stack — see the state diagram in
+[ARCHITECTURE.md §4](ARCHITECTURE.md#4-the-home-surface-state-machine).
 
 ### `MethodChannel` ↔ not needed
 
@@ -447,32 +744,48 @@ You're already native. Android APIs are plain Kotlin calls — no channel, no co
 platform thread hop:
 
 ```kotlin
-// (illustrative, M1 — :core:system)
-val launcherApps = context.getSystemService(LauncherApps::class.java)
-val activities = launcherApps.getActivityList(null, userHandle)
-launcherApps.startMainActivity(component, userHandle, sourceBounds, options)
+// (simplified from core/system/…/launch/SystemAppLauncher.kt)
+override fun launchApp(key: AppKey, origin: LaunchOrigin?): Boolean {
+    val user = profiles.userFor(key.userSerial) ?: return false        // stored serial → UserHandle
+    val activity = tracker.resumedActivity                              // ActivityTracker, D11
+    val (sourceBounds, options) = animationFor(activity, origin)        // makeClipRevealAnimation(decorView, …)
+    return try {
+        launcherApps.startMainActivity(ComponentName(key.packageName, key.activityName), user, sourceBounds, options)
+        true
+    } catch (e: ActivityNotFoundException) { false } catch (e: SecurityException) { false }
+}
 ```
 
 In Reach those calls live only in `:core:system`, behind the interfaces in
 `:core:data/source` (e.g. `InstalledAppsSource`, `AppLauncher`) — the same role a
-platform-interface package plays for a Flutter plugin.
+platform-interface package plays for a Flutter plugin. Note the Java-shaped error model:
+Android reports failure with **exceptions** (`ActivityNotFoundException`,
+`SecurityException`); Reach catches the documented ones and returns `false` so Home never crashes.
 
 ---
 
-## App entry, context and platform
+## App entry, context, lifecycle and platform
 
 ### `main()` / `runApp()` ↔ `MainActivity.setContent`
 
 ```kotlin
-// app/.../MainActivity.kt (real)
+// (simplified from app/…/MainActivity.kt)
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val viewModel: HomeViewModel by viewModels()     // ≈ the root BlocProvider
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {                 // ≈ runApp(...)
-            ReachTheme { FoundationPlaceholder() }
+        setContent {                                         // ≈ runApp(...)
+            ReachApp(viewModel = viewModel, onDarkSystemBars = ::applySystemBarStyle)
         }
+    }
+
+    // singleTask: pressing Home while Reach exists delivers the HOME intent here.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        viewModel.onHomePressed()
     }
 }
 ```
@@ -485,46 +798,84 @@ makes Reach a launcher.
 
 Composables don't receive a context parameter. Anything "from above" is a composition
 local: `LocalContext.current` (the Android `Context`, for system services and resources),
-`LocalConfiguration.current`, `LocalDensity.current`, `ReachTheme.colors`.
+`LocalConfiguration.current`, `LocalDensity.current`, `LocalLocale.current`,
+`LocalSoftwareKeyboardController.current`, `ReachTheme.colors`.
 
 ```kotlin
 val context = LocalContext.current
-val label = stringResource(R.string.app_name)   // resources without passing context around
+val label = stringResource(R.string.home_intent_talk)   // resources without passing context around
 ```
 
 Don't store a `Context` in a ViewModel (it leaks the Activity); inject
-`@ApplicationContext context: Context` with Hilt where it's really needed.
+`@ApplicationContext context: Context` with Hilt where it's really needed (every
+`:core:system` class does). For the few things that need the *Activity* (launch animation,
+role dialog), Reach uses `ActivityTracker`, a weak reference to the resumed Activity (D11).
+
+### `initState`/`dispose` and app lifecycle ↔ `DisposableEffect` / `LifecycleResumeEffect`
+
+```kotlin
+// (simplified from feature/home/…/ui/HomeClock.kt) — ≈ initState registers, dispose unregisters
+@Composable
+internal fun rememberWallClock(): State<ClockReading> {
+    val context = LocalContext.current
+    val reading = remember(context) { mutableStateOf(readClock(context)) }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) { reading.value = readClock(context) }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK); addAction(Intent.ACTION_TIME_CHANGED); addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    LifecycleResumeEffect(context) {               // ≈ didChangeAppLifecycleState(resumed)
+        reading.value = readClock(context)
+        onPauseOrDispose { }
+    }
+    return reading
+}
+```
+
+`ReachApp` uses the same `LifecycleResumeEffect` to call `HomeViewModel.onResume()` (re-check
+the home role, refresh the catalog) every time the user comes back to Home.
 
 ### `MediaQuery.padding` / `SafeArea` ↔ `WindowInsets`, edge-to-edge
 
 `enableEdgeToEdge()` lets Reach draw behind the status and navigation bars (mandatory
-behaviour when targeting API 35+). Each composable then decides how to avoid them:
+behaviour when targeting API 35+). Each surface then avoids them itself:
 
 ```kotlin
-Modifier.safeDrawingPadding()                      // ≈ SafeArea: bars + cutout + keyboard
-Modifier.windowInsetsPadding(WindowInsets.systemBars)
-Modifier.imePadding()                              // ≈ MediaQuery.viewInsets.bottom
+Modifier.windowInsetsPadding(WindowInsets.safeDrawing)  // ≈ SafeArea: bars + cutout + keyboard (Home, detail)
+Modifier.imePadding()                                    // ≈ MediaQuery.viewInsets.bottom
 ```
 
-The manifest's `windowSoftInputMode="adjustResize"` plus these modifiers is how search
-results will sit just above the keyboard (M2).
+`MainActivity.applySystemBarStyle` calls `enableEdgeToEdge(SystemBarStyle.dark/light(…))`
+again whenever the *resolved* Reach theme changes, so status-bar icons stay visible when
+the user forces Dark or Light. The manifest's `windowSoftInputMode="adjustResize"` plus
+these modifiers is how search results will sit just above the keyboard (M2).
 
 ### `intl` / ARB ↔ `strings.xml` + `values-tr/`
 
 ```xml
-<!-- app/src/main/res/values/strings.xml (real) -->
-<string name="foundation_subtitle">Foundation build. Home arrives in M1.</string>
-<!-- app/src/main/res/values-tr/strings.xml (real) -->
-<string name="foundation_subtitle">Temel sürüm. Ana ekran M1\'de geliyor.</string>
+<!-- feature/home/src/main/res/values/strings.xml (real) -->
+<string name="home_intent_make">Make</string>
+<string name="home_launch_failed">Couldn\'t open %1$s</string>
+<!-- feature/home/src/main/res/values-tr/strings.xml (real) -->
+<string name="home_intent_make">Üret</string>
+<string name="home_launch_failed">%1$s açılamadı</string>
 ```
 
 ```kotlin
-Text(stringResource(R.string.foundation_subtitle))   // ≈ AppLocalizations.of(context)!.foundationSubtitle
+Text(stringResource(R.string.home_launch_failed, label))   // ≈ AppLocalizations.of(context)!.homeLaunchFailed(label)
+pluralStringResource(R.plurals.home_now_reason_unread, count, count)   // ≈ Intl.plural
 ```
 
-The system picks the folder by device locale — no delegate setup. Apostrophes must be
-escaped (`\'`). Plurals use `<plurals>` + `pluralStringResource`. Locale-aware sorting
-uses `java.text.Collator`; Turkish-aware matching uses `TextFolding` in `:core:model`.
+The system picks the folder by device locale — no delegate setup. Each module has its own
+`res/` and its own `R` class. Apostrophes must be escaped (`\'`). Locale-aware sorting uses
+`java.text.Collator` (`CatalogAssembler`); Turkish-aware matching uses `TextFolding` in
+`:core:model`. Labels are upper-cased at display time with `LocalLocale`, so Turkish "i"
+becomes "İ" (D20).
 
 ### `const` widgets / rebuild optimisation ↔ recomposition skipping, `@Immutable` / `@Stable`
 
@@ -534,16 +885,62 @@ for *stable* types: primitives, `String`, and classes marked `@Immutable`/`@Stab
 inferred stable.
 
 ```kotlin
-// core/designsystem/.../ReachColors.kt (real)
+// (simplified from feature/home/…/HomeUiState.kt)
 @Immutable
-data class ReachColors(val isDark: Boolean, val bg: Color, val fg: Color, /* … */)
+data class IntentSummary(val intent: ReachIntent, val appCount: Int, val unreadCount: Int)
 ```
 
-With the Kotlin 2.x Compose compiler, *strong skipping* is on by default, so unstable
-parameters are compared by instance (`===`) instead of disabling skipping. Still: pass
-`List`s that don't change identity needlessly, hoist lambdas with `remember` when they
-capture changing values, and read fast-changing state (scroll, drag offsets) as late as
-possible — e.g. in `Modifier.offset { }` lambdas or `drawBehind`.
+Because `HomeUiState.intents` is a list of these, a new catalog emission only recomposes the
+`IntentWordRow` whose summary actually changed. With the Kotlin 2.x Compose compiler,
+*strong skipping* is on by default. Still: replace lists wholesale rather than mutating them,
+use `rememberUpdatedState` for callbacks captured by long-lived objects, and keep
+fast-changing values out of state when nothing needs to recompose — `LaunchOriginHolder`
+stores the tapped element's bounds in a plain field, updated from `onGloballyPositioned`,
+because it changes every scroll frame and is only read on tap.
+
+---
+
+## Accessibility
+
+### `Semantics` / `CustomSemanticsAction` ↔ `Modifier.semantics` / `CustomAccessibilityAction`
+
+TalkBack reads the **semantics tree**, Compose's equivalent of Flutter's semantics tree.
+
+| Flutter | Compose |
+|---|---|
+| `Semantics(label: …)` | `Modifier.semantics { contentDescription = … }` |
+| `Semantics(header: true)` | `Modifier.semantics { heading() }` |
+| `MergeSemantics` + `ExcludeSemantics` | `clearAndSetSemantics { … }` (replace children's semantics with one description) |
+| `CustomSemanticsAction` | `CustomAccessibilityAction(label) { …; true }` in `customActions` |
+| `Semantics(liveRegion: true)` | `Modifier.semantics { liveRegion = LiveRegionMode.Polite }` |
+| `InkWell` + `Semantics(button: true)` | `clickable` / `combinedClickable` (role, click action, focus) |
+
+Reach's one recipe is `Modifier.reachClickable` (`core/designsystem/…/component/ReachClickable.kt`,
+D19):
+
+```kotlin
+// (simplified from core/designsystem/…/component/ReachClickable.kt)
+val clickable = combinedClickable(onClick = onClick, onLongClick = onLongClick, role = role, onClickLabel = onClickLabel /* … */)
+return if (description != null) {
+    clickable.clearAndSetSemantics {        // after (inside) the clickable, so its click action survives
+        contentDescription = description    // "Talk, 3 new notifications" as ONE sentence
+        if (actions.isNotEmpty()) customActions = actions
+    }
+} else clickable
+```
+
+Real custom actions: the clock offers "Appearance" (long-press alternative), the search pill
+offers "All apps" (swipe-up alternative) —
+
+```kotlin
+// (simplified from feature/home/…/ui/HomeScreen.kt)
+SearchPill(
+    onClick = onSearch,
+    modifier = Modifier.semantics {
+        customActions = listOf(CustomAccessibilityAction(allAppsLabel) { onAllApps(); true })
+    },
+)
+```
 
 ---
 
@@ -560,7 +957,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 ```
 
 ```kotlin
-// core/data/build.gradle.kts (real) — each module picks what it uses
+// (simplified from core/data/build.gradle.kts) — each module picks what it uses
 dependencies {
     api(project(":core:model"))                 // ≈ path: ../model  (and re-exported)
     implementation(libs.androidx.room.runtime)  // ≈ a normal dependency
@@ -571,14 +968,15 @@ dependencies {
 
 `settings.gradle.kts` lists the modules (≈ a melos/pub workspace). `api` vs
 `implementation`: `api` leaks the dependency to consumers (like exporting a package),
-`implementation` keeps it private.
+`implementation` keeps it private. The module graph is drawn in
+[ARCHITECTURE.md §1](ARCHITECTURE.md#1-modules).
 
 ### `flutter run` ↔ Gradle tasks / Android Studio run configs
 
 | Flutter | Here |
 |---|---|
 | `flutter run` | Android Studio ▶ Run `app`, or `./gradlew installDebug` + `adb shell am start -n com.baklavapp.reachlauncher/.MainActivity` |
-| `flutter test` | `./gradlew test` (or `:core:designsystem:test` for one module) |
+| `flutter test` | `./gradlew test` (or `:feature:home:test` for one module) |
 | `flutter analyze` | `./gradlew lint` + `./gradlew ktlintCheck` |
 | `dart format` | `./gradlew ktlintFormat` |
 | `flutter build apk` | `./gradlew assembleDebug` / `assembleRelease` |
@@ -593,11 +991,13 @@ composable inside the IDE without a device — closest to iterating on a widget 
 isolation:
 
 ```kotlin
-// app/.../MainActivity.kt (real)
-@Preview
+// (real, core/designsystem/…/component/IntentWordRow.kt)
+@Preview(name = "Intent words · 200% font", widthDp = 390, fontScale = 2f)
 @Composable
-private fun FoundationPlaceholderPreview() {
-    ReachTheme { FoundationPlaceholder() }
+private fun IntentWordRowLargeFontPreview(
+    @PreviewParameter(DarkLightProvider::class) isDark: Boolean,
+) {
+    PreviewSurface(isDark) { IntentWordsSample(ThumbSide.LEFT) }
 }
 ```
 
@@ -611,17 +1011,53 @@ Previews can't touch real system services, which is one reason the fakes in
 | `test()` / `expect()` | JUnit 4 `@Test` + Truth `assertThat(x).isEqualTo(y)` |
 | `bloc_test` / `expectLater(stream, emitsInOrder(…))` | Turbine: `flow.test { assertThat(awaitItem()).isEqualTo(…) }` |
 | `fake_async` | `kotlinx-coroutines-test` `runTest { }` (virtual time) |
-| hand-written fakes | `FakeAppCatalogRepository`, `FakeSettingsRepository`, … in `core.data.fake` |
-| widget tests | Compose UI tests (`createComposeRule()`), run on the JVM via Robolectric |
+| hand-written fakes / mocks | `FakeAppCatalogRepository`, `FakeAppLauncher`, … in `core.data.fake` |
+| `testWidgets` + `WidgetTester` | `createComposeRule()`, run on the JVM via Robolectric |
+| `find.text` / `find.bySemanticsLabel` | `onNodeWithText` / `onNodeWithContentDescription` |
+| `tester.tap` / `tester.drag` | `performClick()` / `performTouchInput { swipeDown() }` |
+| `tester.pumpAndSettle()` | automatic: Compose waits for idle before each assertion |
+
+A ViewModel test (≈ `bloc_test`): build with fakes, act, expect. `Dispatchers.setMain`
+swaps Android's main thread for a test dispatcher because `viewModelScope` runs on Main.
 
 ```kotlin
-// core/designsystem/src/test/.../ColorMathTest.kt (real style)
+// (simplified from feature/home/src/test/…/HomeViewModelTest.kt)
 @Test
-fun `contrast of black and white is 21`() {
-    assertThat(ColorMath.contrastRatio(Color.Black, Color.White)).isWithin(0.01).of(21.0)
+fun `home pressed returns home from anywhere and hides the keyboard`() = runTest {
+    val f = HomeFixture(sampleApps)                 // HomeViewModel built from fakes
+    subscribe(f)                                    // keeps WhileSubscribed upstream alive
+    f.viewModel.events.test {                       // Turbine ≈ expectLater(events, emitsInOrder([...]))
+        f.viewModel.onSearchRequested()
+        f.viewModel.onHomePressed()
+        assertThat(awaitItem()).isEqualTo(HomeEvent.HideKeyboard)
+        assertThat(f.surface).isEqualTo(HomeSurface.Home)
+        // …
+    }
 }
 ```
 
+A Compose UI test (≈ `testWidgets`), on the JVM thanks to Robolectric. Nodes are found
+through the semantics tree, so these tests double as accessibility checks:
+
+```kotlin
+// (simplified from feature/home/src/test/…/HomeRouteTest.kt)
+@RunWith(RobolectricTestRunner::class)
+class HomeRouteTest {
+    @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun intentRowDescriptionIncludesTheBadge() {
+        val fixture = HomeFixture(sampleApps)
+        fixture.notifications.granted.value = true
+        fixture.notifications.counts.value = mapOf(PackageUser("pkg.whatsapp", 0) to 3)
+        composeRule.setContent { ReachTheme { HomeRoute(fixture.viewModel) } }   // ≈ pumpWidget
+        composeRule.onNodeWithContentDescription("Talk, 3 new notifications").assertIsDisplayed()
+    }
+}
+```
+
+Room tests use an in-memory database under Robolectric (`AppCatalogRepositoryImplTest`);
+DataStore tests run on the plain JVM with a temporary file (`SettingsRepositoryImplTest`).
 Backtick names are just Kotlin identifiers with spaces — handy for test names.
 
 ---
@@ -634,10 +1070,12 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 2. **Side effects never go in the composable body.** Anything that starts work, registers a
    listener or logs belongs in an effect: `LaunchedEffect(key) { … }` (≈ `initState` +
    `didUpdateWidget` for coroutines; restarts when `key` changes), `DisposableEffect(key) { …
-   onDispose { … } }` (≈ `initState`/`dispose` pairs), `SideEffect { }` for every
-   successful recomposition.
+   onDispose { … } }` (≈ `initState`/`dispose` pairs — the clock's broadcast receiver),
+   `LifecycleResumeEffect` (on every resume), `SideEffect { }` for every successful
+   recomposition.
 3. **Modifier order is semantics.** `padding().background()` ≠ `background().padding()`;
-   `clickable` before or after `padding` changes the tap area. Read a chain outside-in.
+   `clickable` before or after `padding` changes the tap area; `clearAndSetSemantics` must
+   come after the clickable. Read a chain outside-in.
 4. **The Activity lifecycle and configuration changes.** By default Android *destroys and
    recreates* the Activity on rotation, dark-mode toggle, font-scale or locale change.
    ViewModels survive that; `remember` doesn't, `rememberSaveable` does. Reach's
@@ -648,20 +1086,26 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
    restore the Activity from a saved Bundle — in most apps that's what `rememberSaveable` /
    `SavedStateHandle` are for. Reach is different: it declares `stateNotNeeded`, so after
    process death Home starts **fresh, with no saved state**. That's intended (Home always
-   opens on the Home state), but it means anything a user would miss must be persisted in
-   Room or DataStore. `rememberSaveable` still helps across configuration changes Reach
-   doesn't handle itself.
-6. **The main thread is yours to protect.** There's no separate UI isolate. Blocking I/O on
+   opens on the Home surface, D28), but it means anything a user would miss must be
+   persisted in Room or DataStore.
+6. **`singleTask` and `onNewIntent`.** A Flutter app rarely sees this: with
+   `launchMode="singleTask"`, a second "start" of the Activity (the Home button) doesn't
+   create a new one; Android calls `onNewIntent` on the existing instance. That's Reach's
+   "Home pressed" signal.
+7. **The main thread is yours to protect.** There's no separate UI isolate. Blocking I/O on
    `Dispatchers.Main` janks or ANRs the app. Room and DataStore already suspend off the
    main thread; for your own work use `withContext(Dispatchers.IO) { … }` (I/O) or
-   `Dispatchers.Default` (CPU). Unlike Dart, coroutines on `Dispatchers.Default`/`IO` run
-   **truly in parallel**, so shared mutable state needs care (prefer `StateFlow.update`).
-7. **Kotlin null safety has a Java-shaped hole.** Kotlin is null-safe like Dart (`String?`,
+   `Dispatchers.Default` (CPU) — Reach injects them as `@IoDispatcher` / `@DefaultDispatcher`
+   so tests can swap them. Unlike Dart, coroutines on `Dispatchers.Default`/`IO` run
+   **truly in parallel**, so shared mutable state needs care (prefer `StateFlow.update`, or a
+   `Mutex` as `AppCatalogRepositoryImpl.sync` does).
+8. **Kotlin null safety has a Java-shaped hole.** Kotlin is null-safe like Dart (`String?`,
    `?.`, `?:` ≈ `??`, `!!` ≈ `!`), but Android framework APIs are Java: their return types
    are *platform types* (`String!`) that the compiler won't check. Treat results of system
    calls (`getSystemService`, `getActivityList`, intent extras) as nullable unless the docs
-   or annotations say otherwise.
-8. **Equality and immutability are on you.** `data class` gives you `==`/`copy()` like
+   or annotations say otherwise — and expect **exceptions** (`SecurityException`,
+   `ActivityNotFoundException`) as the error channel.
+9. **Equality and immutability are on you.** `data class` gives you `==`/`copy()` like
    freezed; plain classes compare by identity. Expose `List`/`Map` (read-only interfaces)
    from state, not `MutableList`, so Compose and `StateFlow` can see changes as new values.
 
@@ -671,23 +1115,30 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 
 | To see… | Open |
 |---|---|
-| The "runApp" | `app/src/main/kotlin/com/baklavapp/reachlauncher/MainActivity.kt` |
-| The DI root | `app/src/main/kotlin/com/baklavapp/reachlauncher/ReachApplication.kt` |
+| The "runApp" and the Home-button hook | `app/…/MainActivity.kt` (`setContent`, `onNewIntent`) |
+| The `MaterialApp` equivalent | `app/…/ReachApp.kt` |
+| The DI root | `app/…/ReachApplication.kt` |
 | Why Reach is a launcher | `app/src/main/AndroidManifest.xml` (HOME filter, `singleTask`, `configChanges`, `<queries>`) |
-| Theme ≈ `Theme.of` / `ThemeExtension` | `core/designsystem/.../theme/ReachTheme.kt`, `ReachColors.kt`, `ReachTypography.kt` |
-| Palettes and colour maths | `core/designsystem/.../theme/Palettes.kt`, `ColorMath.kt` |
-| Contrast tests | `core/designsystem/src/test/.../theme/PaletteContrastTest.kt`, `ColorMathTest.kt` |
-| Domain types (≈ your `domain/entities`) | `core/model/src/main/kotlin/.../core/model/` (`App.kt`, `ReachIntent.kt`, `Appearance.kt`, `History.kt`, `SystemData.kt`) |
-| Turkish-aware matching | `core/model/.../TextFolding.kt` + `TextFoldingTest.kt` |
-| Repository contracts (≈ `domain/repositories`) | `core/data/.../repository/Repositories.kt` |
-| System-source contracts (≈ plugin platform interfaces) | `core/data/.../source/SystemSources.kt` |
-| Fakes for tests and previews | `core/data/.../fake/FakeRepositories.kt`, `FakeSystemSources.kt` |
+| The BLoC (state machine + data hub) | `feature/home/…/HomeViewModel.kt`, `HomeUiState.kt`, `HomeSurface.kt` |
+| BlocBuilder/BlocListener/PopScope equivalents | `feature/home/…/HomeRoute.kt` |
+| Stateless screens | `feature/home/…/ui/HomeScreen.kt`, `IntentDetailScreen.kt`, `HomeClock.kt` |
+| Nested-scroll swipes | `feature/home/…/ui/HomeGestures.kt` |
+| Theme ≈ `Theme.of` / `ThemeExtension` | `core/designsystem/…/theme/ReachTheme.kt`, `ReachColors.kt`, `ReachTypography.kt` |
+| Components + the a11y recipe | `core/designsystem/…/component/` (`IntentWordRow.kt`, `ReachClickable.kt`, `NowTile.kt`, `AppRow.kt`) |
+| Domain types (≈ `domain/entities`) | `core/model/…/` |
+| Repository contracts (≈ `domain/repositories`) | `core/data/…/repository/Repositories.kt` |
+| System-source contracts (≈ plugin platform interfaces) | `core/data/…/source/SystemSources.kt` |
+| Repository implementations, Room, DataStore | `core/data/…/repository/impl/`, `…/db/` |
+| Pure domain logic | `core/data/…/domain/` (`CatalogAssembler`, `IntentCategorizer`, `PredictionEngine`) |
+| Hilt modules | `core/data/…/di/DataModules.kt`, `Qualifiers.kt`, `core/system/…/di/SystemModule.kt` |
+| `callbackFlow` wrappers of Android callbacks | `core/system/…/apps/LauncherAppsInstalledAppsSource.kt`, `…/util/BroadcastFlow.kt` |
+| Fakes for tests and previews | `core/data/…/fake/FakeRepositories.kt`, `FakeSystemSources.kt` |
+| ViewModel and UI tests | `feature/home/src/test/…/HomeViewModelTest.kt`, `HomeRouteTest.kt`, `HomeTestFixtures.kt` |
 | Dependency versions (≈ `pubspec.yaml`) | `gradle/libs.versions.toml`, `*/build.gradle.kts`, `settings.gradle.kts` |
 | Lint/format rules (≈ `analysis_options.yaml`) | `.editorconfig`, the `lint { }` blocks in module build files |
-| Why things are the way they are | `docs/DECISIONS.md`, `docs/PLAN.md` |
+| Architecture, APIs, decisions | `docs/ARCHITECTURE.md`, `docs/ANDROID_APIS.md`, `docs/DECISIONS.md`, `docs/PLAN.md` |
 
-(`…` = `src/main/kotlin/com/baklavapp/reachlauncher`.)
-
-Coming in later versions of this file: Room/DataStore and Hilt modules as they really are
-(M1), gestures and `pointerInput` in depth (M2, with `GESTURES.md`), system services and
-permissions (M3), and window themes/wallpaper (M4).
+Coming in later versions of this file: gestures and `pointerInput` in depth, `LazyColumn`
+in All Apps and the search text field (M2, with `GESTURES.md`); services, runtime-permission
+requests with `ActivityResultLauncher` (M3); window themes/wallpaper and the Appearance
+bottom sheet (M4).

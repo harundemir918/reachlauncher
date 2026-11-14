@@ -112,7 +112,7 @@ constructing an `Intent` throws ("Method … not mocked"), and
 access, accessibility, home role) and `ExternalAction` (web search, dial, message, contact
 card). `AppLauncher.open(screen)` / `perform(action)` replace the per-source
 `…Intent()` methods. The `:core:system` implementation is a singleton that keeps a
-`WeakReference` to the resumed Activity (registered from `MainActivity`), uses its decor
+`WeakReference` to the resumed Activity (registered in `ReachApplication.onCreate`), uses its decor
 view for the clip-reveal animation (`LaunchOrigin` is in window pixels, i.e. decor-view
 coordinates) and converts to screen coordinates for `startMainActivity`'s `sourceBounds`.
 Without a resumed Activity it launches without animation.
@@ -282,3 +282,64 @@ this explicit instead of checking `isProfilePaused` in the ViewModel.)
 - An empty intent detail shows "No apps here yet."
 - The intent detail list is a plain `Column` in a scroll (tens of apps at most), which keeps
   the list and the intent chips anchored at the bottom in the thumb zone.
+
+## D34 — `LaunchResult` instead of the ViewModel's paused check (M1, after review)
+**Context.** D32 kept the paused-profile decision in `HomeViewModel` (`CatalogApp.isProfilePaused`),
+a catalog snapshot that can be seconds stale: a just-resumed profile still looked paused (the
+tap did nothing), a just-paused one looked running (the tap was recorded as a launch).
+**Decision.** `AppLauncher.launchApp` returns `LaunchResult` (`LAUNCHED`, `RESUMING_PROFILE`,
+`FAILED`), decided by `SystemAppLauncher` from *live* `UserManager` state. `HomeViewModel`
+reacts only to the result: `LAUNCHED` → record + Home; `RESUMING_PROFILE` → stay, no history;
+`FAILED` → "Couldn't open X". Shortcut launches (still `Boolean`) map to `LAUNCHED`/`FAILED`.
+This supersedes the "future `LaunchResult`" note in D32; D32's behaviour is unchanged.
+
+## D35 — Catalog: really cache-first, one shared pipeline, re-sort on resume (M1, after review)
+**Decision.** `AppCatalogRepositoryImpl.apps` combines `ProfileSource.profiles` starting from
+an empty list (`onStart { emit(emptyList()) }`), so the first emission depends on Room alone
+(`UserManagerProfileSource` reads the system before its first emission). With no profile data,
+the privacy filter fails closed — private-space apps hidden — and personal/work apps show,
+not marked paused (D34 makes a missing "paused" flag harmless). The assembled list is shared
+(`shareIn(appScope, WhileSubscribed(5 s, replayExpirationMillis = 0), replay = 1)`) by Home and
+predictions; the zero replay expiry means a list built while the private space was unlocked is
+never replayed to a later subscriber. The sort locale is a flow updated by `refresh()` (every
+resume), because Reach handles `locale` config changes itself (D8) and nothing else would
+re-sort after a language change.
+**Not done.** `refresh()` still reads once via `installedApps.first()` (registering and
+unregistering the `LauncherApps` callback per resume): a cheaper one-shot read needs a new
+method on the `InstalledAppsSource` contract — an orchestrator decision.
+
+## D36 — Database and system failures never crash Home (M1, after review)
+**Context.** A launcher that crashes on start crash-loops on the home screen (e.g. disk full).
+**Decision.** Catalog syncs catch `SQLiteException` (full, can't open, locked, corrupt),
+`IllegalStateException` (Room's own checks) and `SecurityException`, log, and keep serving the
+cache; a failing *observed* catalog query is retried with capped back-off on `SQLiteException`
+only (anything else is a bug and should surface). `refresh()` swallows a failing system read.
+`HomeViewModel` runs `refresh()` and `recordLaunch` "best effort" (everything but
+`CancellationException` is dropped — the launch already happened). The application scope gets
+a logging `CoroutineExceptionHandler` as a backstop, not as the primary handling.
+
+## D37 — Room: destructive fallback on downgrade only (M1, after review)
+**Decision.** `fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)`, so installing
+an older dev build over a newer one wipes the cache/history instead of crashing on open.
+**Consequences.** Upgrades are *not* covered: every schema version bump needs a real
+`Migration` (tested against the exported schemas in `core/data/schemas/`), or users lose their
+history and "Move to…" choices.
+
+## D38 — `AppKey` includes the activity name (M1, after review)
+**Context.** One package can have several launcher activities (e.g. a "Contacts" and a
+"Phone" entry), and each is its own row on Home, so the key must be package + activity + user.
+**Decision / trade-off.** Accepted: an app update that renames its launcher activity looks like
+a removal + a new app, so it loses its "Move to…" choice, hidden flag and launch history.
+Possible mitigation later: when a key disappears and a new one appears for the same package and
+user in the same sync, carry the assignment over (or fall back to a package + user match).
+
+## D39 — The surface is its own `StateFlow`; details precomputed; `catalogLoaded` (M1, after review)
+**Context.** With the surface inside `uiState`'s `combine` + `stateIn(WhileSubscribed(5 s))`,
+pressing Home after Reach had been in the background > 5 s updated the surface, but the first
+resumed frame still showed the old intent detail/search until every input re-emitted.
+**Decision.** `HomeViewModel.surface` is a plain `StateFlow` that `HomeRoute` reads directly;
+`uiState` holds only data and precomputes the detail of all six intents (tens of apps, cheap),
+so neither a Home press nor a chip switch waits for a recombine. `buildUiState` runs on the
+default dispatcher. `HomeUiState.catalogLoaded` is false until the first catalog emission: intent
+rows show no trailing count (instead of "0") and the Now block stays hidden. The theme root reads
+a separate, `distinctUntilChanged` `HomeViewModel.theme`.

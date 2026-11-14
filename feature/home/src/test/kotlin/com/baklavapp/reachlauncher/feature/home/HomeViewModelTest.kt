@@ -1,8 +1,10 @@
 package com.baklavapp.reachlauncher.feature.home
 
 import app.cash.turbine.test
+import com.baklavapp.reachlauncher.core.data.fake.FakeAppCatalogRepository
 import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.PaletteId
 import com.baklavapp.reachlauncher.core.model.Prediction
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -50,15 +53,14 @@ class HomeViewModelTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.viewModel.uiState.collect {} }
     }
 
-    private fun HomeFixture.state() = viewModel.uiState.value
-
     @Test
     fun `initial state renders immediately with all six intents`() {
-        val state = HomeFixture().viewModel.uiState.value
-        assertThat(state.surface).isEqualTo(HomeSurface.Home)
+        val f = HomeFixture()
+        val state = f.state
+        assertThat(f.surface).isEqualTo(HomeSurface.Home)
         assertThat(state.intents.map { it.intent }).containsExactlyElementsIn(ReachIntent.entries).inOrder()
         assertThat(state.now).isEmpty()
-        assertThat(state.detail).isNull()
+        assertThat(state.details).isEmpty()
     }
 
     @Test
@@ -69,28 +71,28 @@ class HomeViewModelTest {
             val vm = f.viewModel
 
             vm.onIntentSelected(ReachIntent.TALK)
-            assertThat(f.state().surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.TALK))
+            assertThat(f.surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.TALK))
             vm.onBack()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
 
             vm.onSearchRequested()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Search)
+            assertThat(f.surface).isEqualTo(HomeSurface.Search)
             vm.onBack()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
 
             vm.onAllAppsRequested()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.AllApps)
+            assertThat(f.surface).isEqualTo(HomeSurface.AllApps)
             vm.onBack()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
 
             vm.onAppearanceRequested()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Appearance)
+            assertThat(f.surface).isEqualTo(HomeSurface.Appearance)
             vm.onBack()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
 
             // Back on Home does nothing.
             vm.onBack()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
         }
 
     @Test
@@ -100,16 +102,15 @@ class HomeViewModelTest {
             subscribe(f)
             f.viewModel.onIntentSelected(ReachIntent.TALK)
             f.viewModel.onIntentSelected(ReachIntent.LISTEN)
-            assertThat(f.state().surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.LISTEN))
+            assertThat(f.surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.LISTEN))
             assertThat(
-                f
-                    .state()
-                    .detail
-                    ?.apps
-                    ?.map { it.app.label },
+                f.state
+                    .detailFor(ReachIntent.LISTEN)
+                    .apps
+                    .map { it.app.label },
             ).containsExactly("Spotify")
             f.viewModel.onBack()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
         }
 
     @Test
@@ -121,13 +122,63 @@ class HomeViewModelTest {
                 f.viewModel.onSearchRequested()
                 f.viewModel.onHomePressed()
                 assertThat(awaitItem()).isEqualTo(HomeEvent.HideKeyboard)
-                assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+                assertThat(f.surface).isEqualTo(HomeSurface.Home)
 
                 f.viewModel.onIntentSelected(ReachIntent.GO)
                 f.viewModel.onHomePressed()
                 assertThat(awaitItem()).isEqualTo(HomeEvent.HideKeyboard)
-                assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+                assertThat(f.surface).isEqualTo(HomeSurface.Home)
+                // Leaving a sub-surface doesn't ask to scroll: a fresh Home starts at the top.
+                expectNoEvents()
             }
+        }
+
+    @Test
+    fun `home pressed on Home also scrolls Home to the top`() =
+        runTest {
+            val f = HomeFixture(sampleApps)
+            f.viewModel.events.test {
+                f.viewModel.onHomePressed()
+                assertThat(awaitItem()).isEqualTo(HomeEvent.HideKeyboard)
+                assertThat(awaitItem()).isEqualTo(HomeEvent.ScrollToTop)
+            }
+        }
+
+    @Test
+    fun `home pressed while stopped shows Home on the first resumed frame`() =
+        runTest {
+            val f = HomeFixture(sampleApps)
+            val ui = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { f.viewModel.uiState.collect {} }
+            f.viewModel.onIntentSelected(ReachIntent.TALK)
+            assertThat(f.state.catalogLoaded).isTrue()
+
+            // Reach goes to the background: the UI stops collecting and, after
+            // WhileSubscribed's 5 s, the uiState pipeline is stopped.
+            ui.cancel()
+            advanceTimeBy(6_000)
+            f.viewModel.onHomePressed()
+
+            // The first value a resubscribing HomeRoute reads is already Home.
+            assertThat(f.viewModel.surface.first()).isEqualTo(HomeSurface.Home)
+        }
+
+    @Test
+    fun `before the catalog arrives, the state says so`() =
+        runTest {
+            val catalog = FakeAppCatalogRepository(sampleApps)
+            val silent = SilentCatalog(catalog)
+            val f = HomeFixture(catalogRepository = silent)
+            subscribe(f)
+            assertThat(f.state.catalogLoaded).isFalse()
+            assertThat(f.state.now).isEmpty()
+
+            silent.release()
+            assertThat(f.state.catalogLoaded).isTrue()
+            assertThat(
+                f.state.intents
+                    .first { it.intent == ReachIntent.TALK }
+                    .appCount,
+            ).isEqualTo(3)
         }
 
     @Test
@@ -144,7 +195,7 @@ class HomeViewModelTest {
             val events = f.history.events.value
             assertThat(events.map { it.key }).containsExactly(maps.key)
             assertThat(events.single().epochMillis).isEqualTo(f.clock.millis())
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
         }
 
     @Test
@@ -152,7 +203,7 @@ class HomeViewModelTest {
         runTest {
             val f = HomeFixture(sampleApps)
             subscribe(f)
-            f.launcher.launchSucceeds = false
+            f.launcher.result = LaunchResult.FAILED
             val maps = sampleApps.first { it.label == "Maps" }
             f.viewModel.onIntentSelected(ReachIntent.GO)
             f.viewModel.events.test {
@@ -160,20 +211,41 @@ class HomeViewModelTest {
                 assertThat(awaitItem()).isEqualTo(HomeEvent.LaunchFailed("Maps"))
             }
             assertThat(f.history.events.value).isEmpty()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.GO))
+            assertThat(f.surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.GO))
         }
 
     @Test
-    fun `paused profile launch only resumes the profile`() =
+    fun `resuming a paused profile records nothing and stays`() =
         runTest {
+            // The catalog still thinks the profile is running: only the live result counts.
+            val outlook = app("Outlook", ReachIntent.TOOLS, userSerial = 10, profile = ProfileType.WORK, paused = false)
+            val f = HomeFixture(listOf(outlook))
+            subscribe(f)
+            f.launcher.result = LaunchResult.RESUMING_PROFILE
+            f.viewModel.onIntentSelected(ReachIntent.TOOLS)
+            f.viewModel.events.test {
+                f.viewModel.launch(outlook, null)
+                expectNoEvents()
+            }
+            assertThat(f.launcher.launched).containsExactly(outlook.key)
+            assertThat(f.history.events.value).isEmpty()
+            assertThat(f.surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.TOOLS))
+        }
+
+    @Test
+    fun `a stale paused flag doesn't block a real launch`() =
+        runTest {
+            // The profile was resumed a moment ago; the catalog hasn't caught up yet.
             val outlook = app("Outlook", ReachIntent.TOOLS, userSerial = 10, profile = ProfileType.WORK, paused = true)
             val f = HomeFixture(listOf(outlook))
             subscribe(f)
             f.viewModel.onIntentSelected(ReachIntent.TOOLS)
             f.viewModel.launch(outlook, null)
-            assertThat(f.launcher.launched).containsExactly(outlook.key)
-            assertThat(f.history.events.value).isEmpty()
-            assertThat(f.state().surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.TOOLS))
+            assertThat(
+                f.history.events.value
+                    .map { it.key },
+            ).containsExactly(outlook.key)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
         }
 
     @Test
@@ -195,12 +267,11 @@ class HomeViewModelTest {
                     PackageUser("com.sms", 0) to 1,
                 )
 
-            val talk = f.state().intents.first { it.intent == ReachIntent.TALK }
+            val talk = f.state.intents.first { it.intent == ReachIntent.TALK }
             assertThat(talk.unreadCount).isEqualTo(6)
             assertThat(talk.appCount).isEqualTo(4)
             assertThat(
-                f
-                    .state()
+                f.state
                     .intents
                     .first { it.intent == ReachIntent.LISTEN }
                     .unreadCount,
@@ -208,9 +279,8 @@ class HomeViewModelTest {
 
             f.viewModel.onIntentSelected(ReachIntent.TALK)
             val perApp =
-                f
-                    .state()
-                    .detail!!
+                f.state
+                    .detailFor(ReachIntent.TALK)
                     .apps
                     .associate { it.app.key to it.unreadCount }
             assertThat(perApp[personal.key]).isEqualTo(2)
@@ -224,7 +294,7 @@ class HomeViewModelTest {
             val f = HomeFixture(sampleApps)
             subscribe(f)
             f.notifications.counts.value = mapOf(PackageUser("pkg.whatsapp", 0) to 4)
-            assertThat(f.state().intents.sumOf { it.unreadCount }).isEqualTo(0)
+            assertThat(f.state.intents.sumOf { it.unreadCount }).isEqualTo(0)
         }
 
     @Test
@@ -243,9 +313,8 @@ class HomeViewModelTest {
             subscribe(f)
             f.viewModel.onIntentSelected(ReachIntent.TALK)
             assertThat(
-                f
-                    .state()
-                    .detail!!
+                f.state
+                    .detailFor(ReachIntent.TALK)
                     .apps
                     .map { it.app.label },
             ).containsExactly("Discord", "Signal", "Ayşe", "Zoom", "Mail")
@@ -265,14 +334,13 @@ class HomeViewModelTest {
                 )
             subscribe(f)
             assertThat(
-                f
-                    .state()
+                f.state
                     .intents
                     .first { it.intent == ReachIntent.MAKE }
                     .appCount,
             ).isEqualTo(2)
             f.viewModel.onIntentSelected(ReachIntent.MAKE)
-            val apps = f.state().detail!!.apps
+            val apps = f.state.detailFor(ReachIntent.MAKE).apps
             assertThat(apps.map { it.app.label }).containsExactly("Docs", "Visible").inOrder()
             assertThat(apps.first { it.app.label == "Docs" }.app.isProfilePaused).isTrue()
         }
@@ -282,10 +350,9 @@ class HomeViewModelTest {
         runTest {
             val f = HomeFixture(listOf(app("Maps", ReachIntent.GO)))
             subscribe(f)
-            assertThat(f.state().intents).hasSize(6)
+            assertThat(f.state.intents).hasSize(6)
             assertThat(
-                f
-                    .state()
+                f.state
                     .intents
                     .first { it.intent == ReachIntent.PLAY }
                     .appCount,
@@ -298,12 +365,11 @@ class HomeViewModelTest {
             val f = HomeFixture()
             subscribe(f)
             f.settings.setThumbSide(ThumbSide.RIGHT)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { f.viewModel.theme.collect {} }
             f.settings.setThemeMode(ThemeMode.LIGHT)
             f.settings.setPalette(PaletteId.DUSK)
-            val state = f.state()
-            assertThat(state.thumbSide).isEqualTo(ThumbSide.RIGHT)
-            assertThat(state.themeMode).isEqualTo(ThemeMode.LIGHT)
-            assertThat(state.palette).isEqualTo(PaletteId.DUSK)
+            assertThat(f.state.thumbSide).isEqualTo(ThumbSide.RIGHT)
+            assertThat(f.viewModel.theme.value).isEqualTo(HomeTheme(ThemeMode.LIGHT, PaletteId.DUSK))
         }
 
     @Test
@@ -341,21 +407,19 @@ class HomeViewModelTest {
                     shortcut("x", "com.other"),
                 )
             f.viewModel.onIntentSelected(ReachIntent.TALK)
-            assertThat(f.state().detail!!.shortcuts).isEmpty()
+            assertThat(f.state.detailFor(ReachIntent.TALK).shortcuts).isEmpty()
 
             f.shortcuts.granted.value = true
             val ids =
-                f
-                    .state()
-                    .detail!!
+                f.state
+                    .detailFor(ReachIntent.TALK)
                     .shortcuts
                     .map { it.shortcut.id }
             assertThat(ids).containsExactly("s1", "s2", "s3", "w1").inOrder()
 
             val item =
-                f
-                    .state()
-                    .detail!!
+                f.state
+                    .detailFor(ReachIntent.TALK)
                     .shortcuts
                     .first()
             f.viewModel.launchShortcut(item, null)
@@ -364,7 +428,21 @@ class HomeViewModelTest {
                 f.history.events.value
                     .map { it.key },
             ).containsExactly(top.key)
-            assertThat(f.state().surface).isEqualTo(HomeSurface.Home)
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
+        }
+
+    @Test
+    fun `launch failures surface the label, shortcut failures too`() =
+        runTest {
+            val f = HomeFixture(sampleApps)
+            f.launcher.result = LaunchResult.FAILED
+            f.viewModel.events.test {
+                f.viewModel.launch(sampleApps.first(), null)
+                assertThat(awaitItem()).isEqualTo(HomeEvent.LaunchFailed("WhatsApp"))
+                val shortcut = AppShortcut("x", PackageUser("pkg.whatsapp", 0), null, "Call Ayşe", "WhatsApp")
+                f.viewModel.launchShortcut(ShortcutItem(shortcut, sampleApps.first().key), null)
+                assertThat(awaitItem()).isEqualTo(HomeEvent.LaunchFailed("Call Ayşe"))
+            }
         }
 
     @Test

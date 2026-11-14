@@ -16,6 +16,7 @@ import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.ExternalAction
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.system.ActivityTracker
@@ -40,7 +41,7 @@ import javax.inject.Singleton
  *
  * Every method catches the exceptions the system documents (`ActivityNotFoundException`
  * for a vanished target, `SecurityException` for a disabled/unexported one) and reports
- * `false` instead of crashing Home.
+ * failure ([LaunchResult.FAILED] / `false`) instead of crashing Home.
  *
  * Flutter analogy: the implementation behind a `url_launcher`/`android_intent_plus`-style
  * service class — here calling the Android APIs directly, no MethodChannel.
@@ -58,26 +59,27 @@ class SystemAppLauncher
         override fun launchApp(
             key: AppKey,
             origin: LaunchOrigin?,
-        ): Boolean {
-            val user = profiles.userFor(key.userSerial) ?: return false
+        ): LaunchResult {
+            val user = profiles.userFor(key.userSerial) ?: return LaunchResult.FAILED
+            // Live profile state, not the catalog's (possibly seconds-old) isProfilePaused flag:
+            // the caller reacts to the result only (D32, D34).
             if (profiles.isQuietMode(user)) {
                 // A locked private space stays locked; unlocking is an explicit action on Home.
-                if (profiles.typeOf(user) == ProfileType.PRIVATE) return false
+                if (profiles.typeOf(user) == ProfileType.PRIVATE) return LaunchResult.FAILED
                 // Paused work profile: ask to resume. The system may show its own
                 // confirmation/credential UI; the user taps the app again once it's resumed.
                 profiles.requestQuietMode(user, enabled = false)
-                return true
+                return LaunchResult.RESUMING_PROFILE
             }
             val component = ComponentName(key.packageName, key.activityName)
-            val activity = tracker.resumedActivity
-            val (sourceBounds, options) = animationFor(activity, origin)
+            val (sourceBounds, options) = animationFor(tracker.resumedActivity, origin)
             return try {
                 launcherApps.startMainActivity(component, user, sourceBounds, options)
-                true
+                LaunchResult.LAUNCHED
             } catch (e: ActivityNotFoundException) {
-                false
+                LaunchResult.FAILED
             } catch (e: SecurityException) {
-                false
+                LaunchResult.FAILED
             }
         }
 
@@ -93,9 +95,7 @@ class SystemAppLauncher
                     .toBundle()
             val onScreen = IntArray(2)
             decorView.getLocationOnScreen(onScreen)
-            val left = origin.left + onScreen[0]
-            val top = origin.top + onScreen[1]
-            return Rect(left, top, left + origin.width, top + origin.height) to options
+            return sourceBoundsOnScreen(origin, windowLeftOnScreen = onScreen[0], windowTopOnScreen = onScreen[1]) to options
         }
 
         override fun openAppInfo(key: AppKey) {
@@ -159,6 +159,24 @@ class SystemAppLauncher
         }
 
         companion object {
+            /**
+             * Converts [origin] (window pixels, as Compose's `boundsInWindow()` reports them)
+             * to the *screen* rectangle `startMainActivity`'s `sourceBounds` expects, given
+             * where the window's top-left corner sits on screen (`View.getLocationOnScreen` of
+             * the decor view). The offset is 0 for a full-screen Home and non-zero in
+             * split-screen, freeform or when the window is letterboxed. Pure, so it is tested
+             * without a real window.
+             */
+            internal fun sourceBoundsOnScreen(
+                origin: LaunchOrigin,
+                windowLeftOnScreen: Int,
+                windowTopOnScreen: Int,
+            ): Rect {
+                val left = origin.left + windowLeftOnScreen
+                val top = origin.top + windowTopOnScreen
+                return Rect(left, top, left + origin.width, top + origin.height)
+            }
+
             /** Request code for the home-role dialog; results are ignored (see [requestHomeRole]). */
             const val REQUEST_HOME_ROLE = 0x4E01
         }

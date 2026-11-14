@@ -2,6 +2,7 @@ package com.baklavapp.reachlauncher.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.baklavapp.reachlauncher.core.data.di.DefaultDispatcher
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
@@ -15,16 +16,23 @@ import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.Prediction
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,6 +46,8 @@ import javax.inject.Inject
  * - [uiState] (`StateFlow<HomeUiState>`) ≈ the BLoC's state stream. A `StateFlow` always
  *   has a current value, like a `BehaviorSubject` / `Cubit.state`. In Compose,
  *   `collectAsStateWithLifecycle()` ≈ `BlocBuilder`.
+ * - [surface] is a second, tiny state stream: *which* screen is showing. It is kept out of
+ *   [uiState] on purpose (see below).
  * - [events] ≈ what a `BlocListener` reacts to: one-off effects delivered exactly once.
  * - `onIntentSelected(…)`, `onBack()`… ≈ `bloc.add(IntentTapped(…))` / Cubit methods.
  * - `viewModelScope` ≈ the BLoC's lifetime: coroutines launched in it are cancelled when the
@@ -48,11 +58,19 @@ import javax.inject.Inject
  * integration arrives through the `:core:data` interfaces, which is why
  * `HomeViewModelTest` runs on the plain JVM with fakes.
  *
- * State is built reactively: `combine` merges the repository flows (≈ `Rx.combineLatest`)
- * into one [HomeUiState] whenever any input changes, and `stateIn(WhileSubscribed(5 s))`
- * keeps the upstream alive for 5 s after the UI stops collecting — long enough to survive
- * a quick app switch without re-querying, short enough to release work when Home sits in
- * the background.
+ * Data state is built reactively: `combine` merges the repository flows (≈ `Rx.combineLatest`)
+ * into one [HomeUiState] whenever any input changes — on [defaultDispatcher], so grouping
+ * and sorting never run on the main thread — and `stateIn(WhileSubscribed(5 s))` keeps the
+ * upstream alive for 5 s after the UI stops collecting: long enough to survive a quick app
+ * switch without re-querying, short enough to release work when Home sits in the background.
+ *
+ * Why [surface] is separate: after those 5 s the `combine` is stopped, and a `stateIn`
+ * value only changes when the *whole* combine re-emits. If the surface were one of its
+ * inputs, pressing Home while Reach is in the background would update the surface, but the
+ * first frame after resuming would still show the old intent detail or search. A plain
+ * `MutableStateFlow` has no upstream to restart, so its value is always current. For the
+ * same reason the intent details of *all six* intents are precomputed in [uiState]: the
+ * screen never waits for a recombine to switch intents.
  */
 @HiltViewModel
 class HomeViewModel
@@ -67,8 +85,15 @@ class HomeViewModel
         private val appLauncher: AppLauncher,
         private val homeRoleSource: HomeRoleSource,
         private val clock: Clock,
+        @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
-        private val surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
+        private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
+
+        /**
+         * The active surface. Always current, even while nobody collects (see the class
+         * KDoc): `HomeRoute` reads it directly so Home is on the very first resumed frame.
+         */
+        val surface: StateFlow<HomeSurface> = _surface.asStateFlow()
 
         // A Channel (not a SharedFlow) so an event sent while the UI isn't collecting (e.g.
         // HideKeyboard from onNewIntent before onResume) is buffered and delivered once.
@@ -86,37 +111,48 @@ class HomeViewModel
             combine(catalogRepository.apps, notificationCountSource.countsByApp, shortcuts, ::CatalogSnapshot)
 
         /**
-         * The single source of truth for Home. Its initial value renders immediately (six
-         * intents with zero apps); the cached catalog follows within milliseconds.
+         * The single source of truth for Home's *data*. Its initial value renders immediately
+         * (six intents without counts, [HomeUiState.catalogLoaded] = false); the cached
+         * catalog follows within milliseconds.
          */
         val uiState: StateFlow<HomeUiState> =
             combine(
-                surface,
                 settingsRepository.settings,
                 catalog,
                 predictionRepository.predictions(NOW_ROW_SIZE),
-            ) { surface, settings, catalog, predictions ->
-                buildUiState(surface, settings, catalog, predictions)
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
+            ) { settings, catalog, predictions ->
+                buildUiState(settings, catalog, predictions)
+            }.flowOn(defaultDispatcher)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
+
+        /**
+         * Just the theme choice, for the root `ReachTheme`. Separate and `distinctUntilChanged`
+         * so a catalog or prediction update doesn't recompose the theme root.
+         */
+        val theme: StateFlow<HomeTheme> =
+            settingsRepository.settings
+                .map { HomeTheme(themeMode = it.themeMode, palette = it.palette) }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeTheme())
 
         /** Tap on an intent word, or on a chip in intent detail: show that intent's apps. */
         fun onIntentSelected(intent: ReachIntent) {
-            surface.value = HomeSurface.IntentDetail(intent)
+            _surface.value = HomeSurface.IntentDetail(intent)
         }
 
         /** Tap on the search pill or pull-down on Home. */
         fun onSearchRequested() {
-            surface.value = HomeSurface.Search
+            _surface.value = HomeSurface.Search
         }
 
         /** Swipe up on Home. */
         fun onAllAppsRequested() {
-            surface.value = HomeSurface.AllApps
+            _surface.value = HomeSurface.AllApps
         }
 
         /** Long-press on the clock (or its TalkBack action). */
         fun onAppearanceRequested() {
-            surface.value = HomeSurface.Appearance
+            _surface.value = HomeSurface.Appearance
         }
 
         /**
@@ -124,48 +160,54 @@ class HomeViewModel
          * nothing (a launcher has nothing behind it — spec §4).
          */
         fun onBack() {
-            surface.value = HomeSurface.Home
+            _surface.value = HomeSurface.Home
         }
 
         /**
          * The Home button was pressed (`MainActivity.onNewIntent`): return to Home from any
-         * surface and close the keyboard, as every launcher does (spec §4).
+         * surface and close the keyboard, as every launcher does (spec §4). Pressed while
+         * already on Home, it also scrolls Home back to the top (Home scrolls at large font
+         * sizes), like a second tap on a selected tab.
          */
         fun onHomePressed() {
-            surface.value = HomeSurface.Home
+            val wasHome = _surface.value == HomeSurface.Home
+            _surface.value = HomeSurface.Home
             eventChannel.trySend(HomeEvent.HideKeyboard)
+            if (wasHome) eventChannel.trySend(HomeEvent.ScrollToTop)
         }
 
         /**
          * Call on every `ON_RESUME`: the user may have installed apps or changed the default
          * home app while Reach was in the background, and package broadcasts are not always
-         * delivered to a stopped app. Both calls are cheap and safe to repeat.
+         * delivered to a stopped app. Both calls are cheap and safe to repeat. A failing
+         * refresh (e.g. a full disk) keeps the cached catalog instead of crashing Home.
          */
         fun onResume() {
             homeRoleSource.recheck()
-            viewModelScope.launch { catalogRepository.refresh() }
+            viewModelScope.launch { bestEffort { catalogRepository.refresh() } }
         }
 
         /**
          * Launches [app], animating from [origin] (the tapped element in window pixels).
          *
-         * On success the launch is recorded (the primary prediction signal, spec §6.2) and
-         * the surface returns to Home, so Home — not the old detail list — greets the user
-         * when they come back. On failure a short message is shown and the surface stays.
-         *
-         * A paused work profile is special (docs/DECISIONS.md D27): the launcher only asks
-         * the system to resume the profile and does not start the app, so nothing is
-         * recorded and the user stays where they are to tap again.
+         * The decision follows only the launcher's [LaunchResult], which is computed from
+         * *live* profile state (docs/DECISIONS.md D32, D34) — never from the catalog's
+         * possibly stale `isProfilePaused` flag:
+         * - [LaunchResult.LAUNCHED]: recorded (the primary prediction signal, spec §6.2) and
+         *   the surface returns to Home, so Home — not the old detail list — greets the user
+         *   when they come back.
+         * - [LaunchResult.RESUMING_PROFILE]: the system was asked to resume a paused work
+         *   profile; nothing is recorded and the user stays where they are to tap again.
+         * - [LaunchResult.FAILED]: a short message is shown and the surface stays.
          */
         fun launch(
             app: CatalogApp,
             origin: LaunchOrigin?,
         ) {
-            val launched = appLauncher.launchApp(app.key, origin)
-            when {
-                !launched -> eventChannel.trySend(HomeEvent.LaunchFailed(app.label))
-                app.isProfilePaused -> Unit
-                else -> onLaunched(app.key)
+            when (appLauncher.launchApp(app.key, origin)) {
+                LaunchResult.LAUNCHED -> onLaunched(app.key)
+                LaunchResult.RESUMING_PROFILE -> Unit
+                LaunchResult.FAILED -> eventChannel.trySend(HomeEvent.LaunchFailed(app.label))
             }
         }
 
@@ -183,8 +225,10 @@ class HomeViewModel
 
         private fun onLaunched(key: AppKey) {
             val now = clock.millis()
-            viewModelScope.launch { historyRepository.recordLaunch(key, now) }
-            surface.value = HomeSurface.Home
+            // The app is already open; history is best effort. A database error (full disk)
+            // must not crash the launcher — it would only cost one prediction signal.
+            viewModelScope.launch { bestEffort { historyRepository.recordLaunch(key, now) } }
+            _surface.value = HomeSurface.Home
         }
 
         private companion object {
@@ -192,8 +236,23 @@ class HomeViewModel
             const val MAX_SHORTCUTS = 4
             const val STOP_TIMEOUT_MILLIS = 5_000L
 
+            /**
+             * Runs [block] and drops any failure except cancellation. `viewModelScope` has no
+             * exception handler, so an exception escaping a `launch` there would kill the
+             * process — for a launcher that means a crash loop on the home screen.
+             * `CancellationException` must still propagate: it is how coroutines stop.
+             */
+            suspend fun bestEffort(block: suspend () -> Unit) {
+                try {
+                    block()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Nothing to show: the cache/launch already happened; the next resume retries.
+                }
+            }
+
             fun buildUiState(
-                surface: HomeSurface,
                 settings: AppearanceSettings,
                 catalog: CatalogSnapshot,
                 predictions: List<Prediction>,
@@ -205,16 +264,12 @@ class HomeViewModel
                         val apps = byIntent[intent].orEmpty()
                         IntentSummary(intent, appCount = apps.size, unreadCount = unreadFor(apps, catalog.unread))
                     }
-                val detail =
-                    (surface as? HomeSurface.IntentDetail)?.let { detailFor(it.intent, byIntent[it.intent].orEmpty(), catalog) }
                 return HomeUiState(
-                    surface = surface,
+                    catalogLoaded = true,
                     thumbSide = settings.thumbSide,
-                    themeMode = settings.themeMode,
-                    palette = settings.palette,
                     intents = intents,
                     now = predictions.take(NOW_ROW_SIZE).map { NowItem(it.app, it.reason) },
-                    detail = detail,
+                    details = ReachIntent.entries.associateWith { detailFor(it, byIntent[it].orEmpty(), catalog) },
                 )
             }
 
