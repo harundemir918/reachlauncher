@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The six intent words (Home rows, detail title, chips). Short: they render at 46–60sp. -->
+    <string name="home_intent_talk">Talk</string>
+    <string name="home_intent_listen">Listen</string>
+    <string name="home_intent_go">Go</string>
+    <string name="home_intent_make">Make</string>
+    <string name="home_intent_play">Play</string>
+    <string name="home_intent_tools">Tools</string>
+    <!-- TalkBack verb on an intent word: "double-tap to open apps". -->
+    <string name="home_intent_open_action">open apps</string>
+
+    <!-- Clock: TalkBack custom action and long-press verb that open the Appearance sheet. -->
+    <string name="home_clock_appearance_action">Appearance</string>
+
+    <!-- Now row. Labels are shown upper-cased in mono. -->
+    <string name="home_now_label">now</string>
+    <string name="home_now_reason_usual">usually around now</string>
+    <plurals name="home_now_reason_unread">
+        <item quantity="one">%d unread</item>
+        <item quantity="other">%d unread</item>
+    </plurals>
+    <string name="home_now_reason_recent">recent</string>
+
+    <!-- TalkBack custom action on the search pill: the tap alternative to swiping up. -->
+    <string name="home_all_apps_action">All apps</string>
+
+    <!-- Short inline message when an app or shortcut can't be opened. -->
+    <string name="home_launch_failed">Couldn\'t open %1$s</string>
+
+    <!-- Intent detail. -->
+    <string name="home_detail_shortcuts">app shortcuts</string>
+    <string name="home_detail_empty">No apps here yet.</string>
+
+    <!-- Temporary surfaces until their real screens land. -->
+    <string name="home_search_title">Search</string>
+    <string name="home_search_placeholder">Type to launch arrives in M2.</string>
+    <string name="home_all_apps_title">All apps</string>
+    <string name="home_all_apps_placeholder">The A–Z list arrives in M2.</string>
+    <string name="home_appearance_title">Appearance</string>
+    <string name="home_appearance_placeholder">Theme, palette and thumb side arrive in M4.</string>
+    <string name="home_done">Done</string>
+</resources>

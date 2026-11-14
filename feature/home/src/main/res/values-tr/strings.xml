@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_intent_talk">Konuş</string>
+    <string name="home_intent_listen">Dinle</string>
+    <string name="home_intent_go">Git</string>
+    <string name="home_intent_make">Üret</string>
+    <string name="home_intent_play">Oyna</string>
+    <string name="home_intent_tools">Araçlar</string>
+    <string name="home_intent_open_action">uygulamaları aç</string>
+
+    <string name="home_clock_appearance_action">Görünüm</string>
+
+    <string name="home_now_label">şimdi</string>
+    <string name="home_now_reason_usual">genelde bu saatte</string>
+    <plurals name="home_now_reason_unread">
+        <item quantity="one">%d okunmamış</item>
+        <item quantity="other">%d okunmamış</item>
+    </plurals>
+    <string name="home_now_reason_recent">son kullanılan</string>
+
+    <string name="home_all_apps_action">Tüm uygulamalar</string>
+
+    <string name="home_launch_failed">%1$s açılamadı</string>
+
+    <string name="home_detail_shortcuts">uygulama kısayolları</string>
+    <string name="home_detail_empty">Burada henüz uygulama yok.</string>
+
+    <string name="home_search_title">Ara</string>
+    <string name="home_search_placeholder">Yazarak açma M2\'de geliyor.</string>
+    <string name="home_all_apps_title">Tüm uygulamalar</string>
+    <string name="home_all_apps_placeholder">A–Z listesi M2\'de geliyor.</string>
+    <string name="home_appearance_title">Görünüm</string>
+    <string name="home_appearance_placeholder">Tema, palet ve başparmak tarafı M4\'te geliyor.</string>
+    <string name="home_done">Tamam</string>
+</resources>
