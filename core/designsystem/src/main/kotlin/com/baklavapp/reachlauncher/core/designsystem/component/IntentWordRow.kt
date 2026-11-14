@@ -172,7 +172,7 @@ fun IntentWordRow(
                 }
 
                 IntentRowTrailing.None -> {
-                    Unit
+                    // Nothing after the word.
                 }
             }
         }

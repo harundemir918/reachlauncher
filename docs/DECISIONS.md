@@ -163,3 +163,81 @@ Reach tokens and provides `LocalTextStyle`, so M3 infrastructure (switches, segm
 buttons, text fields) never shows stock purple or Roboto. `LocalReachColors` /
 `LocalReachTypography` have no default and throw outside `ReachTheme`, so a missing theme
 is caught immediately instead of rendering in Lime dark.
+
+## D18 — Derived text tokens `soft`, `groupDim`, `dim` (M1)
+**Context.** The mockups use three colours the spec's token list doesn't name: secondary
+body text, non-active All Apps groups, and intent words dimmed while the gesture fan is open.
+**Decision.** Derive them like the other tokens: `soft = mix(bg, fg, 0.84)`,
+`groupDim = mix(bg, fg, 0.62)`, `dim = mix(bg, fg, 0.20)`. `groupDim` uses 0.62 rather than
+the mockup's ≈0.57 because 0.57 gives only ≈4.0:1 on light Lime. `PaletteContrastTest`
+requires `soft` and `groupDim` ≥ 4.5:1 on bg and surface for every palette × theme.
+**[deviation]** `dim` is ≈1.5–1.9:1 and is **not text-safe**: it is only for the label of a
+control that is inactive while the fan is open, which WCAG 1.4.3 exempts. A test keeps
+`dim < groupDim < soft` and `dim ≥ 1.4:1` so it stays visible.
+
+## D19 — One click/accessibility recipe: `Modifier.reachClickable` (M1)
+**Decision.** Every tappable component uses `reachClickable`: a `combinedClickable` plus,
+when a description is given, `clearAndSetSemantics` (applied after the clickable) so
+TalkBack reads one sentence ("Talk, 3 new notifications"). A long-press is exposed both as
+the long-click action and as a named custom accessibility action (§6.10).
+
+## D20 — Labels are upper-cased at display time with `LocalLocale` (M1)
+**Decision.** Components take natural-case strings and upper-case them for display with
+the composition's locale (Turkish "i" → "İ"); TalkBack reads the natural case. Lint flags
+`Locale.getDefault()` inside composables (`NonObservableLocale`), so composables use
+`LocalLocale`; pure helpers (`monogramFor`, `toLabelCase`) default to `Locale.getDefault()`.
+
+## D21 — Mockup sizes below 48dp are raised to 48dp; `ReachComponentDimens` (M1)
+**Decision.** Back, close, chips and "Done" are 48dp (the mockups use 44dp; §5.4's 48dp
+touch-target rule wins). The inline play button *looks* 44dp but has a 48dp touch target.
+Component paddings and gaps from the mockups live in `ReachComponentDimens`; they may be
+folded into `ReachDimens` later. Pill corners are a fixed 24dp so pills that grow taller at
+200% font become rounded rectangles instead of blobs.
+
+## D22 — Intent rows: physical thumb side and reflow (M1)
+**Decision.** `IntentWordRow` aligns with absolute left/right (the thumb side is physical,
+so it must not flip in right-to-left locales) and lays out as a `FlowRow`, so at 200% font
+the Listen row's inline player wraps under the word instead of clipping.
+
+## D23 — Default dialer/SMS without `RoleManager.getRoleHolders` **[deviation]** (M1)
+**Context.** §6.1 says to find the default dialer and SMS apps "via RoleManager".
+`RoleManager.getRoleHolders` is a `@SystemApi`; third-party apps can only ask whether
+they hold a role themselves.
+**Decision.** `TelephonyDefaultAppsSource` uses `TelecomManager.getDefaultDialerPackage()`
+and `Telephony.Sms.getDefaultSmsPackage()` — public, no permission, same answer. Re-read on
+every catalog sync/refresh.
+
+## D24 — Catalog cache sync and privacy defaults (M1)
+**Decision.** `AppCatalogRepository.apps` reads only Room (instant); an application-scoped
+coroutine writes the *diff* between `LauncherApps` and the cache, so unchanged data never
+re-emits. User assignments live in their own table and survive app removal, so a reinstall
+keeps the user's choice. Privacy defaults fail closed: private-space apps are emitted only
+while their profile is known *and* unlocked; a refused `getLauncherUserInfo` lookup counts
+as PRIVATE; an unknown stored profile key reads as PRIVATE. Until M5 adds
+`ACCESS_HIDDEN_PROFILES`, Android 15+ hides the private space from launchers entirely.
+
+## D25 — Prediction scoring constants (M1)
+**Decision.** Per launch: `0.5^(age / 14 days) × (hourWindow × dayType + 0.1)`, where
+hourWindow = 1 (same hour) / 0.5 (±1h, circular) / 0, dayType = 1 (same weekday/weekend
+type) / 0.25. Events older than 60 days are ignored. With usage access, add
+`0.3 · ln(1 + launches in window)` (personal profile only — usage stats cover only the
+user's own profile). Unread multiplies the score by `1 + 0.15 · min(n, 4)` (≤ ×1.6): it
+boosts, never dominates, and never creates a prediction alone. Reason: Unread if n > 0;
+"usually around now" if the window carries ≥ 50 % of the score from ≥ 2 same-day-type
+launches; otherwise Recent. Re-ranked on catalog/history/unread/usage changes and every
+local hour change (ticker sleeps to the next hour, capped at 5 min because `delay` doesn't
+advance in deep sleep). Launch history isn't pruned yet (≈18k rows/year); revisit later.
+
+## D26 — `REQUEST_DELETE_PACKAGES` for "Uninstall" (M1)
+**Decision.** Uninstall opens `ACTION_DELETE` with `package:<pkg>` + `EXTRA_USER`
+(`ACTION_UNINSTALL_PACKAGE` is deprecated since API 29). Apps targeting API 28+ need the
+*normal* (install-time) permission `REQUEST_DELETE_PACKAGES`, declared in `:core:system`.
+The system always shows its own confirmation.
+
+## D27 — Clock follows the current time zone; paused-profile launch (M1)
+**Decision.** Hilt provides `SystemZoneClock`, which reads `ZoneId.systemDefault()` on every
+call (`Clock.systemDefaultZone()` would freeze the zone at creation). Launch hour/weekday
+are stored at record time and never recomputed. Launching an app of a paused work profile
+asks the system to resume the profile and returns without launching; the user taps again.
+Profile-change broadcasts are registered per API level (`ACTION_PROFILE_AVAILABLE/UNAVAILABLE`
+exist from API 35, not 31).

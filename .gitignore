@@ -15,3 +15,7 @@ build/
 local.properties
 /.kotlin
 .kotlin/
+
+# Agent worktrees and IDE state
+.claude/worktrees/
+.idea/

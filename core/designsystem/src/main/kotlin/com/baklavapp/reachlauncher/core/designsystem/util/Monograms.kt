@@ -50,7 +50,7 @@ fun monogramFor(
 
             // Keep "Ayşe's" and combining marks inside the current word.
             inWord && (cp in WORD_JOINERS || Character.getType(cp) == Character.NON_SPACING_MARK.toInt()) -> {
-                Unit
+                // Still inside the same word: no new initial.
             }
 
             else -> {
