@@ -1,3 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ReachLauncher</string>
+    <!-- Product name: identical in every language. -->
+    <string name="app_name" translatable="false">Reach</string>
+    <string name="foundation_title" translatable="false">Reach</string>
+    <string name="foundation_subtitle">Foundation build. Home arrives in M1.</string>
 </resources>

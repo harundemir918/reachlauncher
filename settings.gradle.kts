@@ -23,4 +23,13 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "ReachLauncher"
+
 include(":app")
+include(":core:model")
+include(":core:designsystem")
+include(":core:data")
+include(":core:system")
+include(":feature:home")
+include(":feature:search")
+include(":feature:allapps")
+include(":feature:appearance")
