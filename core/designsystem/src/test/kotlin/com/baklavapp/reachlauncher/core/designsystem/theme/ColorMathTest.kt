@@ -40,6 +40,10 @@ class ColorMathTest {
         assertThat(toHex(c.divider)).isEqualTo("242527")
         assertThat(toHex(c.ring)).isEqualTo("5D5D5C")
         assertThat(toHex(c.faint)).isEqualTo("737371")
+        // M1 additions: soft 84%, groupDim 62%, dim 20% (mockup: #C9CBD1, #8E9098, #3A3C42).
+        assertThat(toHex(c.soft)).isEqualTo("C9C7C2")
+        assertThat(toHex(c.groupDim)).isEqualTo("989894")
+        assertThat(toHex(c.dim)).isEqualTo("3C3C3D")
         assertThat(c.scrim.alpha).isWithin(0.01f).of(0.82f)
         assertThat(ReachColors.of(PaletteId.LIME, isDark = false).scrim.alpha).isWithin(0.01f).of(0.86f)
     }

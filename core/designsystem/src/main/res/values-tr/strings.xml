@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ds_search_pill_label">Yazıp aç</string>
+    <string name="ds_search_pill_hint">ya da aşağı çek</string>
+    <string name="ds_search_pill_action">uygulama, kişi ve eylem ara</string>
+
+    <string name="ds_badge_new">%1$s yeni</string>
+
+    <plurals name="ds_app_count">
+        <item quantity="one">%d uygulama</item>
+        <item quantity="other">%d uygulama</item>
+    </plurals>
+    <plurals name="ds_new_notifications">
+        <item quantity="one">%d yeni bildirim</item>
+        <item quantity="other">%d yeni bildirim</item>
+    </plurals>
+
+    <plurals name="ds_intent_header">
+        <item quantity="one">amaç · %d uygulama</item>
+        <item quantity="other">amaç · %d uygulama</item>
+    </plurals>
+
+    <string name="ds_profile_tag_work">iş</string>
+    <string name="ds_profile_tag_private">gizli</string>
+    <string name="ds_profile_work">iş profili</string>
+    <string name="ds_profile_private">gizli alan</string>
+    <string name="ds_profile_paused">duraklatıldı</string>
+
+    <string name="ds_back">Geri</string>
+    <string name="ds_play">Oynat</string>
+    <string name="ds_pause">Duraklat</string>
+    <string name="ds_play_track">%1$s oynat</string>
+    <string name="ds_pause_track">%1$s duraklat</string>
+    <string name="ds_previous_track">Önceki parça</string>
+    <string name="ds_next_track">Sonraki parça</string>
+    <string name="ds_media_playing">çalıyor · %1$s</string>
+    <string name="ds_media_paused">duraklatıldı · %1$s</string>
+</resources>

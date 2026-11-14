@@ -25,10 +25,30 @@ class PaletteContrastTest {
                     "muted/surface" to contrastRatio(c.muted, c.surface),
                     "accentInk/bg" to contrastRatio(c.accentInk, c.bg),
                     "onAccent/accent" to contrastRatio(c.onAccent, c.accent),
+                    // M1 derived text tokens.
+                    "soft/bg" to contrastRatio(c.soft, c.bg),
+                    "soft/surface" to contrastRatio(c.soft, c.surface),
+                    "groupDim/bg" to contrastRatio(c.groupDim, c.bg),
+                    "groupDim/surface" to contrastRatio(c.groupDim, c.surface),
                 ).filter { it.second < MIN_TEXT_CONTRAST }
                     .map { "$id ${if (dark) "dark" else "light"} ${it.first} = ${"%.2f".format(it.second)}" }
             }
         assertWithMessage("Pairs below $MIN_TEXT_CONTRAST:1:\n${failures.joinToString("\n")}").that(failures).isEmpty()
+    }
+
+    @Test
+    fun `dim is visibly present but quieter than every text token`() {
+        // dim is exempt from 4.5:1 (inactive control text, WCAG 1.4.3), but it must still
+        // be visible against bg and must stay below groupDim/muted so "inactive" reads as such.
+        combos.forEach { (id, dark) ->
+            val c = ReachColors.of(id, dark)
+            val dim = contrastRatio(c.dim, c.bg)
+            assertWithMessage("$id dark=$dark dim/bg").that(dim).isAtLeast(1.4)
+            assertWithMessage("$id dark=$dark dim < groupDim").that(dim).isLessThan(contrastRatio(c.groupDim, c.bg))
+            assertWithMessage(
+                "$id dark=$dark groupDim < soft",
+            ).that(contrastRatio(c.groupDim, c.bg)).isLessThan(contrastRatio(c.soft, c.bg))
+        }
     }
 
     @Test

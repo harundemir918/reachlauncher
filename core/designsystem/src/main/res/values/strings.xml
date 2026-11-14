@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings used by the shared components in :core:designsystem.
+    Mono labels are written in natural case here and upper-cased at display time with the
+    current locale (MonoLabel / toLabelCase), so translators never type in capitals and
+    Turkish "i" correctly becomes "İ".
+    Prefix "ds_" keeps these from colliding with feature-module strings after merging.
+-->
+<resources>
+    <!-- "Type to launch" pill on Home (spec §6.3). -->
+    <string name="ds_search_pill_label">Type to launch</string>
+    <string name="ds_search_pill_hint">or pull down</string>
+    <!-- TalkBack: "double tap to …" for the search pill. -->
+    <string name="ds_search_pill_action">search apps, contacts and actions</string>
+
+    <!-- Badge on an intent word when its apps have unread notifications: "3 NEW". %1$s is the count, possibly "99+". -->
+    <string name="ds_badge_new">%1$s new</string>
+
+    <!-- Spoken parts of row descriptions, e.g. "Talk, 3 new notifications" or "Talk, 5 apps". -->
+    <plurals name="ds_app_count">
+        <item quantity="one">%d app</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+    <plurals name="ds_new_notifications">
+        <item quantity="one">%d new notification</item>
+        <item quantity="other">%d new notifications</item>
+    </plurals>
+
+    <!-- Intent detail header: "INTENT · 5 APPS". -->
+    <plurals name="ds_intent_header">
+        <item quantity="one">intent · %d app</item>
+        <item quantity="other">intent · %d apps</item>
+    </plurals>
+
+    <!-- Profile tags on app rows (shown upper-case) and their spoken forms. -->
+    <string name="ds_profile_tag_work">work</string>
+    <string name="ds_profile_tag_private">private</string>
+    <string name="ds_profile_work">work profile</string>
+    <string name="ds_profile_private">private space</string>
+    <string name="ds_profile_paused">paused</string>
+
+    <!-- Buttons. -->
+    <string name="ds_back">Back</string>
+    <string name="ds_play">Play</string>
+    <string name="ds_pause">Pause</string>
+    <!-- %1$s is the track title: "Pause Daily Mix 1". -->
+    <string name="ds_play_track">Play %1$s</string>
+    <string name="ds_pause_track">Pause %1$s</string>
+    <string name="ds_previous_track">Previous track</string>
+    <string name="ds_next_track">Next track</string>
+    <!-- Status under the track title on the Listen row: "PLAYING · SPOTIFY". %1$s is the app name. -->
+    <string name="ds_media_playing">playing · %1$s</string>
+    <string name="ds_media_paused">paused · %1$s</string>
+</resources>

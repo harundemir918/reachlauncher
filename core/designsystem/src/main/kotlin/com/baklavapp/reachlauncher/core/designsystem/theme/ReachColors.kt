@@ -21,6 +21,13 @@ import com.baklavapp.reachlauncher.core.model.PaletteId
  * @property ring the 1.5dp outline of app monograms.
  * @property faint decorative chevrons only — never for text (too low contrast).
  * @property scrim wallpaper-mode overlay: [bg] at 82% (dark) / 86% (light) opacity.
+ * @property soft secondary body text that should read stronger than [muted] (the gesture
+ *   tutorial steps): mix(bg, fg, 0.84). Text-safe (≥ 4.5:1 on bg and surface, tested).
+ * @property groupDim text that is present but not in focus (All Apps groups other than the
+ *   one under the letter rail, inactive rail letters): mix(bg, fg, 0.62). Text-safe (tested).
+ * @property dim intent words that are *inactive* while the press-slide-release fan is open:
+ *   mix(bg, fg, 0.20). **Not** text-safe (~1.5–1.9:1): allowed only for text of a
+ *   temporarily inactive control, which WCAG 1.4.3 exempts. Never for readable content.
  */
 @Immutable
 data class ReachColors(
@@ -38,6 +45,9 @@ data class ReachColors(
     val ring: Color,
     val faint: Color,
     val scrim: Color,
+    val soft: Color,
+    val groupDim: Color,
+    val dim: Color,
 ) {
     companion object {
         /** Opacity of the wallpaper-mode scrim (spec §6.9). */
@@ -64,6 +74,13 @@ data class ReachColors(
                 ring = mix(base.bg, base.fg, 0.35f),
                 faint = mix(base.bg, base.fg, 0.45f),
                 scrim = base.bg.copy(alpha = if (isDark) SCRIM_ALPHA_DARK else SCRIM_ALPHA_LIGHT),
+                // Added in M1 for mockup roles that had no token; t picked so dark Lime
+                // approximates the mockup values (#C9CBD1 / #8E9098 / #3A3C42). groupDim
+                // is a little lighter than the mockup (0.62, not 0.57) so it stays ≥ 4.5:1
+                // on bg in every palette (light Lime at 0.57 would be ~4.0:1).
+                soft = mix(base.bg, base.fg, 0.84f),
+                groupDim = mix(base.bg, base.fg, 0.62f),
+                dim = mix(base.bg, base.fg, 0.20f),
             )
 
         /** Convenience: tokens for a stored [PaletteId] in the given theme. */
