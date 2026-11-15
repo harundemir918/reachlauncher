@@ -1,10 +1,10 @@
 # Android APIs and permissions used by Reach
 
-**v1 (M1).** Every Android API and permission the code uses *today*: what it does, why
+**v2 (M2).** Every Android API and permission the code uses *today*: what it does, why
 Reach needs it, how the user grants it (if at all), what happens without it, and Play
-policy notes. M3–M5 extend this file as notification access, media, shortcuts, usage
-stats, calendar, contacts, wallpaper colours and the accessibility service arrive (see
-[the last section](#coming-in-m3m5)).
+policy notes. M2 added contacts, app shortcuts, ICU letter buckets, gesture-zone handling and
+haptics. M3–M5 extend this file as notification access, media, usage stats, calendar,
+wallpaper colours and the accessibility service arrive (see [the last section](#coming-in-m3m5)).
 
 Where it helps, an API is tagged with the Android version (API level) that introduced it.
 Reach's `minSdk` is **28** (Android 9); anything newer is behind a `Build.VERSION.SDK_INT`
@@ -13,7 +13,7 @@ part, e.g. `core/system/…/launch/` = `core/system/src/main/kotlin/com/baklavap
 
 For a Flutter developer: everything below is called **directly from Kotlin** — no
 MethodChannel, no plugin. In Reach, these calls live only in `:core:system` (and a few UI
-APIs in `:feature:home` / `:app`), behind the interfaces in `:core:data` (see
+APIs in the feature modules / `:app`), behind the interfaces in `:core:data` (see
 [ARCHITECTURE.md](ARCHITECTURE.md)).
 
 ---
@@ -22,9 +22,11 @@ APIs in `:feature:home` / `:app`), behind the interfaces in `:core:data` (see
 
 | Permission | Type | Declared in | Why | Without it |
 |---|---|---|---|---|
-| `REQUEST_DELETE_PACKAGES` | **normal** (granted at install, no dialog) | `core/system/src/main/AndroidManifest.xml` | Lets Reach open the system's "Uninstall this app?" confirmation (`ACTION_DELETE`) for apps targeting API 28+ (D26). It does **not** let Reach uninstall anything silently: the system always asks. | The uninstall request would be refused. (In M1, `AppLauncher.requestUninstall` exists but no UI calls it yet; the All Apps long-press menu arrives in M2.) |
+| `REQUEST_DELETE_PACKAGES` | **normal** (granted at install, no dialog) | `core/system/src/main/AndroidManifest.xml` | Lets Reach open the system's "Uninstall this app?" confirmation (`ACTION_DELETE`) for apps targeting API 28+ (D26). It does **not** let Reach uninstall anything silently: the system always asks. Used by "Uninstall" in the All Apps long-press menu (M2). | The uninstall request would be refused. |
+| `READ_CONTACTS` | **runtime / "dangerous"** (system dialog), optional | `core/system/src/main/AndroidManifest.xml` | Search finds contacts by name and offers Call / Message / Contact card (spec §6.6, D45). See [Contacts](#contacts-contactscontract-m2). | No contact rows; everything else in Search works. |
+| *Shortcut host access* (not a manifest permission) | granted by **being the default home app** | — | `LauncherApps.getShortcuts` / `startShortcut` for app shortcuts in Search and intent detail. See [App shortcuts](#app-shortcuts-launcherapps-m2). | No shortcut rows or pills. |
 
-That is the **only** permission Reach declares in M1. The merged manifest additionally
+Those are the **only** permissions Reach declares in M2. The merged manifest additionally
 contains `com.baklavapp.reachlauncher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, a
 *signature* permission that AndroidX Core defines for Reach itself so
 `ContextCompat.registerReceiver(…, RECEIVER_NOT_EXPORTED)` can emulate non-exported runtime
@@ -38,8 +40,9 @@ receivers on Android versions before 13. It grants nothing to other apps.
 | `QUERY_ALL_PACKAGES` | Restricted by Google Play (needs a Console declaration and a qualifying use case). A launcher only needs apps that *have a launcher activity*, which the `<queries>` entry for `MAIN/LAUNCHER` makes visible (D8, [package visibility](#package-visibility-queries)). |
 | `ACCESS_HIDDEN_PROFILES` | Android 15+: needed (together with the home role) to see the **private space**. Until it's added and verified in **M5** (D13, D24), Android hides the private space from Reach entirely — the privacy-safe default. |
 | `MODIFY_QUIET_MODE` | Not needed: `UserManager.requestQuietModeEnabled` is allowed for the foreground default launcher. |
-| `VIBRATE` | Not needed: haptics go through `View.performHapticFeedback` (Compose `LocalHapticFeedback`), which needs no permission. |
-| Runtime permissions (`READ_CONTACTS`, `READ_CALENDAR`), special accesses (notification listener, usage access, accessibility service) | Not yet: their sources are stubs in M1 (see [Coming in M3–M5](#coming-in-m3m5)). |
+| `VIBRATE` | Not needed: haptics go through `View.performHapticFeedback` (Compose `LocalHapticFeedback`), which needs no permission ([Haptics](#haptics-m2)). |
+| `CALL_PHONE`, `SEND_SMS` | Not needed: a contact's Call / Message only *pre-fill* the dialer / messaging app (`ACTION_DIAL`, `ACTION_SENDTO`); the user presses call/send there. |
+| `READ_CALENDAR`, special accesses (notification listener, usage access, accessibility service) | Not yet: their sources are stubs in M2 (see [Coming in M3–M5](#coming-in-m3m5)). |
 
 Library components in the merged manifest (none needs a permission from the user):
 `androidx.startup.InitializationProvider` (not exported), Room's
@@ -63,7 +66,7 @@ Used in `core/system/…/apps/LauncherAppsInstalledAppsSource.kt` and `…/profi
 | `LauncherApps.registerCallback(callback, Handler)` / `unregisterCallback` | Notifies about packages added, removed, changed, (un)available (SD card) and (un)suspended (parental controls, Digital Wellbeing), per profile. | Live catalog updates (spec §4). Registered while the `installedApps` flow is collected (`callbackFlow` + `awaitClose`); each callback only triggers a full re-read. Delivered on the main looper. |
 | `LauncherApps.getLauncherUserInfo(user).userType == UserManager.USER_TYPE_PROFILE_PRIVATE` (API 35) | Tells a launcher whether a profile is the private space. | Private-space apps must disappear while it is locked (D13). If the lookup throws `SecurityException` (it does for hidden profiles without `ACCESS_HIDDEN_PROFILES`), Reach treats the profile as **PRIVATE** (`classifyProfile`, D24). |
 | `LauncherApps.startMainActivity(component, user, sourceBounds, options)` | Starts an app's launcher activity in a given profile. | Every app launch ([Launching](#launching)). |
-| `LauncherApps.startAppDetailsActivity(component, user, null, null)` | Opens the system "App info" screen for an app in a given profile. | The future long-press menu (M2/M4). Implemented in `SystemAppLauncher.openAppInfo`; no UI calls it in M1. |
+| `LauncherApps.startAppDetailsActivity(component, user, null, null)` | Opens the system "App info" screen for an app in a given profile. | "App info" in the All Apps long-press menu (M2), via `SystemAppLauncher.openAppInfo`. |
 
 **How the user grants it:** nothing to grant — `LauncherApps` is available to every app;
 results are filtered by [package visibility](#package-visibility-queries).
@@ -140,6 +143,97 @@ unexported) return `false`; `HomeViewModel` then shows "Couldn't open X" and rec
 Not used, on purpose: the "Opening X…" overlay from the mockups (spec §4) and any
 `ACTION_MAIN` intent built by hand — `LauncherApps` handles profiles for us.
 
+All screens reach this through the shared `LaunchApp` use case (`core/data/…/domain/LaunchApp.kt`),
+which records only real launches ([ARCHITECTURE.md §3e](ARCHITECTURE.md)).
+
+---
+
+## App shortcuts (`LauncherApps`, M2)
+
+`core/system/…/shortcuts/LauncherAppsShortcutSource.kt` (D47). Shown as rows in Search
+(≤ 3, `SearchRanker.MAX_SHORTCUTS`) and as pills in intent detail (≤ 4).
+
+| API | What it does | Why Reach needs it |
+|---|---|---|
+| `LauncherApps.hasShortcutHostPermission()` (API 25) | `true` exactly while the caller is the **default home app**. | Checked before every read and launch; without it every shortcut call throws `SecurityException`, so Reach reports `hasHostPermission = false` and an empty list instead. |
+| `LauncherApps.getShortcuts(ShortcutQuery, user)` with `setQueryFlags(FLAG_MATCH_DYNAMIC or FLAG_MATCH_MANIFEST or FLAG_MATCH_PINNED)` | An app's manifest shortcuts, the ones it publishes at run time (recent chats…), and those pinned *to Reach*. | Read per visible profile. Disabled shortcuts (can't be started) and unlabelled ones are dropped; the short label is preferred over the long one. A paused work profile throws `IllegalStateException` → that profile contributes nothing. A locked private space is never queried. |
+| `LauncherApps.startShortcut(packageName, id, sourceBounds, options, user)` | Starts a shortcut in a given profile. | Tapping a shortcut row/pill, with the same clip-reveal animation as an app launch. `ActivityNotFoundException` (gone/disabled), `IllegalStateException` (profile locked/not running) and `SecurityException` (permission lost) return `false` → "Couldn't open X". |
+| `LauncherApps.Callback.onShortcutsChanged(packageName, shortcuts, user)` | Fired when an app publishes, updates or removes shortcuts. | Like the package callbacks (also registered), it only *pokes* a full re-read. |
+| `LauncherApps.getApplicationInfo(packageName, 0, user)` (API 26) | Package info in a given profile. | The source app's label for rows like "MESSAGE AYŞE · WHATSAPP". |
+
+**How the user grants it:** by making Reach the default home app — there is no dialog of its
+own. **Without it:** no shortcut rows in Search, no shortcut pills in intent detail; nothing
+else changes. There's no broadcast when Reach becomes default home, so the permission change
+is noticed on the next collection start (e.g. opening Search) or callback (D47).
+**Play policy:** none specific.
+
+---
+
+## Contacts (`ContactsContract`, M2)
+
+`core/system/…/contacts/ContactsProviderSource.kt`, used by `SearchViewModel` (D45).
+
+**Background for a Flutter developer.** Contacts live in a system *content provider* — a
+database owned by another process. You query it with `ContentResolver.query(uri, columns,
+selection, args, sortOrder)` and read the rows with a `Cursor` (what a `flutter_contacts`-style
+plugin does behind its `MethodChannel`). It's a blocking IPC call, so it runs on the IO
+dispatcher.
+
+| API | What / why |
+|---|---|
+| `ContactsContract.Contacts.CONTENT_FILTER_URI` + `Uri.encode(text)` + `LIMIT_PARAM_KEY` | The provider's own name lookup: matches the start of any name word, case- and accent-insensitive, capped at 12 rows (`CONTACT_FETCH_LIMIT`; the ranker shows ≤ 3). Columns `_ID`, `LOOKUP_KEY`, `DISPLAY_NAME_PRIMARY`, `HAS_PHONE_NUMBER`. |
+| `ContactsContract.CommonDataKinds.Phone.CONTENT_URI`, `CONTACT_ID IN (…)`, sorted `IS_SUPER_PRIMARY DESC, IS_PRIMARY DESC, _ID` | One number per contact: the default number first. Only for contacts with a phone. |
+| `ContactsContract.Contacts.getLookupUri(id, lookupKey)` | Opens the contact card (`ExternalAction.ViewContact`). The lookup key survives contact merges/syncs better than the row id. |
+| `ContextCompat.checkSelfPermission(context, READ_CONTACTS)` | Checked before every query; re-checked on every `ON_RESUME` of Search (the user may grant it in Settings). |
+
+**How it's requested.** Never at startup. After at least two typed letters, Search shows one
+"Include contacts" row with a one-line rationale (only while not granted and not declined
+this session). Tapping it runs
+`rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())` →
+`launch(Manifest.permission.READ_CONTACTS)` in `SearchRoute` (≈ permission_handler's
+`Permission.contacts.request()`); the answer goes to
+`SearchViewModel.onContactsPermissionResult(granted)`. A denial hides the row for the rest of
+the process's life (not persisted, D45); a permanently denied permission ends there too,
+because the system then answers "denied" at once.
+
+**Without it:** contacts are never queried; Search shows apps, shortcuts, commands and the web
+row. Any provider failure (`SecurityException` if revoked mid-query, a crashed or missing
+provider) also yields an empty list.
+
+**Privacy / Play notes.** Contacts are personal data. Reach reads them **on demand, for the
+current query only**: nothing is stored (no Room table, no DataStore key), and with no
+`INTERNET` permission nothing can leave the device. The Play listing's Data safety form and
+`PRIVACY.md` (**M3**) will still need to state that contacts are accessed and processed on the
+device only, never collected or shared. Work-profile contacts (`ENTERPRISE_CONTENT_FILTER_URI`) are not read yet
+(**M5**).
+
+---
+
+## Letter buckets: `android.icu.text.AlphabeticIndex` (API 24, M2)
+
+`feature/allapps/…/LetterIndex.kt` (D40). ICU's `AlphabeticIndex(locale)` — the class the
+system Contacts app uses for its fast-scroll letters — knows per locale which letters an
+alphabet has and which characters fold into them: in English "Ödeme" files under O; in
+Turkish Ç, I, İ, Ö, Ş, Ü, Ğ are letters of their own. Reach builds
+`AlphabeticIndex<Any>(locale).addLabels(Locale.ENGLISH).buildImmutableIndex()` (English labels
+added so Latin names like "WhatsApp" get a W even in Turkish), uses `getBucketIndex(name)` /
+`getBucket(…)`, and merges the underflow/overflow/inflow buckets into one "#" group. The built
+`ImmutableIndex` is thread-safe; it's rebuilt only when the composition's locale
+(`LocalLocale`) changes, off the main thread. No permission. (Flutter has no equivalent in
+the SDK; packages like `azlistview` approximate it with `name[0].toUpperCase()`.)
+
+---
+
+## Haptics (M2)
+
+| API | Where | What / why |
+|---|---|---|
+| `LocalHapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentTick)` | `core/designsystem/…/util/Motion.kt` (`rememberHapticTick`), used by `PressSlideRelease.kt` and `LetterRail.kt` | One light tick per new fan pill / rail letter (spec §6.5, §6.7) — Compose's semantic type for stepping through discrete values (≈ `HapticFeedback.selectionClick()`). |
+| `LocalHapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)` | `feature/home/…/ui/HomeClock.kt` | The clock long-press. |
+
+Both go through `View.performHapticFeedback`, which **needs no `VIBRATE` permission** (there is
+none in any manifest) and follows the user's system touch-feedback setting.
+
 ---
 
 ## Default home app and the HOME role
@@ -156,10 +250,10 @@ Not used, on purpose: the "Opening X…" overlay from the mockups (spec §4) and
 
 **How the user grants it:** by choosing Reach in the system dialog or in *Settings → Apps →
 Default apps → Home app*. **Without it:** Reach still runs as a normal app (via its LAUNCHER
-entry) and can launch apps; pressing Home opens the other launcher. Later features that need
-the role: app shortcuts (`hasShortcutHostPermission`, M3), resuming a paused work profile,
-the private space (M5).
-**M1 status:** the role state is read on every resume, and `AppLauncher.open(SystemScreen.HOME_ROLE)`
+entry) and can launch apps; pressing Home opens the other launcher. Features that need the
+role: app shortcuts (`hasShortcutHostPermission`, [M2](#app-shortcuts-launcherapps-m2)),
+resuming a paused work profile, the private space (M5).
+**M2 status:** the role state is read on every resume, and `AppLauncher.open(SystemScreen.HOME_ROLE)`
 is implemented and tested (`SystemAppLauncherTest`, `HomeRoleSourceTest`), but no UI shows
 the onboarding card yet — that's **M3**. Until then, set the default via Settings or adb
 (see the README).
@@ -169,9 +263,10 @@ the onboarding card yet — that's **M3**. Until then, set the default via Setti
 ## Settings deep links and hand-offs to other apps
 
 Implemented in `core/system/…/launch/SystemIntents.kt`, exposed through
-`AppLauncher.open(SystemScreen)` and `AppLauncher.perform(ExternalAction)`. **No UI calls
-them in M1**; they're ready for onboarding/permissions UX (M3) and search (M2). Covered by
-`SystemAppLauncherTest`. None needs a permission.
+`AppLauncher.open(SystemScreen)` and `AppLauncher.perform(ExternalAction)`. Since M2,
+**Search uses the `ExternalAction`s** (web fallback, contact Call / Message / Card) and All
+Apps' menu uses uninstall; the `SystemScreen` deep links still wait for the onboarding /
+permissions UX (M3). Covered by `SystemAppLauncherTest`. None needs a permission.
 
 | Domain request | Android intent | Used for |
 |---|---|---|
@@ -179,14 +274,16 @@ them in M1**; they're ready for onboarding/permissions UX (M3) and search (M2). 
 | `SystemScreen.USAGE_ACCESS` | `Settings.ACTION_USAGE_ACCESS_SETTINGS` | Granting usage access (optional prediction blend). |
 | `SystemScreen.ACCESSIBILITY_SERVICE` | `Settings.ACTION_ACCESSIBILITY_SETTINGS` | Enabling the optional accessibility service. |
 | `SystemScreen.HOME_ROLE` | role dialog, else `Settings.ACTION_HOME_SETTINGS` | See above. |
-| `ExternalAction.WebSearch(query)` | `ACTION_WEB_SEARCH` + extra `SearchManager.QUERY` | Search's "Search the web for '…'" fallback (M2). |
-| `ExternalAction.Dial(number)` | `ACTION_DIAL`, `tel:` URI | Contact result → call. **Pre-fills** the dialer; doesn't call, so no `CALL_PHONE`. |
-| `ExternalAction.Message(number)` | `ACTION_SENDTO`, `smsto:` URI | Contact result → message. No `SEND_SMS`. |
-| `ExternalAction.ViewContact(id, lookupKey)` | `ACTION_VIEW`, `ContactsContract.Contacts.getLookupUri(…)` | Open the contact card. |
-| `AppLauncher.requestUninstall(key)` | `ACTION_DELETE`, `package:<pkg>` URI + `Intent.EXTRA_USER` | "Uninstall" in the long-press menu (M2). `EXTRA_USER` targets the work copy instead of the personal one. `ACTION_UNINSTALL_PACKAGE` is deprecated since API 29 (D26). Requires `REQUEST_DELETE_PACKAGES`. |
+| `ExternalAction.WebSearch(query)` | `ACTION_WEB_SEARCH` + extra `SearchManager.QUERY` | Search's always-last "Search the web for '…'" row (and Enter when it's the top row). |
+| `ExternalAction.Dial(number)` | `ACTION_DIAL`, `tel:` URI | Contact → Call pill. **Pre-fills** the dialer; doesn't call, so no `CALL_PHONE`. |
+| `ExternalAction.Message(number)` | `ACTION_SENDTO`, `smsto:` URI | Contact → Message pill. No `SEND_SMS`. |
+| `ExternalAction.ViewContact(id, lookupKey)` | `ACTION_VIEW`, `ContactsContract.Contacts.getLookupUri(…)` | Contact → Card pill. |
+| `AppLauncher.requestUninstall(key)` | `ACTION_DELETE`, `package:<pkg>` URI + `Intent.EXTRA_USER` | "Uninstall" in the All Apps long-press menu. `EXTRA_USER` targets the work copy instead of the personal one. `ACTION_UNINSTALL_PACKAGE` is deprecated since API 29 (D26). Requires `REQUEST_DELETE_PACKAGES`. |
 
 All are started from the resumed Activity when there is one (else with `FLAG_ACTIVITY_NEW_TASK`);
-"nothing handles this" (`ActivityNotFoundException`) returns `false`.
+"nothing handles this" (`ActivityNotFoundException`) returns `false`. Search then shows a short
+"no app can do this" line (`SearchEvent.NoHandler`) instead of closing; the web row itself is
+always offered (Reach doesn't resolve a handler first).
 
 ---
 
@@ -197,7 +294,7 @@ Since Android 11 (API 30), an app only sees other apps it declares an interest i
 | `<queries>` entry | Declared in | Why |
 |---|---|---|
 | `MAIN` + `LAUNCHER` | `app/src/main/AndroidManifest.xml` | Makes every app with a launcher activity visible to `LauncherApps` — exactly what a launcher shows. Replaces `QUERY_ALL_PACKAGES`. |
-| `WEB_SEARCH` | `core/system/src/main/AndroidManifest.xml` | Resolve a web-search handler before offering the row (M2). |
+| `WEB_SEARCH` | `core/system/src/main/AndroidManifest.xml` | Lets Reach resolve a web-search handler. Declared ahead of use: in M2 the web row is always shown and a missing handler is reported after the tap. |
 | `DIAL` with `tel:` | same | Resolve a dialer. |
 | `SENDTO` with `smsto:` | same | Resolve a messaging app. |
 | `VIEW` with MIME `vnd.android.cursor.item/contact` | same | Resolve a contacts app. |
@@ -217,9 +314,9 @@ would do nothing) needs them. Library manifests are merged into the app's at bui
 | `Intent.ACTION_TIMEZONE_CHANGED` | same | Time-zone change. |
 | `ContextCompat.registerReceiver(…, RECEIVER_NOT_EXPORTED)` | same, and `BroadcastFlow.kt` | Android 14+ (when targeting 34+) requires an explicit exported/not-exported flag for runtime receivers; `ContextCompat` handles older versions. Registered in a `DisposableEffect`, unregistered on dispose. |
 | `android.text.format.DateFormat.is24HourFormat(context)` | same | Follows the user's 12/24-hour setting. The time is also re-read on every resume (`LifecycleResumeEffect`). |
-| `ViewConfiguration.longPressTimeoutMillis` (Compose `LocalViewConfiguration`) | `HomeClock` | Long-press on the clock = `max(450 ms, system long-press timeout)`, so the accessibility "Touch & hold delay" is never shortened (D30). |
-| `Settings.Global.ANIMATOR_DURATION_SCALE` + `ContentObserver` | `core/designsystem/…/util/Motion.kt` (`rememberReducedMotion`) | "Remove animations" (spec §6.10): surface transitions fall back to a plain cross-fade. Read-only, no permission. |
-| `LocalHapticFeedback` → `View.performHapticFeedback(LONG_PRESS)` | `HomeClock` | Haptic tick on the clock long-press. No `VIBRATE` permission needed. |
+| `ViewConfiguration.longPressTimeoutMillis` (Compose `LocalViewConfiguration`, `PointerInputScope.viewConfiguration`) | `HomeClock`, `PressSlideRelease.kt` | Long-press on the clock = `max(450 ms, system long-press timeout)` (D30); the fan's hold = 300 ms unless the system timeout is > 500 ms, then the user's value (D48). Either way the accessibility "Touch & hold delay" is never shortened. |
+| `ViewConfiguration.touchSlop` | `PressSlideRelease.kt` | Moving further than this during the hold abandons the fan (≈ `kTouchSlop`). |
+| `Settings.Global.ANIMATOR_DURATION_SCALE` + `ContentObserver` | `core/designsystem/…/util/Motion.kt` (`rememberReducedMotion`) | "Remove animations" (spec §6.10): surface transitions fall back to a plain cross-fade, the fan's entrance and the rail's animated scroll are skipped. Read-only, no permission. |
 | `java.time.ZoneId.systemDefault()` | `core/data/…/time/SystemZoneClock.kt` | Launch hour/weekday are stored in the zone current *at launch time* (D27). |
 | `java.text.Collator.getInstance(locale)` | `CatalogAssembler` | Locale-aware alphabetical order (Turkish İ/ı, ç, ş…), spec §3. |
 
@@ -234,13 +331,15 @@ None of these needs a permission.
 | `enableEdgeToEdge()` | `MainActivity.onCreate` | Draw behind the status and navigation bars. Edge-to-edge is enforced for apps targeting API 35+; Reach targets 37. |
 | `enableEdgeToEdge(SystemBarStyle.dark/light(Color.TRANSPARENT…))` | `MainActivity.applySystemBarStyle` | Re-styles bar icons for the *resolved* Reach theme (a forced Dark/Light theme would otherwise leave dark icons on a dark background). Called from `ReachApp` whenever the resolved theme changes. |
 | `WindowInsets.safeDrawing` + `windowInsetsPadding` | `HomeScreen`, `IntentDetailScreen`, `HomeRoute` | Keeps content out of the status bar, navigation bar, display cutout and IME. |
-| `windowSoftInputMode="adjustResize"` | manifest | The window resizes for the keyboard; Compose applies IME insets (Search, M2). |
-| `LocalSoftwareKeyboardController.hide()` + `LocalFocusManager.clearFocus(force = true)` | `HomeRoute` | "Pressing Home closes the keyboard" (spec §4), on `HomeEvent.HideKeyboard`. |
-| `BackHandler` (AndroidX `OnBackPressedDispatcher`) | `HomeRoute` | Intercepts system Back (button and gesture): sub-surface → Home, Home → nothing (D28). |
+| `windowSoftInputMode="adjustResize"` | manifest | The window resizes for the keyboard; `SearchScreen` pads itself by `WindowInsets.safeDrawing` (which includes the IME inset), so results sit right above the keyboard. |
+| `FocusRequester.requestFocus()` + `LocalSoftwareKeyboardController.show()` | `SearchRoute` | Search opens with the keyboard up (spec §6.6). |
+| `LocalSoftwareKeyboardController.hide()` + `LocalFocusManager.clearFocus(force = true)` | `HomeRoute`, `SearchRoute` | "Pressing Home closes the keyboard" (spec §4), on `HomeEvent.HideKeyboard`; Search also hides it when it closes. |
+| `BackHandler` (AndroidX `OnBackPressedDispatcher`) | `HomeRoute`, `AppMenu` | Intercepts system Back (button and gesture): sub-surface → Home, Home → nothing (D28); while All Apps' long-press menu is open, Back closes the menu (D42). |
+| `WindowInsets.systemGestures` | `AllAppsScreen`, `FanOverlay` | The zones where a swipe is a system gesture (back from the left/right edge, home from the bottom). The letter rail is inset by `systemGestures.exclude(safeDrawing)` on its side, and fan pills stay inside `safeDrawing ∪ systemGestures` (D41, D50). |
+| `Modifier.systemGestureExclusion()` (→ `View.setSystemGestureExclusionRects`, API 29) | `LetterRail` | Asks the system not to treat swipes on the rail strip as Back — a backup for devices whose real zone is wider than the reported inset. Android caps exclusions at **200dp per edge**, except for the current home activity; Reach insets the rail anyway, so Back keeps working along the whole edge and nothing depends on being default home (D41). |
 | `android:windowBackground` in the window theme | `app/src/main/res/values*/themes.xml` | Default palette bg before Compose's first frame — no white flash (D8). |
 
-Not yet: keeping the press-slide-release area away from `WindowInsets.systemGestures` (M2),
-wallpaper window theme / blur (M4).
+Not yet: wallpaper window theme / blur (M4).
 
 ---
 
@@ -254,17 +353,17 @@ with other apps, excluded from cloud backup and device transfer (D9).
 
 ## Coming in M3–M5
 
-Each of these is already behind an interface in `core/data/…/source/SystemSources.kt` and
-bound to an `Unavailable…` stub in `core/system/…/di/SystemModule.kt`, which reports exactly
+App shortcuts and contacts are done (M2, sections above). Most of what remains is already
+behind an interface in `core/data/…/source/SystemSources.kt` and bound to one of the six
+`Unavailable…` stubs in `core/system/…/di/SystemModule.kt`, which reports exactly
 what the real source reports with the permission denied. Milestones as stated in the stub's
 KDoc (`core/system/…/unavailable/UnavailableSources.kt`):
 
 - **Notification counts** — `NotificationListenerService`, enabled by the user in system settings; feeds the "3 NEW" badges (M3).
 - **Media sessions** — `MediaSessionManager.getActiveSessions(listenerComponent)`, reuses notification access; Listen row + Now Playing card (M3).
-- **App shortcuts** — `LauncherApps.getShortcuts` / `startShortcut` with `hasShortcutHostPermission()` (default launcher only) (M2, with Search; intent-detail pills in M3).
 - **Default-home onboarding card** — UI for the existing `HomeRoleSource` / `SystemScreen.HOME_ROLE` (M3).
 - **Calendar** — next event from `CalendarContract`, runtime permission `READ_CALENDAR` (M3).
-- **Contacts** — `ContactsContract` search, runtime permission `READ_CONTACTS` (M2, with Search).
+- **Work-profile contacts** — `ContactsContract.Contacts.ENTERPRISE_CONTENT_FILTER_URI`, subject to the admin's cross-profile contacts policy (M5).
 - **Usage stats** — `UsageStatsManager`, special access `PACKAGE_USAGE_STATS` via usage-access settings; optional prediction blend (M3).
 - **Wallpaper colours** — `WallpaperManager.getWallpaperColors(FLAG_SYSTEM)` for the wallpaper-mode accent (M4).
 - **Accessibility service** — opt-in, `GLOBAL_ACTION_LOCK_SCREEN` / `GLOBAL_ACTION_NOTIFICATIONS`, with the Play accessibility-API disclosure text (M5).

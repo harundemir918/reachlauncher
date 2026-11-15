@@ -16,18 +16,46 @@ the Android side with Flutter analogies — start with
 
 ---
 
-## Status: M1 — Core launcher (done)
+## Status: M2 — Speed (done)
 
 | | Milestone | Scope |
 |---|---|---|
 | ● | **M0 — Foundation** | Gradle + version catalog, modules, Hilt, `ReachTheme` with all palettes, derived tokens and contrast tests, bundled fonts, `MainActivity` registered as HOME, PLAN/DECISIONS, README, `FLUTTER_TO_COMPOSE.md` v1 |
-| ◐ | **M1 — Core launcher** | App catalog (LauncherApps, live updates, cache), intent auto-assignment, Home, intent detail, launching with animation, launch history, the Now row, Home/Back behaviour — *implemented, awaiting the independent review* |
-| ☐ | M2 — Speed | Search with ranking and commands, All Apps with the letter rail, press-slide-release, haptics |
-| ☐ | M3 — System features | Notification counts, media controls, app shortcuts, default-home onboarding, permissions UX |
+| ● | **M1 — Core launcher** | App catalog (LauncherApps, live updates, cache), intent auto-assignment, Home, intent detail, launching with animation, launch history, the Now row, Home/Back behaviour |
+| ◐ | **M2 — Speed** | Search with ranking, commands, shortcuts, contacts and web fallback; All Apps with the word wall, letter rail and long-press menu; press-slide-release; haptics; the shared `LaunchApp` use case — *implemented, awaiting the independent review* |
+| ☐ | M3 — System features | Notification counts, media controls, default-home onboarding, permissions UX |
 | ☐ | M4 — Personalisation | Appearance sheet, DataStore persistence, Auto theme, thumb side, wallpaper mode, move/hide apps |
 | ☐ | M5 — Polish | Accessibility pass, optional accessibility service, work profile + private space, Turkish strings, Baseline Profile, release config |
 
-### What works now (M1)
+### What works now (M1 + M2)
+
+New in M2:
+
+- **Press, slide, release**: hold an intent word (~0.3 s, or longer if you set a longer
+  Android "Touch & hold delay"). Its apps fan upward beside your thumb, most-used nearest.
+  Slide onto one (it lights up and you feel a tick), then lift to open it. Lift anywhere
+  else, or slide back onto the word, to cancel. A plain tap still opens the intent detail.
+  See [`docs/GESTURES.md`](docs/GESTURES.md).
+- **Search ("type to launch")**: pull down on Home or tap the pill. The keyboard comes up and
+  the results sit right above it. Matching ignores case and accents and follows Turkish
+  rules ("ins" finds "İnstagram"). Word-prefix matches rank above substring matches, and how
+  often you launch an app is a tiebreaker within the same match quality. You get up to six
+  rows: apps, **app shortcuts** (when Reach is the default home), **contacts** (only after
+  you allow it from the "Include contacts" row) with Call / Message / Card, and
+  **commands** ("Switch to Forest", "dark theme" / "koyu tema", "Appearance settings").
+  "Search the web for '…'" is always the last row. Enter opens the top row. With an empty
+  query you see four suggested apps.
+- **All Apps**: swipe up on Home. "Everything" plus a count, then a **word wall** of names
+  grouped by locale-aware letters (ICU), and an **A–Z letter rail** on the thumb side.
+  Scrub the rail to jump: a big bubble shows the letter and you feel a tick per letter. Hidden
+  apps sit in a dimmed group at the end. **Long-press a name** for App info, Move to
+  intent…, Hide/Unhide and Uninstall.
+- **App shortcuts in intent detail**: up to four shortcut pills, when Reach is the default
+  home.
+- **Haptics**: a light tick for the fan and the rail, and a long-press buzz on the clock. No
+  vibration permission is needed.
+
+From M1:
 
 - **Home**: the date line ("SAT 14 NOV") and the big clock, updated on every minute tick,
   time/time-zone change and resume; the **NOW** row with up to three predicted apps and a
@@ -52,13 +80,11 @@ the Android side with Flutter analogies — start with
 
 ### Placeholders (so you know what you're looking at)
 
-- **Pull down** / tap the pill → a "Type to launch arrives in M2" placeholder (Search, **M2**).
-- **Swipe up** → a placeholder for the A–Z list (All Apps, **M2**).
 - **Long-press the clock** (~450 ms) → a placeholder sheet (Appearance, **M4**). The theme
-  follows Android's dark mode; palette and thumb side are fixed to the defaults until M4.
-- No "3 NEW" badges, media controls, app shortcuts, calendar line or default-home
-  onboarding card yet (**M3**). No "Move to… / Hide" yet (**M4**). No press-slide-release
-  gesture yet (**M2**).
+  follows Android's dark mode, and the thumb side is fixed to the default until M4. The search
+  commands "Switch to <Palette>" and "dark/light theme" already change and save the setting.
+- No "3 NEW" badges, media controls, calendar line or default-home onboarding card yet
+  (**M3**). Work-profile contacts in search are not included yet (**M5**).
 
 ---
 
@@ -71,11 +97,13 @@ Reach has **no analytics, no network access and sends no data off the device.**
 - **Cloud backup and device-to-device transfer are disabled** (`android:allowBackup="false"`
   plus backup/data-extraction rules that exclude everything), so launch history and
   settings are not copied anywhere. See [DECISIONS D9](docs/DECISIONS.md#d9--no-cloud-backup-m0).
-- The only permission in M1 is `REQUEST_DELETE_PACKAGES` (normal, install-time), for the
-  system's own uninstall confirmation. Details and everything that is *not* requested:
-  [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md).
-- A Play-listing-ready `PRIVACY.md` arrives in M3, together with the optional
-  permissions (notification access, usage access, contacts, calendar).
+- Permissions in M2: `REQUEST_DELETE_PACKAGES` (normal, install-time), for the system's own
+  uninstall confirmation, and the **optional** runtime permission `READ_CONTACTS`. It is only
+  requested when you tap "Include contacts" in Search. Contacts are read on demand for the
+  current query and are never stored or sent anywhere. Details and everything that is *not*
+  requested: [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md).
+- A Play-listing-ready `PRIVACY.md` arrives in M3, together with the remaining optional
+  permissions (notification access, usage access, calendar).
 
 (The *build* downloads Gradle, libraries and possibly a JDK — that's your machine, not the app.)
 
@@ -184,6 +212,22 @@ shortcut only — real users go through Settings or Reach's own onboarding. On A
    intent's count changes within a moment, without restarting Reach.
 5. Back on Home does nothing; Back in a sub-screen returns to Home.
 
+New in M2:
+
+6. **Press, slide, release:** put your thumb on **Talk** and keep it still for about 0.3 s.
+   The apps fan up beside your finger. Slide up onto one (it lights up, with a tick) and
+   lift: the app opens. Try it again, but slide back onto the word or lift beside the fan:
+   nothing opens. A quick tap still shows the Talk list.
+7. **Pull down** on Home (or tap the pill) → Search with the keyboard up. Type `spo` or `set`:
+   the best match is on top with "ENTER ↵", and Enter opens it. Type `dark` or `forest` for
+   commands. After two letters an "Include contacts" row offers contacts, and the last row
+   searches the web.
+8. **Swipe up** on Home → All Apps. Drag your thumb along the letters on the edge: a bubble
+   shows each letter and the list jumps. **Long-press a name** for App info / Move to intent… /
+   Hide / Uninstall. The "Type to launch" pill at the bottom switches to Search.
+9. App shortcuts (in Search and as pills in intent detail) only appear while Reach is the
+   **default home app**. That's an Android rule, not a setting.
+
 ### Getting back to the stock launcher
 
 - **Settings → Apps → Default apps → Home app** → pick the original launcher. In M1, Reach
@@ -210,10 +254,10 @@ shortcut only — real users go through Settings or Reach's own onboarding. On A
 :core:model           Pure Kotlin domain types (ReachIntent, AppKey, CatalogApp, Prediction, PaletteId, …) + TextFolding
 :core:designsystem    ReachTheme, palettes, derived tokens, colour maths, typography, fonts, components (IntentWordRow, NowTile, AppRow, …)
 :core:data            Repository + system-source interfaces, Room/DataStore implementations, catalog/prediction logic, fakes
-:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role; stubs for M2–M5
-:feature:home         HomeViewModel (surface state machine), Home, intent detail, placeholders for Search/All Apps/Appearance
-:feature:search       Type to launch — empty until M2
-:feature:allapps      A–Z word wall + letter rail — empty until M2
+:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts; stubs for M3–M5
+:feature:home         HomeViewModel (surface state machine + fan), Home, intent detail, press-slide-release, Appearance placeholder
+:feature:search       Type to launch: SearchViewModel, SearchRanker, commands, contacts prompt
+:feature:allapps      A–Z word wall, letter rail, long-press menu
 :feature:appearance   Appearance sheet — empty until M4
 ```
 
@@ -224,12 +268,12 @@ data flows are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | Doc | What's in it |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module diagram, layers, data flows from system event to pixel, the Home state machine, startup, privacy, where to add a feature |
-| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v1; extended M3–M5) |
-| [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v2) |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D33) |
+| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v2; extended M3–M5) |
+| [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v3) |
+| [`docs/GESTURES.md`](docs/GESTURES.md) | Press-slide-release, the letter rail, Home swipes and the clock long-press, step by step: pointer passes, consumption vs. the gesture arena, and how the tests drive them |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D51) |
 | [`docs/PLAN.md`](docs/PLAN.md) | Module layout, dependency rules, contracts, milestones, carried-over notes |
 | [`docs/reach-launcher-prompt.md`](docs/reach-launcher-prompt.md) | The full product and design spec (source of truth) |
-| `docs/GESTURES.md` | *M2* — press-slide-release and the letter rail, step by step |
 | `PRIVACY.md` | *M3* — privacy policy for the Play listing |
 
 ---

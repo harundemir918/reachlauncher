@@ -450,3 +450,15 @@ as composable slots defaulting to `SearchRoute` / `AllAppsRoute`, with a small
 `HomeViewModel`, and Home's Robolectric tests render stand-ins because the real routes need
 Hilt (`hiltViewModel()`). Home's `BackHandler` closes both surfaces; only All Apps' open
 long-press menu claims Back for itself.
+
+## D52 — Lighter process from M2 on: orchestrator review instead of a reviewer agent **[deviation]** (M2)
+**Context.** §1.5 asks for a separate reviewer sub-agent after every milestone. Each sub-agent
+re-reads the spec, plan, decisions and code from scratch (≈ 200–280k tokens each), and M2's
+agents were repeatedly stopped by usage limits. The owner asked to cut the token use.
+**Decision.** M2 was finished and reviewed by the orchestrator directly: the docs-agent's
+updates were checked against the code, and a focused review covered the riskiest parts —
+the press-slide-release detector (consumption, cancel detection, cleanup), the contacts
+query (parameterised, fails closed), the shortcut source's callback lifecycle, that every
+launch goes through `LaunchApp`, and the merged release manifest's permissions
+(`READ_CONTACTS`, `REQUEST_DELETE_PACKAGES`; no `INTERNET`). The process for M3–M5 will be
+agreed with the owner before M3 starts.

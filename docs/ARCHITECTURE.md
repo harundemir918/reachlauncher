@@ -1,10 +1,11 @@
 # Reach — architecture
 
-**v1 (M1).** Describes the code as it is at the end of milestone M1 ("Core launcher").
-Things that don't exist yet are marked with the milestone that brings them. The product
-spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the reasons behind the
-choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D33); the Flutter → Compose vocabulary
-is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md).
+**v2 (M2).** Describes the code as it is at the end of milestone M2 ("Speed": Search, All
+Apps, press-slide-release). Things that don't exist yet are marked with the milestone that
+brings them. The product spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the
+reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D51); the Flutter →
+Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md); custom touch
+handling is explained in [`GESTURES.md`](GESTURES.md).
 
 Paths below are abbreviated: `…` = the `src/main/kotlin/com/baklavapp/reachlauncher/<module>`
 part, e.g. `core/data/…/db/` = `core/data/src/main/kotlin/com/baklavapp/reachlauncher/core/data/db/`.
@@ -16,9 +17,9 @@ part, e.g. `core/data/…/db/` = `core/data/src/main/kotlin/com/baklavapp/reachl
 ```mermaid
 graph TD
     app[":app<br/>MainActivity, ReachApp, ReachApplication"]
-    home[":feature:home<br/>HomeViewModel, Home, intent detail"]
-    search[":feature:search<br/>(empty until M2)"]
-    allapps[":feature:allapps<br/>(empty until M2)"]
+    home[":feature:home<br/>HomeViewModel, Home, intent detail, fan"]
+    search[":feature:search<br/>SearchViewModel, SearchRanker, SearchRoute"]
+    allapps[":feature:allapps<br/>AllAppsViewModel, word wall, letter rail"]
     appearance[":feature:appearance<br/>(empty until M4)"]
     ds[":core:designsystem<br/>ReachTheme, tokens, components"]
     data[":core:data<br/>contracts, Room, DataStore, domain logic, fakes"]
@@ -56,15 +57,17 @@ The edges are exactly the `project(":…")` dependencies in each module's `build
 `--> model` edges from features are technically redundant but are declared anyway for
 readability.
 
-| Module | Kind | What lives there (M1) |
+| Module | Kind | What lives there (M2) |
 |---|---|---|
 | `:app` | Android application | `MainActivity` (HOME activity), `ReachApp` (root composable), `ReachApplication` (`@HiltAndroidApp`), the manifest, window theme, backup rules |
 | `:core:model` | **pure Kotlin/JVM** (no Android) | `AppKey`, `PackageUser`, `CatalogApp`, `InstalledApp`, `ProfileState`, `ReachIntent`, `LaunchEvent`, `Prediction`, `AppearanceSettings`, `LaunchOrigin`, `SystemScreen`, `ExternalAction`, `TextFolding`… |
-| `:core:designsystem` | Android library + Compose | `ReachTheme`, palettes, derived tokens, `ColorMath`, typography + fonts, components (`IntentWordRow`, `NowTile`, `AppRow`, `SearchPill`, `Monogram`, `reachClickable`…) |
-| `:core:data` | Android library | **Contracts** (`repository/Repositories.kt`, `source/SystemSources.kt`), their **implementations** for data (`repository/impl`, `db`, `domain`, `time`), Hilt modules (`di`), and **fakes** (`fake`, in `src/main` — D4) |
-| `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, `Unavailable…` stubs), `ActivityTracker`, `SystemModule` |
-| `:feature:home` | Android library + Compose | `HomeViewModel` (the surface state machine), `HomeRoute`, Home and intent-detail screens, placeholders for Search / All Apps / Appearance |
-| `:feature:search`, `:feature:allapps`, `:feature:appearance` | Android library + Compose | Build files only. Their surfaces are placeholders inside `:feature:home` (`ui/PlaceholderSurfaces.kt`) until M2 / M2 / M4 |
+| `:core:designsystem` | Android library + Compose | `ReachTheme`, palettes, `PaletteNames.kt` (localised palette names, shared by Search's commands and Appearance in M4), derived tokens, `ColorMath`, typography + fonts, components (`IntentWordRow`, `NowTile`, `AppRow`, `SearchPill`, `Monogram`, `reachClickable`…), `util/Motion.kt` (`rememberReducedMotion`, `rememberHapticTick`) |
+| `:core:data` | Android library | **Contracts** (`repository/Repositories.kt`, `source/SystemSources.kt`), their **implementations** for data (`repository/impl`, `db`, `domain` — incl. the shared `LaunchApp` use case —, `time`), Hilt modules (`di`), and **fakes** (`fake`, in `src/main` — D4) |
+| `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, **`LauncherAppsShortcutSource`** and **`ContactsProviderSource`** (M2), six `Unavailable…` stubs), `ActivityTracker`, `SystemModule` |
+| `:feature:home` | Android library + Compose | `HomeViewModel` (the surface state machine + the fan's state), `HomeRoute` (hosts Search / All Apps as slots, D51), Home and intent-detail screens, press-slide-release (`ui/PressSlideRelease.kt`, `ui/FanOverlay.kt`, `ui/HomeWithFan.kt`), Home swipes (`ui/HomeGestures.kt`), the Appearance placeholder sheet (`ui/PlaceholderSurfaces.kt`, until M4) |
+| `:feature:search` | Android library + Compose | `SearchRoute` (public), `SearchViewModel`, `SearchRanker` + `CommandKeywords` (pure), `SearchResult` / `SearchUiState`, `ui/SearchScreen.kt` |
+| `:feature:allapps` | Android library + Compose | `AllAppsRoute` (public), `AllAppsViewModel`, `LetterIndex` (ICU), `ui/AllAppsScreen.kt` (word wall), `ui/LetterRail.kt`, `ui/AppMenu.kt` (long-press menu) |
+| `:feature:appearance` | Android library + Compose | Build file only; the sheet is a placeholder in `:feature:home` until **M4** |
 
 ### Dependency rules and why
 
@@ -73,8 +76,9 @@ readability.
    `:core:data/…/source/SystemSources.kt` (D3). Consequences:
    - `HomeViewModelTest` is a plain JVM test with fakes (`HomeTestFixtures.kt` builds the
      ViewModel from `FakeAppCatalogRepository`, `FakeAppLauncher`, …).
-   - Every system integration is optional: in M1, eight of the thirteen sources are
-     `Unavailable…` stubs and Home works anyway.
+   - Every system integration is optional: in M2, six of the thirteen sources are still
+     `Unavailable…` stubs, and shortcuts/contacts degrade to "none" without their
+     permission — Home and Search work anyway.
 2. **Contracts live in `:core:data`, not in `:core:system`.** `:core:system` depends on
    `:core:data` to implement them (dependency inversion). Flutter analogy: the
    `*_platform_interface` package of a federated plugin.
@@ -92,7 +96,11 @@ readability.
    fast JVM tests and it can never leak a platform type.
 6. **Feature modules don't depend on each other**, except that `:feature:home` hosts the
    others: Search, All Apps and Appearance are *states* of the Home surface (§4), not
-   separate screens.
+   separate screens. The dependency is one-way and narrow: Home only calls the public
+   `SearchRoute(onClose, onOpenAppearance)` and `AllAppsRoute(onClose, onOpenSearch)`;
+   neither module ever sees `HomeViewModel` (D51, §4a).
+7. **One launch path.** Every screen launches through the `LaunchApp` use case in
+   `:core:data` (§3e), so history is recorded the same way everywhere.
 
 ---
 
@@ -101,14 +109,15 @@ readability.
 Every data path in Reach has the same shape. Here it is next to the Flutter
 clean-architecture layers you know:
 
-| Reach layer | Example (M1) | Flutter clean architecture |
+| Reach layer | Example (M2) | Flutter clean architecture |
 |---|---|---|
-| Stateless composables | `HomeScreen`, `IntentDetailScreen`, `IntentWordRow`, `NowTile` | widgets (`StatelessWidget` taking state + callbacks) |
-| Route (state ↔ UI glue) | `HomeRoute` (collects state, handles events and Back) | `BlocBuilder` / `BlocListener` / `PopScope` around a page |
-| ViewModel | `HomeViewModel` — `StateFlow<HomeUiState>`, `Flow<HomeEvent>` | BLoC / Cubit |
+| Stateless composables | `HomeScreen`, `IntentDetailScreen`, `SearchScreen`, `AllAppsScreen`, `LetterRail`, `IntentWordRow`, `NowTile` | widgets (`StatelessWidget` taking state + callbacks) |
+| Route (state ↔ UI glue) | `HomeRoute` (collects state, handles events and Back), `SearchRoute`, `AllAppsRoute` | `BlocBuilder` / `BlocListener` / `PopScope` around a page |
+| ViewModel | `HomeViewModel`, `SearchViewModel`, `AllAppsViewModel` — `StateFlow<…UiState>`, `Flow<…Event>` | BLoC / Cubit |
+| Use case | `LaunchApp` (`core/data/…/domain/LaunchApp.kt`) | a use-case class with `call()` shared by several BLoCs |
 | Repository interface | `AppCatalogRepository`, `LaunchHistoryRepository`, `PredictionRepository`, `SettingsRepository` (`core/data/…/repository/Repositories.kt`) | `domain/repositories` abstract classes |
 | System-source interface | `InstalledAppsSource`, `ProfileSource`, `AppLauncher`, `NotificationCountSource`… (`core/data/…/source/SystemSources.kt`) | plugin platform interface / abstract data source |
-| Pure domain logic | `CatalogAssembler`, `IntentCategorizer`, `PredictionEngine`, `hourTicks` (`core/data/…/domain`, `…/time`) | use cases / pure Dart services |
+| Pure domain logic | `CatalogAssembler`, `IntentCategorizer`, `PredictionEngine`, `hourTicks` (`core/data/…/domain`, `…/time`); `SearchRanker` (`feature/search/…`), `LetterIndex` / `buildUiState` (`feature/allapps/…`) | pure Dart services |
 | Repository implementation | `AppCatalogRepositoryImpl`, `LaunchHistoryRepositoryImpl`, `PredictionRepositoryImpl`, `SettingsRepositoryImpl` | `data/repositories` implementations |
 | Data sources | Room (`ReachDatabase`, DAOs), DataStore (`DataStore<Preferences>`), system sources in `:core:system` | drift/sqflite, shared_preferences, platform plugins |
 
@@ -254,13 +263,18 @@ sequenceDiagram
 
 ### 3c. Tap an app → launch
 
-1. **Where was the tap?** Every launchable element (`NowTile` on Home, `AppRow` in intent
-   detail, shortcut pills) has a `LaunchOriginHolder` (`rememberLaunchOrigin()`) and
-   `Modifier.trackLaunchOrigin(holder)`, which records `boundsInWindow()` from
-   `onGloballyPositioned` (`feature/home/…/ui/HomeUiSupport.kt`). It's a plain holder, not
-   Compose state, because it changes on every scroll frame and nobody reads it until a tap.
-2. **ViewModel.** The click calls `HomeViewModel.launch(app, holder.toLaunchOrigin())`.
-3. **System launch.** `AppLauncher.launchApp(key, origin)` → `SystemAppLauncher`
+1. **Where was the tap?** Every launchable element (`NowTile` on Home, `AppRow` and shortcut
+   pills in intent detail, word-wall names in All Apps) has a `LaunchOriginHolder`
+   (`rememberLaunchOrigin()`) and `Modifier.trackLaunchOrigin(holder)`, which records
+   `boundsInWindow()` from `onGloballyPositioned` (`feature/home/…/ui/HomeUiSupport.kt`; a
+   copy of the same two helpers lives in `feature/allapps/…/ui/AllAppsUiSupport.kt`). It's a
+   plain holder, not Compose state, because it changes on every scroll frame and nobody reads
+   it until a tap. Search rows record `boundsInWindow()` in their own `onGloballyPositioned`
+   (`SearchScreen.kt`), and fan pills report their bounds through `FanOverlay`'s layout.
+2. **ViewModel → use case.** The click calls `HomeViewModel.launch(app, holder.toLaunchOrigin())`
+   (or `AllAppsViewModel.launch`, `SearchViewModel.onResultClick`, `HomeViewModel.onFanRelease`),
+   which calls **`LaunchApp.app(key, origin)`** (`core/data/…/domain/LaunchApp.kt`) — see §3e.
+3. **System launch.** `LaunchApp` → `AppLauncher.launchApp(key, origin)` → `SystemAppLauncher`
    (`core/system/…/launch/`):
    - `Profiles.userFor(serial)` turns the stored user serial back into a `UserHandle`
      (`FAILED` if the profile was removed);
@@ -279,9 +293,10 @@ sequenceDiagram
      "Couldn't open X" for 3 s (a polite live region; a second failure restarts the timer);
      the surface stays.
    - `RESUMING_PROFILE` → nothing else (no history, surface stays; D32).
-   - `LAUNCHED` → `onLaunched(key)`: `historyRepository.recordLaunch(key, clock.millis())` in
-     `viewModelScope` (best effort: a database error is swallowed, D36), and the surface
-     returns to Home (D28).
+   - `LAUNCHED` → `LaunchApp` has already started `history.recordLaunch(key, clock.millis())`
+     in the **application scope** (the launched app is in front and the ViewModel may stop,
+     but the launch must still count; best effort, a database error is swallowed, D36), and
+     the surface returns to Home (D28).
 5. **History → predictions.** `LaunchHistoryRepositoryImpl.recordLaunch` stores a
    `LaunchEventEntity` with hour-of-day and weekday captured in the *current* zone
    (`SystemZoneClock`, D27). Room invalidates `launch_events`, which re-emits two flows:
@@ -294,6 +309,7 @@ sequenceDiagram
 sequenceDiagram
     participant UI as NowTile / AppRow
     participant VM as HomeViewModel
+    participant U as LaunchApp
     participant L as SystemAppLauncher
     participant T as ActivityTracker
     participant LA as LauncherApps (system)
@@ -301,13 +317,15 @@ sequenceDiagram
     participant P as PredictionRepositoryImpl
 
     UI->>VM: launch(app, LaunchOrigin from boundsInWindow)
-    VM->>L: launchApp(key, origin)
+    VM->>U: app(key, origin)
+    U->>L: launchApp(key, origin)
     L->>T: resumedActivity
     T-->>L: MainActivity (weak reference)
     L->>L: makeClipRevealAnimation(decorView, origin) + getLocationOnScreen
     L->>LA: startMainActivity(component, user, sourceBounds, options)
-    L-->>VM: LaunchResult.LAUNCHED
-    VM->>H: recordLaunch(key, clock.millis()) in viewModelScope
+    L-->>U: LaunchResult.LAUNCHED
+    U->>H: recordLaunch(key, clock.millis()) in the application scope
+    U-->>VM: LaunchResult.LAUNCHED
     VM->>VM: surface = Home
     H->>H: insert LaunchEventEntity (Room)
     H-->>P: eventsSince() re-emits
@@ -358,6 +376,107 @@ sequenceDiagram
     App->>VM: onResume(): recheck home role, refresh catalog
 ```
 
+### 3e. One launch path: `LaunchApp` (Search, All Apps, the fan)
+
+Four places can launch an app in M2 — Home (Now row, intent detail), Search, All Apps and
+the press-slide-release fan. All of them call one use case, `LaunchApp`
+(`core/data/…/domain/LaunchApp.kt`), injected by Hilt into each ViewModel:
+
+- `LaunchApp.app(key, origin)` → `AppLauncher.launchApp` → on `LAUNCHED` records the launch
+  in the **application scope**; returns the `LaunchResult` unchanged.
+- `LaunchApp.shortcut(shortcut, origin, recordAs)` → `ShortcutSource.launch`; on success
+  records against `recordAs` (the app the shortcut belongs to) when known.
+- Only `LAUNCHED` is recorded (D32, D34); a recording failure is swallowed (D36).
+
+Each ViewModel maps the result to its own UI: `HomeViewModel` → surface Home (or
+`HomeEvent.LaunchFailed`); `SearchViewModel` → `SearchEvent.Close` / `LaunchFailed`;
+`AllAppsViewModel` → `AllAppsEvent.Done` / `LaunchFailed`. `RESUMING_PROFILE` keeps the user
+where they are everywhere. Tested in `core/data/src/test/…/domain/LaunchAppTest.kt` and by the
+feature tests asserting `fixture.history` after a launch.
+
+```mermaid
+sequenceDiagram
+    participant S as SearchViewModel.onResultClick
+    participant A as AllAppsViewModel.launch
+    participant F as HomeViewModel.onFanRelease
+    participant U as LaunchApp
+    participant L as AppLauncher (SystemAppLauncher)
+    participant H as LaunchHistoryRepository
+    participant R as Route (SearchRoute / AllAppsRoute / HomeRoute)
+
+    alt from Search
+        S->>U: app(key, origin) or shortcut(s, origin, recordAs)
+    else from All Apps
+        A->>U: app(key, origin)
+    else from the fan
+        F->>F: fan = null, launch(highlightedApp, pill bounds)
+        F->>U: app(key, origin)
+    end
+    U->>L: launchApp(key, origin)
+    L-->>U: LAUNCHED / RESUMING_PROFILE / FAILED
+    opt LAUNCHED
+        U->>H: recordLaunch(key, now) in the application scope
+    end
+    U-->>S: LaunchResult
+    Note over S,F: LAUNCHED: Close / Done event or surface = Home. FAILED: LaunchFailed(label). RESUMING_PROFILE: stay.
+    S-->>R: SearchEvent.Close → onClose() → HomeViewModel.onBack()
+```
+
+### 3f. Type → ranked results (Search)
+
+1. **Query in the UI.** `SearchRoute` keeps the text in `rememberSaveable` UI state and passes
+   a copy to `SearchViewModel.onQueryChange(text)` on every keystroke (D46), so a slow
+   ranking pass can never make the cursor jump. On open, a `FocusRequester` focuses the
+   `BasicTextField` and `LocalSoftwareKeyboardController.show()` raises the keyboard.
+2. **Inputs.** `SearchViewModel` `combine`s a `SearchCorpus` from `catalogRepository.apps`,
+   shortcuts (empty unless `ShortcutSource.hasHostPermission`), contacts and
+   `predictionRepository.predictions(4)`. Contacts are the only slow source (another
+   process): `combine(query, contactsGranted)` → `distinctUntilChanged` → `debounce(150 ms)` →
+   `mapLatest { contactsSource.search(text, 12) }` → `onStart { emit(emptyList()) }` — never
+   queried without `READ_CONTACTS`, and a lookup overtaken by typing is cancelled (D45).
+3. **Ranking.** `SearchRanker.rank(query, corpus)` (pure, `SearchRankerTest`): fold with
+   `TextFolding` (case, accents, Turkish i/İ) and collapse punctuation; tiers label-prefix
+   2.25 > word-prefix 2.0 > substring 1.0; plus a frequency boost ≤ 0.5; shortcuts ≤ 3,
+   contacts ≤ 3; commands (`CommandKeywords`, English + Turkish) from 2 letters, word-prefix
+   only; ties apps > shortcuts > contacts > commands > alphabetical; 6 rows, then
+   "Search the web" last. Empty query → 4 predictions (D43, D44).
+4. **State.** `combine(query, corpus, expandedContactId, contactsGranted, declined)` builds
+   `SearchUiState(query, results, expandedContactId, showContactsPrompt)` on the default
+   dispatcher, `stateIn(WhileSubscribed(5 s))`.
+5. **UI.** `SearchScreen` is padded by `WindowInsets.safeDrawing` (which includes the IME
+   inset), so the input sits right above the keyboard and the results `LazyColumn` right above
+   the input; the first row is accent-filled with an "ENTER ↵" hint.
+6. **Enter.** `KeyboardActions(onGo = …)` → `onSubmit(origin)` activates the top row exactly
+   like a tap. If `uiState` is a keystroke behind, it re-ranks the current query against the
+   last corpus (`lastCorpus`) first. App/shortcut → `LaunchApp` (§3e); contact → inline
+   Call / Message / Card pills; command → `SettingsRepository` (palette / theme) then close, or
+   `SearchEvent.OpenAppearance`; web → `AppLauncher.perform(ExternalAction.WebSearch)` (or a
+   "no app can do this" message when nothing handles it).
+
+```mermaid
+sequenceDiagram
+    participant UI as SearchRoute / SearchScreen
+    participant VM as SearchViewModel
+    participant C as ContactsSource
+    participant R as SearchRanker
+    participant U as LaunchApp
+
+    UI->>VM: onQueryChange("spo")
+    VM->>VM: query.value = "spo" (apps, shortcuts, predictions already in the corpus)
+    VM->>R: rank("spo", corpus) on Dispatchers.Default
+    R-->>VM: rows (no contacts yet) + WebSearch
+    VM-->>UI: SearchUiState (results above the keyboard)
+    Note over VM,C: 150 ms without typing
+    VM->>C: search("spo", 12) (IO, only with READ_CONTACTS)
+    C-->>VM: contacts
+    VM->>R: rank("spo", corpus with contacts)
+    VM-->>UI: SearchUiState with contact rows
+    UI->>VM: onSubmit(origin) (Enter)
+    VM->>U: top row: app(key, origin)
+    U-->>VM: LAUNCHED
+    VM-->>UI: SearchEvent.Close → hide keyboard, onClose()
+```
+
 ---
 
 ## 4. The Home surface state machine
@@ -379,17 +498,24 @@ stateDiagram-v2
     Home --> AllApps : onAllAppsRequested (swipe up, pill TalkBack action)
     Home --> Appearance : onAppearanceRequested (clock long-press, TalkBack action, Enter)
     IntentDetail --> Home : onBack, onHomePressed, successful launch
-    Search --> Home : onBack, onHomePressed
-    AllApps --> Home : onBack, onHomePressed
+    Search --> Home : onBack, onHomePressed, launch, command applied (onClose)
+    Search --> Appearance : Appearance settings command (onOpenAppearance)
+    AllApps --> Home : onBack, onHomePressed, launch (onClose)
+    AllApps --> Search : Type to launch pill (onOpenSearch)
     Appearance --> Home : onBack, onHomePressed
-    Home --> Home : successful launch from the Now row
+    Home --> Home : successful launch from the Now row or the fan
 ```
+
+The press-slide-release fan is *not* a surface: it's a separate `HomeViewModel.fan:
+StateFlow<FanState?>` that only exists on Home and is cleared by `onBack`, `onHomePressed` and
+every successful launch (D50, [GESTURES.md §2](GESTURES.md#2-press-slide-release-home)).
 
 - **Back** (`BackHandler(enabled = true)` in `HomeRoute`) is *always* consumed: sub-surfaces
   → `onBack()` → Home; on Home it changes nothing. Letting Back through would finish the
   launcher Activity.
-- **The on-screen back/close buttons** of intent detail and the placeholders call the same
-  `onBack()`.
+- **The on-screen back/close buttons** of intent detail, Search and the Appearance placeholder
+  call the same `onBack()` (Search via `SurfaceCallbacks.onClose`). Search and All Apps add
+  no `BackHandler` of their own; only All Apps' open long-press menu claims Back (D42, D51).
 - **Home button** → `onHomePressed()` from any state (§3d), plus `HideKeyboard`.
 - **Successful launch** → Home (so Home, not a stale list, greets the user when they come
   back). A failed launch or a paused-profile tap keeps the current state.
@@ -403,14 +529,41 @@ stateDiagram-v2
   sheet is drawn *over* Home by a separate `AnimatedVisibility`); all `IntentDetail(…)` states
   share `"detail"`, so a chip switch updates the list in place. With "Remove animations" on
   (`rememberReducedMotion()`), only a cross-fade remains.
-- **M1 placeholders.** Search and All Apps render `SearchPlaceholder` / `AllAppsPlaceholder`,
-  Appearance renders `AppearancePlaceholderSheet` (`feature/home/…/ui/PlaceholderSurfaces.kt`).
-  The real screens arrive in M2 (`:feature:search`, `:feature:allapps`) and M4
-  (`:feature:appearance`).
+- **Real screens and one placeholder.** Search renders `:feature:search`'s `SearchRoute`, All
+  Apps renders `:feature:allapps`'s `AllAppsRoute` (both through slots, §4a). Appearance still
+  renders `AppearancePlaceholderSheet` (`feature/home/…/ui/PlaceholderSurfaces.kt`) until
+  **M4** (`:feature:appearance`).
 - **Home swipes** come from a `NestedScrollConnection` (`VerticalSwipeConnection` in
   `ui/HomeGestures.kt`, D29): Home scrolls at large font sizes, so pull-down / swipe-up use
   the drag the scroll couldn't consume (72dp past the edge, or a ≥ 1200dp/s flick with ≥ 16dp
-  travel) instead of a competing drag detector.
+  travel) instead of a competing drag detector. See [GESTURES.md §4](GESTURES.md#4-home-swipes-pull-down--search-swipe-up--all-apps-d29).
+
+### 4a. Sub-surfaces are slots of `HomeRoute` (D51)
+
+```kotlin
+// feature/home/…/HomeRoute.kt
+@Immutable
+class SurfaceCallbacks(
+    val onClose: () -> Unit,          // back to Home: after a launch, or a close button
+    val onOpenAppearance: () -> Unit, // Search's "Appearance settings" command
+    val onOpenSearch: () -> Unit,     // All Apps' "Type to launch" pill
+)
+
+@Composable
+fun HomeRoute(
+    viewModel: HomeViewModel,
+    modifier: Modifier = Modifier,
+    searchContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { SearchRoute(it.onClose, it.onOpenAppearance) },
+    allAppsContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { AllAppsRoute(it.onClose, it.onOpenSearch) },
+)
+```
+
+`HomeSurfaces` builds one `SurfaceCallbacks(viewModel::onBack, viewModel::onAppearanceRequested,
+viewModel::onSearchRequested)` and calls `searchContent(callbacks)` / `allAppsContent(callbacks)`
+for the matching `HomeSurface`. Why slots (≈ passing a `Widget Function(…)` builder in
+Flutter): the real routes create their ViewModels with `hiltViewModel()`, which needs Hilt;
+`HomeRouteTest` renders `Text(SEARCH_STUB)` / `Text(ALL_APPS_STUB)` instead and tests Home in
+isolation. In the app, `ReachApp` uses the defaults.
 
 ---
 
@@ -475,12 +628,17 @@ Spec §4: "Home must render immediately when Home is pressed."
      currently *known* and *unlocked* — applied to **every** emission, including the instant
      cached one, so apps cached during an unlocked session can't flash onto Home after the
      space is locked. Before the profile list has arrived, "known" is false for every
-     profile, so private apps are hidden then too (D35). Predictions and (from M2) search build on `AppCatalogRepository.apps`
-     and inherit this.
+     profile, so private apps are hidden then too (D35). Predictions, Search and All Apps build on `AppCatalogRepository.apps`
+     and inherit this. Shortcuts of a locked private space are never read
+     (`profileShortcuts`, D47), and `SearchRanker` drops shortcuts whose app isn't visible.
   Until M5 adds `ACCESS_HIDDEN_PROFILES`, Android 15+ doesn't show the private space to
   Reach at all, which is the safe default.
 - **Own launches only.** Predictions use Reach's own launch history (no permission). Usage
   stats are an optional blend behind `UsageStatsSource`, stubbed until M3.
+- **Contacts stay on device.** `ContactsProviderSource` queries the Contacts Provider on
+  demand for the current query only (after `READ_CONTACTS` is granted from Search's "Include
+  contacts" row); nothing is cached in Room or DataStore, and with no `INTERNET` permission
+  nothing can be uploaded (D45).
 - **Receivers are not exported.** Every runtime broadcast receiver (clock ticks, profile
   changes) is registered with `RECEIVER_NOT_EXPORTED`, so other apps can't fake those events.
 
@@ -518,9 +676,50 @@ Spec §4: "Home must render immediately when Home is pressed."
 2. Add the transition method(s) to `HomeViewModel` (`fun onXRequested() { _surface.value = … }`)
    and decide what `onBack()` does from it (today: always Home).
 3. Write the stateless composable (state in, callbacks out) — in its own feature module if
-   it's big (as Search/All Apps/Appearance will be) — and render it from `HomeSurfaces`.
+   it's big, like Search and All Apps — with a public `XRoute(callbacks…)` that creates its
+   ViewModel with `hiltViewModel()`. Add a slot parameter to `HomeRoute` defaulting to that
+   route (D51), extend `SurfaceCallbacks` only if the surface needs a new way out, and render
+   the slot from `HomeSurfaces`.
 4. Tests: transitions in `HomeViewModelTest` (Turbine), the UI in `HomeRouteTest`
-   (`createAndroidComposeRule` + Robolectric; it also gives you the Activity for system Back).
+   (`createAndroidComposeRule` + Robolectric, with a `Text` stub in the slot; it also gives
+   you the Activity for system Back); the surface itself in its own module's tests.
+
+### A new search command
+
+E.g. "Wallpaper mode" (M4). All in `:feature:search`:
+
+1. **Model** — add a case to `sealed interface SearchCommand` (`SearchResult.kt`). The `when`s
+   in `SearchViewModel.run` and in `SearchScreen` (title/icon of the row) stop compiling until
+   you handle it.
+2. **Keywords** — add `SearchCommand.X to listOf("…english…", "…türkçe…")` to
+   `CommandKeywords.all` (`SearchRanker.kt`). Keywords are in code, in both languages, matched
+   by word prefix from 2 letters (D44). Display text goes into `strings.xml` *and*
+   `values-tr/strings.xml`.
+3. **Action** — handle it in `SearchViewModel.run`: a setting via `applySetting { settingsRepository.… }`
+   (it closes Search afterwards), or a new `SearchEvent` the route maps to a `SurfaceCallbacks`
+   entry.
+4. **Tests** — a `SearchRankerTest` case (matches in both languages, not from one letter) and a
+   `SearchViewModelTest` case for the action.
+
+### A new search source
+
+E.g. calendar events or settings screens:
+
+1. **Contract + domain type** — a `…Source` interface in `core/data/…/source/SystemSources.kt`
+   returning `:core:model` types, with a fake in `core/data/…/fake/` (see "A new system
+   integration" above for the `:core:system` implementation, binding and docs).
+2. **Corpus** — add a field to `SearchCorpus` and feed it in `SearchViewModel.corpus`'s
+   `combine`. If the source is slow (IPC, disk), debounce and `mapLatest` it like `contacts`,
+   and start it with `onStart { emit(emptyList()) }` so the first results never wait.
+3. **Result row** — a new `SearchResult` case with a stable `key`; handle it in
+   `SearchViewModel.onResultClick` and `SearchScreen`.
+4. **Ranking** — score it in `SearchRanker.rank` with the shared `score()` (so tiers and
+   folding apply), cap it like `MAX_SHORTCUTS` / `MAX_CONTACTS` so apps aren't crowded out,
+   and give it a `KIND_…` constant for the tie-break order.
+5. **Permission** (if any) — follow the contacts pattern: never query without it, a single
+   prompt row requested from a tap via `rememberLauncherForActivityResult(RequestPermission())`
+   in `SearchRoute`, a session-wide "declined" flag; document it in `ANDROID_APIS.md`.
+6. **Tests** — `SearchRankerTest` for ranking and caps, `SearchViewModelTest` for wiring.
 
 ### A new setting
 
@@ -542,7 +741,9 @@ Spec §4: "Home must render immediately when Home is pressed."
 | Colour maths, contrast, monograms | `core/designsystem/src/test` | plain JUnit |
 | Repositories, Room, DataStore, predictions | `core/data/src/test` | Robolectric for Room (in-memory database), plain JVM for DataStore (a temp file) and predictions (fakes); Turbine + `runTest` |
 | System-source mapping and intents | `core/system/src/test` | Robolectric |
+| Use cases (`LaunchApp`) | `core/data/src/test/…/domain` | plain JUnit + fakes |
+| Pure feature logic (`SearchRanker`, `railLetterAt`, `PressSlideReleaseState`) | `feature/<x>/src/test` | plain JUnit |
 | ViewModels | `feature/<x>/src/test` | plain JUnit + fakes + Turbine |
-| Compose UI flows | `feature/<x>/src/test` | Robolectric + `createComposeRule()` |
+| Compose UI flows and gestures | `feature/<x>/src/test` | Robolectric + `createComposeRule()`, real pointer input via `performTouchInput` ([GESTURES.md §6](GESTURES.md#6-testing-gestures)) |
 
 Run them all with `./gradlew test`, or one module with `./gradlew :feature:home:test`.

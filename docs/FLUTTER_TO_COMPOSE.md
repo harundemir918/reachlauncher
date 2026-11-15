@@ -1,8 +1,11 @@
 # Flutter → Compose (and Android) for Reach
 
-**v2 (M1) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaces the
-illustrative examples with real code from the M1 launcher and adds the patterns M1
-introduced (events, lifecycle effects, `callbackFlow`, nested scroll, semantics, UI tests).
+**v3 (M2) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
+illustrative examples with real code from the M1 launcher (events, lifecycle effects,
+`callbackFlow`, nested scroll, semantics, UI tests); v3 adds what M2 brought: custom
+gestures (`pointerInput` / `awaitEachGesture`, in depth in [GESTURES.md](GESTURES.md)),
+`LazyColumn` + `FlowRow` in All Apps, the search text field and focus, runtime permission
+requests, debounced flows, composable slots, the shared `LaunchApp` use case and haptics.
 
 ## How to read this
 
@@ -48,9 +51,20 @@ and `app/…/MainActivity.kt` = `app/src/main/kotlin/com/baklavapp/reachlauncher
 | `Column` / `Row` / `Stack` / `Wrap` | `Column` / `Row` / `Box` / `FlowRow` |
 | `Padding` / `SizedBox` / `Container` | `Modifier` chains (order matters) |
 | `SingleChildScrollView` | `Modifier.verticalScroll(rememberScrollState())` |
-| `ListView.builder` | `LazyColumn` |
-| `GestureDetector` | `Modifier.clickable`, `combinedClickable`, `Modifier.pointerInput` |
+| `ListView.builder` | `LazyColumn` (All Apps, Search results) |
+| `ScrollController.jumpTo` / `animateTo` | `LazyListState.scrollToItem` / `animateScrollToItem` |
+| `GestureDetector` | `Modifier.clickable`, `combinedClickable`, `detectTapGestures` |
+| `RawGestureDetector` + custom `GestureRecognizer` | `Modifier.pointerInput { awaitEachGesture { … } }` ([GESTURES.md](GESTURES.md)) |
+| winning the gesture arena | `PointerInputChange.consume()` (+ reading in `PointerEventPass.Initial`) |
 | `NotificationListener<OverscrollNotification>` | `NestedScrollConnection` (Home's swipes) |
+| `CustomMultiChildLayout` | `Layout { measurables, constraints -> … }` (`FanOverlay`) |
+| `TextField` / `EditableText` | `BasicTextField` (Search input) |
+| `FocusNode` + `SystemChannels.textInput` | `FocusRequester` + `LocalSoftwareKeyboardController` |
+| `permission_handler` (`Permission.contacts.request()`) | `rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission())` |
+| rxdart `debounceTime` + `switchMap` | `Flow.debounce` + `mapLatest` |
+| builder / `Widget child` parameters | composable slot parameters (`HomeRoute(searchContent = …)`) |
+| use-case class (`LaunchApp.call()`) | `LaunchApp` in `:core:data` (`@Inject` class shared by ViewModels) |
+| `HapticFeedback.selectionClick()` | `LocalHapticFeedback.current.performHapticFeedback(HapticFeedbackType.SegmentTick)` (`rememberHapticTick`) |
 | `Semantics` / `CustomSemanticsAction` / `MergeSemantics` | `Modifier.semantics` / `CustomAccessibilityAction` / `clearAndSetSemantics` |
 | `Navigator` | not used — a state machine in `HomeViewModel` (`HomeSurface`) |
 | `PopScope` / `WillPopScope` | `BackHandler` |
@@ -153,9 +167,26 @@ FlowRow { /* ≈ Wrap */ }
 ```
 
 Real uses: `HomeRoute` stacks the surface and the failure message in a `Box`;
+`HomeWithFan` stacks `HomeScreen` and `FanOverlay` (≈ `Stack(children: [home, overlay])`);
 `IntentWordRow` is a `FlowRow` so the Listen row's inline player wraps under the word at
 200 % font (D22); the Now row uses `Row(Modifier.height(IntrinsicSize.Min))` + tiles with
 `fillMaxHeight()` ≈ `IntrinsicHeight` + `CrossAxisAlignment.stretch`.
+
+`FlowRow` ↔ `Wrap` for real — the All Apps word wall: names flow left to right and wrap, so
+200 % font needs no special layout, the wall just gets more lines.
+
+```kotlin
+// (simplified from feature/allapps/…/ui/AllAppsScreen.kt, WordWallGroup)
+Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    MonoLabel(text = label, modifier = Modifier.semantics { heading() })   // "S"
+    FlowRow(                                                              // ≈ Wrap(spacing: 10, runSpacing: 2)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        apps.forEach { app -> key(app.key) { WordWallName(app, color, hiddenGroup, callbacks) } }
+    }
+}
+```
 
 ### Padding / SizedBox / Container ↔ `Modifier` chains (order matters)
 
@@ -200,28 +231,42 @@ BoxWithConstraints(                                  // ≈ LayoutBuilder: gives
 }
 ```
 
-### `ListView.builder` ↔ `LazyColumn`
+### `ListView.builder` ↔ `LazyColumn`, `ScrollController` ↔ `LazyListState`
 
 ```kotlin
-// (illustrative — All Apps in M2 will use a lazy list)
-LazyColumn {
-    items(apps, key = { it.key }) { app ->   // key ≈ ValueKey: keeps item state stable
-        Text(app.label)
+// (simplified from feature/allapps/…/ui/AllAppsScreen.kt)
+val listState = rememberLazyListState()              // ≈ ScrollController (hoisted so tests can read it)
+LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    item(key = "header") { Header(state) }           // item 0
+    items(state.groups, key = { "group:${it.letter}" }) { group ->   // key ≈ ValueKey
+        WordWallGroup(label = group.letter, apps = group.apps, /* … */)
     }
 }
+
+// The letter rail asks for a jump; one group = one item, so "jump to S" = "scroll to item n".
+LaunchedEffect(jump) {                               // restarts (and cancels a running scroll) per request
+    val item = 1 + (jump?.groupIndex ?: return@LaunchedEffect)
+    if (reducedMotion) listState.scrollToItem(item)  // ≈ controller.jumpTo
+    else listState.animateScrollToItem(item)         // ≈ controller.animateTo / Scrollable.ensureVisible
+}
 ```
+
+Unlike `ScrollController.jumpTo(offset)`, `scrollToItem(index)` works in *items*, so you
+never need item heights. Both are `suspend` functions: call them from a coroutine
+(`LaunchedEffect` or `rememberCoroutineScope().launch { … }`). Search's results are a
+`LazyColumn` too, keyed by `SearchResult.key`.
 
 `LazyRow` ↔ horizontal `ListView`; `LazyVerticalGrid` ↔ `GridView.builder`. Don't put a
 `LazyColumn` inside a vertically scrolling `Column` (same "unbounded height" trap as
 nesting `ListView` in `Column` without `shrinkWrap`).
 
-M1 deliberately uses **no** lazy list: an intent holds tens of apps, so intent detail is a
+Intent detail deliberately uses **no** lazy list: an intent holds tens of apps, so it is a
 plain `Column` inside the scroll (D33), which keeps the list and the intent chips anchored
 at the bottom. In a non-lazy `forEach`, wrap each item in `key(item.app.key) { … }` (≈ a
 `ValueKey`) so remembered per-item state follows the item when the list reorders — see
 `AppList` and `NowRow`.
 
-### GestureDetector ↔ `Modifier.clickable` / `combinedClickable` / `Modifier.pointerInput`
+### GestureDetector / RawGestureDetector ↔ `clickable` / `combinedClickable` / `pointerInput` + `awaitEachGesture`
 
 Simple taps: `Modifier.clickable { }` / `Modifier.combinedClickable(onLongClick = …) { }`
 — these also give semantics for TalkBack. Reach wraps them in one recipe,
@@ -244,23 +289,41 @@ The clock's 450 ms long-press is set by overriding `LocalViewConfiguration` arou
 (never shorter than the system's own "touch & hold delay", D30) — Compose's equivalent of
 `kLongPressTimeout`.
 
-Low level (press-slide-release in M2 will be built like this):
+Low level — where Flutter makes you subclass `GestureRecognizer` for a `RawGestureDetector`,
+Compose lets you write the recognizer as **one sequential coroutine**. The All Apps letter
+rail is the shortest real example:
 
 ```kotlin
-// (illustrative, M2)
+// (simplified from feature/allapps/…/ui/LetterRail.kt)
 Modifier.pointerInput(Unit) {
-    awaitEachGesture {
-        val down = awaitFirstDown()
-        // …loop over awaitPointerEvent(), track position, decide, consume…
+    awaitEachGesture {                                 // once per gesture (≈ recognizer reset)
+        val down = awaitFirstDown(requireUnconsumed = false)   // ≈ addAllowedPointer
+        down.consume()                                 // ≈ winning the arena right away
+        try {
+            update(down.position.y)                    // → railLetterAt(...), tick, scroll
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                change.consume()
+                if (!change.pressed) break             // finger lifted
+                update(change.position.y)              // ≈ handleEvent(PointerMoveEvent)
+            }
+        } finally {
+            currentOnChange(null)                      // also runs on cancel / dispose
+        }
     }
 }
 ```
 
+Press-slide-release (`feature/home/…/ui/PressSlideRelease.kt`) is the same shape with a hold
+timer (`withTimeoutOrNull(hold)`, 300 ms by default) and a switch to `PointerEventPass.Initial` once armed.
+
 **Gesture arena vs. consumption.** Flutter resolves competing recognisers in a *gesture
 arena* that declares one winner. Compose has no arena: pointer events travel through the
-modifier tree, each handler sees them in order, and a handler **consumes** a change
-(`change.consume()`) to tell others "this is mine". Others check `isConsumed` and back
-off. The full step-by-step write-up comes in `docs/GESTURES.md` (M2).
+modifier tree in three passes (Initial root→leaf, Main leaf→root, Final root→leaf), every
+handler sees them, and a handler **consumes** a change (`change.consume()`) to tell others
+"this is mine". Others check `isConsumed` and back off. Modifier order decides who is parent
+and child. The full step-by-step write-up, with diagrams and the tests, is
+[GESTURES.md](GESTURES.md).
 
 ### Nested scroll ↔ `NotificationListener<OverscrollNotification>`
 
@@ -298,6 +361,46 @@ internal class VerticalSwipeConnection(/* distancePx, fling thresholds, callback
 `rememberVerticalSwipeConnection` keeps the latest callbacks in `rememberUpdatedState` —
 the Compose way to read "the current `widget.onX`" from a long-lived object.
 
+### `HapticFeedback.selectionClick()` ↔ `LocalHapticFeedback`
+
+```kotlin
+// (real, core/designsystem/…/util/Motion.kt)
+@Composable
+fun rememberHapticTick(): () -> Unit {
+    val haptics = LocalHapticFeedback.current
+    return remember(haptics) { { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) } }
+}
+```
+
+`SegmentTick` is the semantic type for "stepped to the next discrete value" — one tick per new
+fan pill and per new rail letter. The clock uses `HapticFeedbackType.LongPress`. Like Flutter's
+`HapticFeedback`, it goes through the view (`View.performHapticFeedback`), so no `VIBRATE`
+permission is needed.
+
+### `CustomMultiChildLayout` ↔ `Layout { measurables, constraints -> … }`
+
+The press-slide-release fan measures its pills, then places them from the finger upward,
+stopping when the next one wouldn't fit under the top inset:
+
+```kotlin
+// (simplified from feature/home/…/ui/FanOverlay.kt)
+Layout(content = { apps.forEachIndexed { i, app -> FanPill(app, highlighted = i == fan.highlighted, …) } }) { measurables, constraints ->
+    val placeables = measurables.map { it.measure(Constraints.fixedWidth(pillWidth)) }   // ≈ layoutChild
+    val positions = mutableListOf<Pair<Int, Int>>()
+    var bottom = wordTop - gap
+    for ((i, p) in placeables.withIndex()) {
+        val y = bottom - p.height
+        if (y < safeTop) break                                     // fewer pills at 200 % font
+        positions += (pressX - leadIn + i * stagger) to y          // staggered away from the thumb
+        bottom = y - gap
+    }
+    state.recordPills(/* window bounds of the placed pills, for hit-testing */)
+    layout(constraints.maxWidth, constraints.maxHeight) {
+        positions.forEachIndexed { i, (x, y) -> placeables[i].place(x, y) }   // ≈ positionChild
+    }
+}
+```
+
 ### `AnimatedSwitcher` / implicit animations ↔ `AnimatedContent` / `animate*AsState`
 
 ```kotlin
@@ -312,14 +415,14 @@ AnimatedContent(
     label = "surface",
 ) { shown ->
     when (val s = shown.surface) {
-        HomeSurface.Home, HomeSurface.Appearance -> HomeScreen(/* … */)
+        HomeSurface.Home, HomeSurface.Appearance -> HomeWithFan(/* HomeScreen + fan overlay */)
         is HomeSurface.IntentDetail -> IntentDetailScreen(detail = shown.state.detailFor(s.intent) /* … */)
-        HomeSurface.Search -> SearchPlaceholder(onClose = viewModel::onBack)
-        HomeSurface.AllApps -> AllAppsPlaceholder(onClose = viewModel::onBack)
+        HomeSurface.Search -> searchContent(surfaceCallbacks)    // slot, default SearchRoute (see "Slots")
+        HomeSurface.AllApps -> allAppsContent(surfaceCallbacks)  // slot, default AllAppsRoute
     }
 }
 AnimatedVisibility(visible = surface == HomeSurface.Appearance /* … */) {
-    AppearancePlaceholderSheet(onClose = viewModel::onBack)    // the sheet slides in *over* Home
+    AppearancePlaceholderSheet(onClose = viewModel::onBack)    // the sheet slides in *over* Home (real sheet: M4)
 }
 ```
 
@@ -346,13 +449,13 @@ The `label` parameter only names the animation in Android Studio's animation ins
 @HiltViewModel                                            // ≈ @injectable + BlocProvider factory
 class HomeViewModel @Inject constructor(
     private val catalogRepository: AppCatalogRepository,  // interfaces from :core:data only
-    private val historyRepository: LaunchHistoryRepository,
     predictionRepository: PredictionRepository,
     settingsRepository: SettingsRepository,
     notificationCountSource: NotificationCountSource,
-    private val appLauncher: AppLauncher,
-    private val clock: Clock,
-    // … ShortcutSource, HomeRoleSource
+    shortcutSource: ShortcutSource,
+    private val launchApp: LaunchApp,                     // the shared use case (see "Use-case classes")
+    private val homeRoleSource: HomeRoleSource,
+    @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
     private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
     val surface: StateFlow<HomeSurface> = _surface.asStateFlow()   // which screen — always current
@@ -366,9 +469,16 @@ class HomeViewModel @Inject constructor(
     val theme: StateFlow<HomeTheme> = /* settings → (themeMode, palette), distinctUntilChanged */
 
     fun onIntentSelected(intent: ReachIntent) { _surface.value = HomeSurface.IntentDetail(intent) } // ≈ add(IntentTapped(intent))
-    fun onBack() { _surface.value = HomeSurface.Home }
+    fun onBack() { _fan.value = null; _surface.value = HomeSurface.Home }
+
+    // M2: a second small StateFlow for the press-slide-release fan (D50)
+    private val _fan = MutableStateFlow<FanState?>(null)
+    val fan: StateFlow<FanState?> = _fan.asStateFlow()
 }
 ```
+
+`SearchViewModel` and `AllAppsViewModel` follow the same recipe (`uiState` via
+`combine(…).flowOn(defaultDispatcher).stateIn(WhileSubscribed(5_000))`, an event `Channel`).
 
 - `combine` ≈ `Rx.combineLatest`: a new `HomeUiState` whenever any input emits.
 - `stateIn(scope, WhileSubscribed(5_000), initial)` turns the cold pipeline into a hot
@@ -394,22 +504,25 @@ State that should *replay* (what Home shows) goes into `uiState`. Things that mu
 **once** — hide the keyboard, show "Couldn't open X" — are events, sent through a `Channel`:
 
 ```kotlin
-// (real, feature/home/…/HomeViewModel.kt)
+// (simplified from feature/home/…/HomeViewModel.kt)
 // A Channel (not a SharedFlow) so an event sent while the UI isn't collecting (e.g.
 // HideKeyboard from onNewIntent before onResume) is buffered and delivered once.
 private val eventChannel = Channel<HomeEvent>(Channel.BUFFERED)
 val events: Flow<HomeEvent> = eventChannel.receiveAsFlow()
 
 fun onHomePressed() {
-    surface.value = HomeSurface.Home
+    val wasHome = _surface.value == HomeSurface.Home
+    _fan.value = null
+    _surface.value = HomeSurface.Home
     eventChannel.trySend(HomeEvent.HideKeyboard)
+    if (wasHome) eventChannel.trySend(HomeEvent.ScrollToTop)
 }
 ```
 
 ```kotlin
 // (simplified from feature/home/…/HomeRoute.kt)
 @Composable
-fun HomeRoute(viewModel: HomeViewModel, modifier: Modifier = Modifier) {
+fun HomeRoute(viewModel: HomeViewModel, modifier: Modifier = Modifier /* + searchContent, allAppsContent slots */) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()        // ≈ BlocBuilder
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -499,10 +612,10 @@ list on the IO dispatcher, so a burst of callbacks collapses into one or two rea
 // (real, feature/home/…/HomeViewModel.kt)
 fun onResume() {
     homeRoleSource.recheck()
-    viewModelScope.launch { catalogRepository.refresh() }   // ≈ unawaited(repo.refresh()) inside a BLoC
+    viewModelScope.launch { bestEffort { catalogRepository.refresh() } }   // ≈ unawaited(repo.refresh()) inside a BLoC
 }
 
-// (real, core/data/…/repository/impl/AppCatalogRepositoryImpl.kt)
+// (simplified from core/data/…/repository/impl/AppCatalogRepositoryImpl.kt)
 override suspend fun refresh() {                              // ≈ Future<void> refresh() async
     withContext(ioDispatcher) { safeSync(installedAppsSource.installedApps.first()) }  // ≈ await stream.first
 }
@@ -516,6 +629,78 @@ override suspend fun refresh() {                              // ≈ Future<void
   but on a real thread pool, not a separate isolate.
 - Composables use `LaunchedEffect` / `rememberCoroutineScope()` for their own coroutines.
 - Cancellation is cooperative and structured: cancelling a scope cancels its children.
+
+### rxdart `debounceTime` + `switchMap` ↔ `Flow.debounce` + `mapLatest`
+
+Search ranks apps, shortcuts and commands on every keystroke (they're in memory), but the
+contacts provider is another process, so its lookup waits until typing pauses and a lookup
+overtaken by a newer query is cancelled:
+
+```kotlin
+// (simplified from feature/search/…/SearchViewModel.kt)
+private val contacts: Flow<List<Contact>> =
+    combine(query, contactsGranted) { q, granted -> ContactLookup(q.trim(), granted) }
+        .distinctUntilChanged()                                       // ≈ .distinct()
+        .debounce { if (it.shouldQuery) 150L else 0L }                // ≈ .debounceTime(150.ms), skipped when there's nothing to ask
+        .mapLatest { if (it.shouldQuery) searchContacts(it.text) else emptyList() } // ≈ .switchMap(...)
+        .onStart { emit(emptyList()) }                                // ≈ .startWith([]): first results never wait
+```
+
+`mapLatest` cancels the previous block's coroutine when a new value arrives — Kotlin's
+built-in "switchMap for a suspend call". `debounce` takes a lambda here, so an empty query or
+a missing permission passes straight through. Both need `@OptIn(FlowPreview::class,
+ExperimentalCoroutinesApi::class)`.
+
+### Use-case classes ↔ `LaunchApp`
+
+```kotlin
+// (simplified from core/data/…/domain/LaunchApp.kt)
+class LaunchApp @Inject constructor(
+    private val appLauncher: AppLauncher,
+    private val shortcutSource: ShortcutSource,
+    private val history: LaunchHistoryRepository,
+    private val clock: Clock,
+    @param:ApplicationScope private val appScope: CoroutineScope,
+) {
+    fun app(key: AppKey, origin: LaunchOrigin?): LaunchResult {       // ≈ call()
+        val result = appLauncher.launchApp(key, origin)
+        if (result == LaunchResult.LAUNCHED) record(key)               // only real launches count
+        return result
+    }
+    fun shortcut(shortcut: AppShortcut, origin: LaunchOrigin?, recordAs: AppKey?): LaunchResult { /* … */ }
+    private fun record(key: AppKey) {
+        val now = clock.millis()
+        appScope.launch { /* history.recordLaunch(key, now), failures swallowed */ }  // outlives the ViewModel
+    }
+}
+```
+
+The clean-architecture use case you'd share between BLoCs: `HomeViewModel`,
+`SearchViewModel` and `AllAppsViewModel` all inject it, so Home, the fan, Search and All Apps
+record launches identically. No `@Module` needed — an `@Inject constructor` is enough for Hilt
+(≈ `@injectable` on a concrete class).
+
+### Builder / `Widget child` parameters ↔ composable slots
+
+```kotlin
+// (simplified from feature/home/…/HomeRoute.kt)
+@Composable
+fun HomeRoute(
+    viewModel: HomeViewModel,
+    modifier: Modifier = Modifier,
+    searchContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { SearchRoute(it.onClose, it.onOpenAppearance) },
+    allAppsContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { AllAppsRoute(it.onClose, it.onOpenSearch) },
+)
+
+// (simplified from feature/home/src/test/…/HomeRouteTest.kt) — Hilt-free stand-ins
+HomeRoute(viewModel = fixture.viewModel, searchContent = { Text(SEARCH_STUB) }, allAppsContent = { Text(ALL_APPS_STUB) })
+```
+
+A parameter of type `@Composable (T) -> Unit` is Compose's `Widget Function(BuildContext, T)
+builder`. Defaults make the call site in `ReachApp` just `HomeRoute(viewModel)`, while tests
+swap in stubs because the real routes call `hiltViewModel()` (D51). `SurfaceCallbacks` is the
+small "what may a sub-surface ask Home to do" object — the feature modules never see
+`HomeViewModel`.
 
 ### get_it / injectable ↔ Hilt
 
@@ -551,11 +736,12 @@ object DatabaseModule {
     @Provides fun provideAppCacheDao(db: ReachDatabase): AppCacheDao = db.appCacheDao()
 }
 
-// (simplified from core/system/…/di/SystemModule.kt) — real implementations and M1 stubs
+// (simplified from core/system/…/di/SystemModule.kt) — real implementations and stubs
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class SystemModule {
     @Binds @Singleton abstract fun bindAppLauncher(impl: SystemAppLauncher): AppLauncher
+    @Binds @Singleton abstract fun bindContactsSource(impl: ContactsProviderSource): ContactsSource // M2: was a stub
     /** M3 placeholder. */
     @Binds @Singleton
     abstract fun bindNotificationCountSource(impl: UnavailableNotificationCountSource): NotificationCountSource
@@ -722,8 +908,8 @@ and the Appearance sheet are states of one surface:
 sealed interface HomeSurface {
     data object Home : HomeSurface
     data class IntentDetail(val intent: ReachIntent) : HomeSurface
-    data object Search : HomeSurface       // real screen: :feature:search (M2)
-    data object AllApps : HomeSurface      // real screen: :feature:allapps (M2)
+    data object Search : HomeSurface       // :feature:search's SearchRoute, via a slot
+    data object AllApps : HomeSurface      // :feature:allapps's AllAppsRoute, via a slot
     data object Appearance : HomeSurface   // real sheet: :feature:appearance (M4)
 }
 
@@ -734,7 +920,10 @@ BackHandler(enabled = true) { viewModel.onBack() }
 `HomeRoute` switches on `viewModel.surface` inside `AnimatedContent` (see above). Back is
 **always** consumed: sub-surfaces go to Home, Home ignores it (letting it through would
 finish the launcher Activity). The Home button goes through `MainActivity.onNewIntent` →
-`HomeViewModel.onHomePressed()`. That's a five-state machine, easier to test as plain
+`HomeViewModel.onHomePressed()`. Search and All Apps add no `BackHandler` of their own; All
+Apps' long-press menu (`AppMenu`) registers one while it's open, and because the innermost
+enabled handler wins, Back then closes the menu first — ≈ a nested `PopScope` (D42).
+That's a five-state machine, easier to test as plain
 ViewModel logic than a back stack — see the state diagram in
 [ARCHITECTURE.md §4](ARCHITECTURE.md#4-the-home-surface-state-machine).
 
@@ -846,14 +1035,69 @@ the home role, refresh the catalog) every time the user comes back to Home.
 behaviour when targeting API 35+). Each surface then avoids them itself:
 
 ```kotlin
-Modifier.windowInsetsPadding(WindowInsets.safeDrawing)  // ≈ SafeArea: bars + cutout + keyboard (Home, detail)
-Modifier.imePadding()                                    // ≈ MediaQuery.viewInsets.bottom
+Modifier.windowInsetsPadding(WindowInsets.safeDrawing)  // ≈ SafeArea: bars + cutout + keyboard (Home, detail, Search, All Apps)
+Modifier.imePadding()                                    // (illustrative) ≈ MediaQuery.viewInsets.bottom alone
+WindowInsets.systemGestures                              // ≈ MediaQuery.systemGestureInsets (back-swipe edges)
 ```
 
 `MainActivity.applySystemBarStyle` calls `enableEdgeToEdge(SystemBarStyle.dark/light(…))`
 again whenever the *resolved* Reach theme changes, so status-bar icons stay visible when
 the user forces Dark or Light. The manifest's `windowSoftInputMode="adjustResize"` plus
-these modifiers is how search results will sit just above the keyboard (M2).
+`safeDrawing` (which includes the IME) is how Search's input and results sit just above the
+keyboard (`SearchScreen`) — ≈ `Scaffold(resizeToAvoidBottomInset: true)` + `SafeArea`.
+All Apps keeps its letter rail off the back-gesture edge with
+`WindowInsets.systemGestures.exclude(WindowInsets.safeDrawing)` padding plus
+`Modifier.systemGestureExclusion()` (D41, [GESTURES.md §3](GESTURES.md#3-the-letter-rail-all-apps)).
+
+### `TextField` / `EditableText` ↔ `BasicTextField`; `FocusNode` ↔ `FocusRequester`
+
+Material's `TextField` brings its own underline/label chrome (Reach never shows stock
+Material chrome), so Search uses the bare `BasicTextField` — Compose's `EditableText`:
+
+```kotlin
+// (simplified from feature/search/…/ui/SearchScreen.kt)
+BasicTextField(
+    value = query,                                  // text owned by the caller (UI state), see below
+    onValueChange = onQueryChange,                  // ≈ onChanged
+    modifier = Modifier.focusRequester(focusRequester),
+    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Go), // ≈ textInputAction
+    keyboardActions = KeyboardActions(onGo = { onSubmit() }),   // ≈ onSubmitted; also hardware Enter
+)
+
+// (simplified from feature/search/…/SearchRoute.kt)
+var query by rememberSaveable { mutableStateOf("") }   // survives Activity recreation
+val focusRequester = remember { FocusRequester() }     // ≈ FocusNode()
+val keyboard = LocalSoftwareKeyboardController.current
+LaunchedEffect(focusRequester) {
+    focusRequester.requestFocus()                       // ≈ focusNode.requestFocus()
+    keyboard?.show()                                    // ≈ SystemChannels.textInput.invokeMethod('TextInput.show')
+}
+```
+
+The text lives in the UI (`rememberSaveable`), and the ViewModel only gets a copy via
+`onQueryChange` — so a slow ranking pass can never make the cursor jump (D46). That's the
+Compose equivalent of keeping a `TextEditingController` in the widget rather than rebuilding
+the field from BLoC state.
+
+### `permission_handler` ↔ `rememberLauncherForActivityResult(RequestPermission())`
+
+```kotlin
+// (simplified from feature/search/…/SearchRoute.kt)
+val contactsPermission =
+    rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.onContactsPermissionResult(granted)           // ≈ the PermissionStatus you'd await
+    }
+// …
+onIncludeContacts = { contactsPermission.launch(Manifest.permission.READ_CONTACTS) } // ≈ Permission.contacts.request()
+```
+
+Differences from `await Permission.contacts.request()`: the launcher must be **registered
+during composition** (Android re-delivers the result if the Activity is recreated while the
+dialog is up), so you can't create it inside the click handler; the answer comes back as a
+callback, not a `Future`; and "permanently denied" isn't reported separately — the system
+simply answers `false` at once, which Reach treats like any denial (hide the prompt for the
+session, D45). Checking without asking is `ContextCompat.checkSelfPermission(…)` (≈
+`Permission.contacts.status`), done in `ContactsProviderSource.isPermissionGranted()`.
 
 ### `intl` / ARB ↔ `strings.xml` + `values-tr/`
 
@@ -1050,11 +1294,19 @@ class HomeRouteTest {
         val fixture = HomeFixture(sampleApps)
         fixture.notifications.granted.value = true
         fixture.notifications.counts.value = mapOf(PackageUser("pkg.whatsapp", 0) to 3)
-        composeRule.setContent { ReachTheme { HomeRoute(fixture.viewModel) } }   // ≈ pumpWidget
+        composeRule.setContent {                                              // ≈ pumpWidget
+            ReachTheme { HomeRoute(fixture.viewModel, searchContent = { Text(SEARCH_STUB) }, allAppsContent = { Text(ALL_APPS_STUB) }) }
+        }
         composeRule.onNodeWithContentDescription("Talk, 3 new notifications").assertIsDisplayed()
     }
 }
 ```
+
+**Gestures in tests** ≈ `tester.startGesture` / `TestGesture`: `performTouchInput { down(center);
+advanceEventTime(350); moveTo(…); up() }` injects real pointer events, and
+`composeRule.mainClock.advanceTimeBy(350)` lets a hold timer fire while the finger rests
+(≈ `tester.pump(duration)`). Full table and examples in
+[GESTURES.md §6](GESTURES.md#6-testing-gestures) (`PressSlideReleaseTest`, `AllAppsScreenTest`).
 
 Room tests use an in-memory database under Robolectric (`AppCatalogRepositoryImplTest`);
 DataStore tests run on the plain JVM with a temporary file (`SettingsRepositoryImplTest`).
@@ -1108,6 +1360,13 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 9. **Equality and immutability are on you.** `data class` gives you `==`/`copy()` like
    freezed; plain classes compare by identity. Expose `List`/`Map` (read-only interfaces)
    from state, not `MutableList`, so Compose and `StateFlow` can see changes as new values.
+   The flip side is used on purpose: `JumpRequest` (All Apps) and `LaunchFailure` (the
+   routes) are *plain* classes so two equal-looking requests still restart a
+   `LaunchedEffect(key)`.
+10. **There's no gesture arena.** Every pointer detector sees every event; "winning" is
+    consuming, and modifier order decides who is parent and child. Read
+    [GESTURES.md §1](GESTURES.md#1-composes-pointer-model-for-a-flutter-developer) before
+    writing a `pointerInput`.
 
 ---
 
@@ -1123,6 +1382,14 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 | BlocBuilder/BlocListener/PopScope equivalents | `feature/home/…/HomeRoute.kt` |
 | Stateless screens | `feature/home/…/ui/HomeScreen.kt`, `IntentDetailScreen.kt`, `HomeClock.kt` |
 | Nested-scroll swipes | `feature/home/…/ui/HomeGestures.kt` |
+| A custom gesture recognizer (≈ `RawGestureDetector`) | `feature/home/…/ui/PressSlideRelease.kt`, `feature/allapps/…/ui/LetterRail.kt` |
+| A custom multi-child layout | `feature/home/…/ui/FanOverlay.kt` |
+| Search: text field, focus, permission request, debounce | `feature/search/…/SearchRoute.kt`, `ui/SearchScreen.kt`, `SearchViewModel.kt` |
+| Pure, unit-tested ranking | `feature/search/…/SearchRanker.kt` (+ `src/test/…/SearchRankerTest.kt`) |
+| `LazyColumn` + `FlowRow` word wall, in-surface menu | `feature/allapps/…/ui/AllAppsScreen.kt`, `ui/AppMenu.kt` |
+| Locale-aware letters (ICU) | `feature/allapps/…/LetterIndex.kt` |
+| A shared use case | `core/data/…/domain/LaunchApp.kt` |
+| Composable slots | `feature/home/…/HomeRoute.kt` (`searchContent`, `allAppsContent`, `SurfaceCallbacks`) |
 | Theme ≈ `Theme.of` / `ThemeExtension` | `core/designsystem/…/theme/ReachTheme.kt`, `ReachColors.kt`, `ReachTypography.kt` |
 | Components + the a11y recipe | `core/designsystem/…/component/` (`IntentWordRow.kt`, `ReachClickable.kt`, `NowTile.kt`, `AppRow.kt`) |
 | Domain types (≈ `domain/entities`) | `core/model/…/` |
@@ -1133,12 +1400,11 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 | Hilt modules | `core/data/…/di/DataModules.kt`, `Qualifiers.kt`, `core/system/…/di/SystemModule.kt` |
 | `callbackFlow` wrappers of Android callbacks | `core/system/…/apps/LauncherAppsInstalledAppsSource.kt`, `…/util/BroadcastFlow.kt` |
 | Fakes for tests and previews | `core/data/…/fake/FakeRepositories.kt`, `FakeSystemSources.kt` |
-| ViewModel and UI tests | `feature/home/src/test/…/HomeViewModelTest.kt`, `HomeRouteTest.kt`, `HomeTestFixtures.kt` |
+| ViewModel and UI tests | `feature/home/src/test/…/HomeViewModelTest.kt`, `HomeRouteTest.kt`, `HomeTestFixtures.kt`, `PressSlideReleaseTest.kt`; `feature/search/src/test/…`, `feature/allapps/src/test/…` |
 | Dependency versions (≈ `pubspec.yaml`) | `gradle/libs.versions.toml`, `*/build.gradle.kts`, `settings.gradle.kts` |
 | Lint/format rules (≈ `analysis_options.yaml`) | `.editorconfig`, the `lint { }` blocks in module build files |
-| Architecture, APIs, decisions | `docs/ARCHITECTURE.md`, `docs/ANDROID_APIS.md`, `docs/DECISIONS.md`, `docs/PLAN.md` |
+| Architecture, APIs, gestures, decisions | `docs/ARCHITECTURE.md`, `docs/ANDROID_APIS.md`, `docs/GESTURES.md`, `docs/DECISIONS.md`, `docs/PLAN.md` |
 
-Coming in later versions of this file: gestures and `pointerInput` in depth, `LazyColumn`
-in All Apps and the search text field (M2, with `GESTURES.md`); services, runtime-permission
-requests with `ActivityResultLauncher` (M3); window themes/wallpaper and the Appearance
+Coming in later versions of this file: services (`NotificationListenerService`), special-access
+settings flows and the onboarding card (M3); window themes/wallpaper and the Appearance
 bottom sheet (M4).
