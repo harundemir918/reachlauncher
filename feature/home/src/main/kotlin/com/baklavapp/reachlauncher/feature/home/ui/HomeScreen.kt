@@ -1,6 +1,8 @@
 package com.baklavapp.reachlauncher.feature.home.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -16,18 +18,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentRowTrailing
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentWordRow
@@ -35,6 +41,7 @@ import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
 import com.baklavapp.reachlauncher.core.designsystem.component.NowTile
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.component.SearchPill
+import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -75,6 +82,9 @@ private const val NOW_ROW_SLOTS = 3
  *   every new value scrolls Home back to the top.
  * @param wordModifier per-intent modifier for the intent word's tappable area — the hook for
  *   M2's press-slide-release gesture (passed through to `IntentWordRow(wordModifier = …)`).
+ * @param heldIntent the intent whose press-slide-release fan is open, or null. While set, that
+ *   word turns `accentInk`, the other words `dim` (D18), counts are hidden, and the search
+ *   pill is replaced by the hint "RELEASE TO OPEN · SLIDE OFF TO CANCEL".
  */
 @Composable
 internal fun HomeScreen(
@@ -90,6 +100,7 @@ internal fun HomeScreen(
     modifier: Modifier = Modifier,
     scrollToTopRequests: Int = 0,
     wordModifier: (ReachIntent) -> Modifier = { Modifier },
+    heldIntent: ReachIntent? = null,
 ) {
     val swipe = rememberVerticalSwipeConnection(onSwipeUp = onAllApps, onSwipeDown = onSearch)
     val reading by rememberWallClock()
@@ -129,27 +140,52 @@ internal fun HomeScreen(
                 }
             }
             Column {
-                IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier)
+                IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier, heldIntent)
                 val allAppsLabel = stringResource(R.string.home_all_apps_action)
-                SearchPill(
-                    onClick = onSearch,
-                    modifier =
-                        Modifier
-                            .padding(top = PillTopGap)
-                            // Swipe-up has no visible tap alternative yet (spec §6.10), so TalkBack
-                            // users get "All apps" in the pill's actions menu.
-                            .semantics {
-                                customActions =
-                                    listOf(
-                                        CustomAccessibilityAction(allAppsLabel) {
-                                            onAllApps()
-                                            true
-                                        },
-                                    )
-                            },
-                )
+                if (heldIntent != null) {
+                    FanHint(Modifier.padding(top = PillTopGap))
+                } else {
+                    SearchPill(
+                        onClick = onSearch,
+                        modifier =
+                            Modifier
+                                .padding(top = PillTopGap)
+                                // Swipe-up has no visible tap alternative yet (spec §6.10), so TalkBack
+                                // users get "All apps" in the pill's actions menu.
+                                .semantics {
+                                    customActions =
+                                        listOf(
+                                            CustomAccessibilityAction(allAppsLabel) {
+                                                onAllApps()
+                                                true
+                                            },
+                                        )
+                                },
+                    )
+                }
             }
         }
+    }
+}
+
+/**
+ * The hint shown in the search pill's place while the fan is open (spec §6.5). Same outline
+ * and minimum height as the pill, so nothing below the words moves.
+ */
+@Composable
+private fun FanHint(modifier: Modifier = Modifier) {
+    val colors = ReachTheme.colors
+    val shape = RoundedCornerShape(ReachDimens.searchPillHeight / 2)
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .border(ReachComponentDimens.hairline, colors.line, shape)
+                .heightIn(min = ReachDimens.searchPillHeight)
+                .padding(horizontal = ReachComponentDimens.searchPillHorizontalPadding),
+        contentAlignment = Alignment.Center,
+    ) {
+        MonoLabel(text = stringResource(R.string.home_fan_hint), textAlign = TextAlign.Center)
     }
 }
 
@@ -192,22 +228,31 @@ private fun IntentWords(
     thumbSide: ThumbSide,
     onIntentSelected: (ReachIntent) -> Unit,
     wordModifier: (ReachIntent) -> Modifier,
+    heldIntent: ReachIntent?,
 ) {
+    val colors = ReachTheme.colors
     val openLabel = stringResource(R.string.home_intent_open_action)
     Column(verticalArrangement = Arrangement.spacedBy(ReachComponentDimens.intentRowSpacing)) {
         intents.forEach { summary ->
             IntentWordRow(
                 word = intentWord(summary.intent),
                 trailing =
-                    if (catalogLoaded) {
+                    if (catalogLoaded && heldIntent == null) {
                         IntentRowTrailing.of(appCount = summary.appCount, unreadCount = summary.unreadCount)
                     } else {
-                        IntentRowTrailing.None // Not "0": the cached catalog is milliseconds away.
+                        // Not "0" before the cached catalog arrives; nothing while the fan is open.
+                        IntentRowTrailing.None
                     },
                 onClick = { onIntentSelected(summary.intent) },
                 thumbSide = thumbSide,
                 onClickLabel = openLabel,
                 wordModifier = wordModifier(summary.intent),
+                wordColor =
+                    when (heldIntent) {
+                        null -> Color.Unspecified
+                        summary.intent -> colors.accentInk
+                        else -> colors.dim
+                    },
             )
         }
     }

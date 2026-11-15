@@ -40,4 +40,7 @@
     <string name="home_appearance_title">Appearance</string>
     <string name="home_appearance_placeholder">Theme, palette and thumb side arrive in M4.</string>
     <string name="home_done">Done</string>
+
+    <!-- Press-slide-release: hint shown in the search pill's place while the fan is open (shown upper-cased in mono). -->
+    <string name="home_fan_hint">release to open · slide off to cancel</string>
 </resources>

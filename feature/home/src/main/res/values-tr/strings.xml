@@ -32,4 +32,7 @@
     <string name="home_appearance_title">Görünüm</string>
     <string name="home_appearance_placeholder">Tema, palet ve başparmak tarafı M4\'te geliyor.</string>
     <string name="home_done">Tamam</string>
+
+    <!-- Press-slide-release: hint shown in the search pill's place while the fan is open (shown upper-cased in mono). -->
+    <string name="home_fan_hint">açmak için bırak · iptal için kaydır</string>
 </resources>

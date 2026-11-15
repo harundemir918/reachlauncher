@@ -23,11 +23,10 @@ import androidx.compose.ui.unit.dp
  * the part past the top/bottom edge when it doesn't — counts towards the swipe.
  *
  * Why this keeps taps and long-press working: the scrollable only claims the pointer after
- * the touch slop, so taps and the clock's long-press never reach this code. For M2's
- * press-slide-release on the intent words (attached via `wordModifier`): a detector there
- * that consumes its move events once the fan opens should keep the scroll from dragging,
- * because the scrollable ignores already-consumed movement — verify this with a UI test
- * when the gesture lands.
+ * the touch slop, so taps and the clock's long-press never reach this code. Press-slide-release
+ * on the intent words (PressSlideRelease.kt) consumes every pointer change once its fan is
+ * open, so the scrollable never drags and no leftovers reach this connection
+ * (`PressSlideReleaseTest.verticalMovementInTheFanDoesNotTriggerHomeSwipes`).
  */
 
 /** Drag distance past the scroll edge that opens Search / All Apps. */

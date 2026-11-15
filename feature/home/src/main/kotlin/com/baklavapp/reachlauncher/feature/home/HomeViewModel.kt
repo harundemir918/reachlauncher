@@ -3,15 +3,13 @@ package com.baklavapp.reachlauncher.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.baklavapp.reachlauncher.core.data.di.DefaultDispatcher
+import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
-import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
-import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.data.source.HomeRoleSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
-import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -35,8 +33,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Clock
 import javax.inject.Inject
 
 /**
@@ -77,14 +75,12 @@ class HomeViewModel
     @Inject
     constructor(
         private val catalogRepository: AppCatalogRepository,
-        private val historyRepository: LaunchHistoryRepository,
         predictionRepository: PredictionRepository,
         settingsRepository: SettingsRepository,
         notificationCountSource: NotificationCountSource,
-        private val shortcutSource: ShortcutSource,
-        private val appLauncher: AppLauncher,
+        shortcutSource: ShortcutSource,
+        private val launchApp: LaunchApp,
         private val homeRoleSource: HomeRoleSource,
-        private val clock: Clock,
         @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
@@ -160,6 +156,7 @@ class HomeViewModel
          * nothing (a launcher has nothing behind it — spec §4).
          */
         fun onBack() {
+            _fan.value = null
             _surface.value = HomeSurface.Home
         }
 
@@ -171,6 +168,7 @@ class HomeViewModel
          */
         fun onHomePressed() {
             val wasHome = _surface.value == HomeSurface.Home
+            _fan.value = null
             _surface.value = HomeSurface.Home
             eventChannel.trySend(HomeEvent.HideKeyboard)
             if (wasHome) eventChannel.trySend(HomeEvent.ScrollToTop)
@@ -188,14 +186,16 @@ class HomeViewModel
         }
 
         /**
-         * Launches [app], animating from [origin] (the tapped element in window pixels).
+         * Launches [app], animating from [origin] (the tapped element in window pixels),
+         * through the shared [LaunchApp] use case — the one place that records launches, so
+         * Home, Search, All Apps and the fan count them the same way.
          *
          * The decision follows only the launcher's [LaunchResult], which is computed from
          * *live* profile state (docs/DECISIONS.md D32, D34) — never from the catalog's
          * possibly stale `isProfilePaused` flag:
-         * - [LaunchResult.LAUNCHED]: recorded (the primary prediction signal, spec §6.2) and
-         *   the surface returns to Home, so Home — not the old detail list — greets the user
-         *   when they come back.
+         * - [LaunchResult.LAUNCHED]: [LaunchApp] records it (the primary prediction signal,
+         *   spec §6.2, in the application scope) and the surface returns to Home, so Home —
+         *   not the old detail list — greets the user when they come back.
          * - [LaunchResult.RESUMING_PROFILE]: the system was asked to resume a paused work
          *   profile; nothing is recorded and the user stays where they are to tap again.
          * - [LaunchResult.FAILED]: a short message is shown and the surface stays.
@@ -204,11 +204,7 @@ class HomeViewModel
             app: CatalogApp,
             origin: LaunchOrigin?,
         ) {
-            when (appLauncher.launchApp(app.key, origin)) {
-                LaunchResult.LAUNCHED -> onLaunched(app.key)
-                LaunchResult.RESUMING_PROFILE -> Unit
-                LaunchResult.FAILED -> eventChannel.trySend(HomeEvent.LaunchFailed(app.label))
-            }
+            onLaunchResult(launchApp.app(app.key, origin), app.label)
         }
 
         /** Launches an app-shortcut pill; recorded against the app it belongs to. */
@@ -216,19 +212,82 @@ class HomeViewModel
             item: ShortcutItem,
             origin: LaunchOrigin?,
         ) {
-            if (shortcutSource.launch(item.shortcut, origin)) {
-                onLaunched(item.appKey)
-            } else {
-                eventChannel.trySend(HomeEvent.LaunchFailed(item.shortcut.label))
+            onLaunchResult(launchApp.shortcut(item.shortcut, origin, recordAs = item.appKey), item.shortcut.label)
+        }
+
+        private fun onLaunchResult(
+            result: LaunchResult,
+            label: String,
+        ) {
+            when (result) {
+                LaunchResult.LAUNCHED -> {
+                    _fan.value = null
+                    _surface.value = HomeSurface.Home
+                }
+
+                LaunchResult.RESUMING_PROFILE -> {
+                    // Stay where the user is; they tap again once the profile is running (D32, D34).
+                }
+
+                LaunchResult.FAILED -> {
+                    eventChannel.trySend(HomeEvent.LaunchFailed(label))
+                }
             }
         }
 
-        private fun onLaunched(key: AppKey) {
-            val now = clock.millis()
-            // The app is already open; history is best effort. A database error (full disk)
-            // must not crash the launcher — it would only cost one prediction signal.
-            viewModelScope.launch { bestEffort { historyRepository.recordLaunch(key, now) } }
-            _surface.value = HomeSurface.Home
+        // ---- Press, slide, release (spec §6.5) ------------------------------------------
+        //
+        // The ViewModel owns *what* the fan shows (which apps, in which order, which one is
+        // highlighted) and what releasing does (launch through LaunchApp). The pointer
+        // tracking, hit-testing and pill geometry live in the UI (ui/PressSlideRelease.kt),
+        // because they are about pixels, not about apps.
+
+        private val _fan = MutableStateFlow<FanState?>(null)
+
+        /**
+         * The open press-slide-release fan, or null when it is closed. A plain `StateFlow`
+         * like [surface] (no upstream to restart), because it changes while a finger is down
+         * and must never lag behind.
+         */
+        val fan: StateFlow<FanState?> = _fan.asStateFlow()
+
+        /**
+         * The user has held [intent]'s word long enough: open its fan with the intent's
+         * visible apps, most-launched first (the nearest pill to the finger), capped at
+         * [FanState.MAX_APPS]. The UI shows fewer when fewer fit above the finger.
+         *
+         * @return false — and nothing opens — when the intent has no apps: the gesture then
+         *   stays out of the way and the press behaves like a normal tap/long-press.
+         */
+        fun onFanOpen(intent: ReachIntent): Boolean {
+            val apps = uiState.value.fanAppsFor(intent)
+            if (apps.isEmpty()) return false
+            _fan.value = FanState(intent = intent, apps = apps, highlighted = null)
+            return true
+        }
+
+        /**
+         * The finger is over pill [index] (0 = nearest the finger), or over no pill / back on
+         * the word (null). Out-of-range indices count as "no pill".
+         */
+        fun onFanHighlight(index: Int?) {
+            _fan.update { fan -> fan?.copy(highlighted = index?.takeIf { it in fan.apps.indices }) }
+        }
+
+        /**
+         * The finger lifted. Over a pill → launch that app from [origin] (the pill's window
+         * bounds) with the same outcome handling as a tap ([launch]); anywhere else →
+         * cancel. The fan closes either way.
+         */
+        fun onFanRelease(origin: LaunchOrigin?) {
+            val app = _fan.value?.highlightedApp
+            _fan.value = null
+            if (app != null) launch(app, origin)
+        }
+
+        /** The gesture was cancelled (system took the pointer, Home left the screen): close the fan. */
+        fun onFanCancel() {
+            _fan.value = null
         }
 
         private companion object {

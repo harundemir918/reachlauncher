@@ -46,6 +46,47 @@ data class HomeUiState(
 ) {
     /** Detail content for [intent]; empty (not null) before the catalog has loaded. */
     fun detailFor(intent: ReachIntent): IntentDetailUi = details[intent] ?: IntentDetailUi(intent, emptyList(), emptyList())
+
+    /**
+     * The apps the press-slide-release fan shows for [intent]: the same order as intent
+     * detail (most-launched first, then alphabetical), capped at [FanState.MAX_APPS].
+     */
+    fun fanAppsFor(intent: ReachIntent): List<CatalogApp> =
+        detailFor(intent)
+            .apps
+            .asSequence()
+            .take(FanState.MAX_APPS)
+            .map { it.app }
+            .toList()
+}
+
+/**
+ * The open press-slide-release fan (spec §6.5).
+ *
+ * @property intent the held intent word.
+ * @property apps the fanned apps; index 0 is the pill nearest the finger (the most used).
+ *   The UI may show only the first few when fewer fit above the finger (200% font, a word
+ *   high on the screen); it never highlights a pill it didn't place.
+ * @property highlighted index into [apps] of the pill under the finger, or null when the
+ *   finger is over no pill or back on the word (releasing then cancels).
+ */
+@Immutable
+data class FanState(
+    val intent: ReachIntent,
+    val apps: List<CatalogApp>,
+    val highlighted: Int?,
+) {
+    /** The app a release would launch, or null when a release would cancel. */
+    val highlightedApp: CatalogApp? get() = highlighted?.let(apps::getOrNull)
+
+    companion object {
+        /**
+         * Most pills a fan ever shows. Six 52dp pills plus gaps take ≈ 370dp — about what
+         * sits above the lowest intent word on a typical phone — and more choices than that
+         * stop being a quick "slide and release" anyway (the detail list has the rest).
+         */
+        const val MAX_APPS = 6
+    }
 }
 
 /**
