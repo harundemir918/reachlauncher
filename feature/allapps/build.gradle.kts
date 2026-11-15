@@ -38,6 +38,8 @@ dependencies {
     implementation(project(":core:data"))
 
     implementation(libs.androidx.core.ktx)
+    // BackHandler for the long-press menu.
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
@@ -53,10 +55,4 @@ dependencies {
     testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
-}
-
-// Gradle 9 fails a test task that finds no tests. This module gets its first tests in a
-// later milestone; remove this block then.
-tasks.withType<Test>().configureEach {
-    failOnNoDiscoveredTests = false
 }

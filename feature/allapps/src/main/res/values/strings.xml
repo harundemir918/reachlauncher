@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings of the All Apps surface (spec §6.7). Mono labels are natural case here; the
+    components upper-case them with the current locale at display time (D20).
+    Prefix "allapps_" keeps these from colliding with other modules after resource merging.
+-->
+<resources>
+    <!-- Heading of the screen, 46sp display type. Short. -->
+    <string name="allapps_title">Everything</string>
+    <!-- Mono count next to the heading: "42 APPS". -->
+    <plurals name="allapps_count">
+        <item quantity="one">%d app</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+    <string name="allapps_subtitle">Names, not icons — scan by reading.</string>
+
+    <!-- Label of the final group holding hidden apps. -->
+    <string name="allapps_hidden_group">hidden</string>
+    <!-- Spoken part of a hidden app's description: "Slack, hidden". -->
+    <string name="allapps_hidden">hidden</string>
+
+    <!-- TalkBack: the letter rail as one control, and its per-letter actions ("Jump to S"). -->
+    <string name="allapps_rail">Letter index</string>
+    <string name="allapps_rail_jump">Jump to %1$s</string>
+
+    <!-- Long-press menu. The long-press verb TalkBack announces: "double-tap and hold to app options". -->
+    <string name="allapps_menu_open">App options</string>
+    <string name="allapps_menu_app_info">App info</string>
+    <string name="allapps_menu_move">Move to intent…</string>
+    <string name="allapps_menu_hide">Hide</string>
+    <string name="allapps_menu_unhide">Unhide</string>
+    <string name="allapps_menu_uninstall">Uninstall</string>
+    <!-- Mono label above the intent chips in the menu. -->
+    <string name="allapps_menu_move_label">move to</string>
+    <string name="allapps_menu_close">Close</string>
+
+    <!-- The six intent words, for the Move-to chips. Same words as on Home. -->
+    <string name="allapps_intent_talk">Talk</string>
+    <string name="allapps_intent_listen">Listen</string>
+    <string name="allapps_intent_go">Go</string>
+    <string name="allapps_intent_make">Make</string>
+    <string name="allapps_intent_play">Play</string>
+    <string name="allapps_intent_tools">Tools</string>
+
+    <!-- Short inline message when an app can't be opened. -->
+    <string name="allapps_launch_failed">Couldn\'t open %1$s</string>
+</resources>

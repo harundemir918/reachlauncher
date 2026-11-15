@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allapps_title">Hepsi</string>
+    <plurals name="allapps_count">
+        <item quantity="one">%d uygulama</item>
+        <item quantity="other">%d uygulama</item>
+    </plurals>
+    <string name="allapps_subtitle">Simge değil, isim — okuyarak tara.</string>
+
+    <string name="allapps_hidden_group">gizli</string>
+    <string name="allapps_hidden">gizli</string>
+
+    <string name="allapps_rail">Harf dizini</string>
+    <string name="allapps_rail_jump">%1$s harfine git</string>
+
+    <string name="allapps_menu_open">Uygulama seçenekleri</string>
+    <string name="allapps_menu_app_info">Uygulama bilgisi</string>
+    <string name="allapps_menu_move">Amaca taşı…</string>
+    <string name="allapps_menu_hide">Gizle</string>
+    <string name="allapps_menu_unhide">Göster</string>
+    <string name="allapps_menu_uninstall">Kaldır</string>
+    <string name="allapps_menu_move_label">taşı</string>
+    <string name="allapps_menu_close">Kapat</string>
+
+    <string name="allapps_intent_talk">Konuş</string>
+    <string name="allapps_intent_listen">Dinle</string>
+    <string name="allapps_intent_go">Git</string>
+    <string name="allapps_intent_make">Üret</string>
+    <string name="allapps_intent_play">Oyna</string>
+    <string name="allapps_intent_tools">Araçlar</string>
+
+    <string name="allapps_launch_failed">%1$s açılamadı</string>
+</resources>
