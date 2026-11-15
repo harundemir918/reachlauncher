@@ -117,7 +117,8 @@ Each milestone ends with: `./gradlew build test lint` green at the root, docs up
   settings snapshot); consider a `LaunchResult` type (D32).
 - **M5:** verify private-space APIs/permissions (D13); revisit R8 `packageScope` (D16);
   the owner reviews all Turkish strings (agents' wording kept until then, e.g. "amaç"
-  for intent, "Yazıp aç" for Type to launch).
+  for intent, "Yazıp aç" for Type to launch; All Apps: "Hepsi", "Simge değil, isim — okuyarak
+  tara.", "Amaca taşı…", "Göster" for Unhide).
 
 ### Rules for every sub-agent prompt
 1. Exact files/modules it owns; files it must not touch (always: `gradle/libs.versions.toml`

@@ -343,3 +343,30 @@ so neither a Home press nor a chip switch waits for a recombine. `buildUiState` 
 default dispatcher. `HomeUiState.catalogLoaded` is false until the first catalog emission: intent
 rows show no trailing count (instead of "0") and the Now block stays hidden. The theme root reads
 a separate, `distinctUntilChanged` `HomeViewModel.theme`.
+
+## D40 — All Apps letters from ICU `AlphabeticIndex` (M2)
+**Decision.** Buckets come from `android.icu.text.AlphabeticIndex(locale)` plus English
+labels, so Latin app names always get a letter (e.g. W in Turkish). Underflow, overflow and
+inflow buckets merge into one "#" group at the end. Names keep the catalog's Collator order.
+The rail shows every index letter; letters without apps are drawn in `dim` (an inactive
+control, D18), skipped while scrubbing, and have no TalkBack action. The locale is pushed in
+from the composition (`LocalLocale`), because a ViewModel survives language changes.
+Turkish İ, I, Ç, Ş, Ö, Ü, Ğ are their own letters; English folds accents.
+
+## D41 — Letter rail placement and accessibility (M2)
+**Decision.** The rail sits inside `WindowInsets.systemGestures` on the thumb side, plus
+`systemGestureExclusion()` as a backup for devices whose real gesture zone is wider than
+reported. The home activity is exempt from Android's 200dp exclusion cap, but insetting keeps
+Back working along the whole edge and doesn't depend on Reach being the default home.
+TalkBack sees the rail as one "Letter index" control with "Jump to X" custom actions; group
+labels are headings. At large font sizes only every k-th letter is drawn (the rest become
+dots) while the slot mapping keeps every letter reachable. The bubble glyph is fixed at 36dp
+so it never overflows its 72dp bubble.
+
+## D42 — All Apps long-press menu as an in-surface overlay (M2)
+**Decision.** The menu (App info, Move to intent…, Hide/Unhide, Uninstall) is an overlay —
+scrim + bottom card with 28dp corners, `BackHandler`, `paneTitle`, content behind hidden
+from TalkBack — not a `Dialog`, to fit the single-surface model (D28). Every menu item is
+also a direct custom accessibility action on the app name. Hidden apps appear in a final
+dimmed "Hidden" group (not on the rail) so they can be un-hidden. Only
+`LaunchResult.LAUNCHED` closes All Apps.

@@ -89,9 +89,19 @@ class FakeAppLauncher : AppLauncher {
         return result
     }
 
-    override fun openAppInfo(key: AppKey) = Unit
+    /** Apps passed to [openAppInfo], in order. */
+    val appInfoOpened = mutableListOf<AppKey>()
 
-    override fun requestUninstall(key: AppKey) = Unit
+    /** Apps passed to [requestUninstall], in order. */
+    val uninstallRequested = mutableListOf<AppKey>()
+
+    override fun openAppInfo(key: AppKey) {
+        appInfoOpened += key
+    }
+
+    override fun requestUninstall(key: AppKey) {
+        uninstallRequested += key
+    }
 
     override fun open(screen: SystemScreen): Boolean {
         openedScreens += screen
