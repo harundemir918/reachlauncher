@@ -69,11 +69,14 @@ internal class LaunchOriginHolder {
     }
 
     /** The bounds as a [LaunchOrigin] in window pixels, or null before the first layout. */
-    fun toLaunchOrigin(): LaunchOrigin? =
-        bounds.takeUnless { it.isEmpty }?.let {
-            LaunchOrigin(it.left.roundToInt(), it.top.roundToInt(), it.width.roundToInt(), it.height.roundToInt())
-        }
+    fun toLaunchOrigin(): LaunchOrigin? = bounds.toLaunchOrigin()
 }
+
+/** These window bounds as a [LaunchOrigin] (rounded to pixels), or null when empty (not laid out). */
+internal fun Rect.toLaunchOrigin(): LaunchOrigin? =
+    takeUnless { it.isEmpty }?.let {
+        LaunchOrigin(it.left.roundToInt(), it.top.roundToInt(), it.width.roundToInt(), it.height.roundToInt())
+    }
 
 /** A [LaunchOriginHolder] that lives as long as the calling composable. */
 @Composable

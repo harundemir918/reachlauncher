@@ -47,7 +47,8 @@ import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.feature.home.ui.AllAppsPlaceholder
 import com.baklavapp.reachlauncher.feature.home.ui.AppearancePlaceholderSheet
-import com.baklavapp.reachlauncher.feature.home.ui.HomeScreen
+import com.baklavapp.reachlauncher.feature.home.ui.FanCallbacks
+import com.baklavapp.reachlauncher.feature.home.ui.HomeWithFan
 import com.baklavapp.reachlauncher.feature.home.ui.IntentDetailScreen
 import com.baklavapp.reachlauncher.feature.home.ui.SearchPlaceholder
 import kotlinx.coroutines.delay
@@ -154,6 +155,11 @@ private fun HomeSurfaces(
     scrollToTopRequests: Int,
 ) {
     val reducedMotion = rememberReducedMotion()
+    val fan by viewModel.fan.collectAsStateWithLifecycle()
+    val fanCallbacks =
+        remember(viewModel) {
+            FanCallbacks(viewModel::onFanOpen, viewModel::onFanHighlight, viewModel::onFanRelease, viewModel::onFanCancel)
+        }
     // targetState is the whole frame, so an exiting surface keeps rendering the snapshot it
     // was showing (e.g. the detail list) while it fades out. contentKey decides when a
     // transition runs: switching intents via the chips updates detail in place, and the
@@ -167,11 +173,11 @@ private fun HomeSurfaces(
         val state = shown.state
         when (val surface = shown.surface) {
             HomeSurface.Home, HomeSurface.Appearance -> {
-                HomeScreen(
-                    intents = state.intents,
-                    now = state.now,
-                    catalogLoaded = state.catalogLoaded,
-                    thumbSide = state.thumbSide,
+                // Home with press-slide-release (spec §6.5): the fan's state lives in the ViewModel.
+                HomeWithFan(
+                    state = state,
+                    fan = fan,
+                    fanCallbacks = fanCallbacks,
                     onIntentSelected = viewModel::onIntentSelected,
                     onLaunch = viewModel::launch,
                     onSearch = viewModel::onSearchRequested,

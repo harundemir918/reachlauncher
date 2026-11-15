@@ -1,5 +1,6 @@
 package com.baklavapp.reachlauncher.feature.home
 
+import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
 import com.baklavapp.reachlauncher.core.data.fake.FakeHomeRoleSource
@@ -15,7 +16,9 @@ import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -72,17 +75,22 @@ class HomeFixture(
     val homeRole = FakeHomeRoleSource()
     val clock: Clock = Clock.fixed(Instant.parse("2026-11-08T09:41:00Z"), ZoneOffset.UTC)
 
+    /**
+     * Stands in for the application scope `LaunchApp` records history in. On `Dispatchers.Main`
+     * (the unconfined test dispatcher in ViewModel tests, the main looper in UI tests), so a
+     * recorded launch is visible right after the call.
+     */
+    val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     val viewModel =
         HomeViewModel(
             catalogRepository = catalogRepository ?: catalog,
-            historyRepository = historyRepository ?: history,
             predictionRepository = predictions,
             settingsRepository = settings,
             notificationCountSource = notifications,
             shortcutSource = shortcuts,
-            appLauncher = launcher,
+            launchApp = LaunchApp(launcher, shortcuts, historyRepository ?: history, clock, appScope),
             homeRoleSource = homeRole,
-            clock = clock,
             defaultDispatcher = dispatcher,
         )
 
