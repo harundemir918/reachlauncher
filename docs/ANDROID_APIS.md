@@ -1,11 +1,11 @@
 # Android APIs and permissions used by Reach
 
-**v3 (M3).** Every Android API and permission the code uses *today*: what it does, why
+**v4 (M4).** Every Android API and permission the code uses *today*: what it does, why
 Reach needs it, how the user grants it (if at all), what happens without it, and Play
 policy notes. M2 added contacts, app shortcuts, ICU letter buckets, gesture-zone handling and
 haptics; M3 added the notification listener, media sessions, calendar, usage access and the
-resume re-check. M4–M5 extend this file with wallpaper colours and the accessibility service
-(see [the last section](#coming-in-m4m5)).
+resume re-check. M4 added wallpaper colours, the wallpaper window flag and background blur; M5 will add the
+accessibility service (see [the last section](#coming-in-m5)).
 
 Where it helps, an API is tagged with the Android version (API level) that introduced it.
 Reach's `minSdk` is **28** (Android 9); anything newer is behind a `Build.VERSION.SDK_INT`
@@ -30,7 +30,7 @@ APIs in the feature modules / `:app`), behind the interfaces in `:core:data` (se
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | **service permission** (held only by the system); the *user* grants "Notification access" in Settings, optional | `<service>` in `core/system/src/main/AndroidManifest.xml` | Unread counts and media controls. See [Notification listener](#notification-listener-m3) and [Media sessions](#media-sessions-m3). | No badges, no media row. |
 | *Shortcut host access* (not a manifest permission) | granted by **being the default home app** | — | `LauncherApps.getShortcuts` / `startShortcut` for app shortcuts in Search and intent detail. See [App shortcuts](#app-shortcuts-launcherapps-m2). | No shortcut rows or pills. |
 
-Those are the **only** permissions Reach declares as of M3 (the last four are all optional). The merged manifest additionally
+Those are the **only** permissions Reach declares as of M4 (M4 added none: wallpaper colours need no permission) (the last four are all optional). The merged manifest additionally
 contains `com.baklavapp.reachlauncher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, a
 *signature* permission that AndroidX Core defines for Reach itself so
 `ContextCompat.registerReceiver(…, RECEIVER_NOT_EXPORTED)` can emulate non-exported runtime
@@ -46,7 +46,7 @@ receivers on Android versions before 13. It grants nothing to other apps.
 | `MODIFY_QUIET_MODE` | Not needed: `UserManager.requestQuietModeEnabled` is allowed for the foreground default launcher. |
 | `VIBRATE` | Not needed: haptics go through `View.performHapticFeedback` (Compose `LocalHapticFeedback`), which needs no permission ([Haptics](#haptics-m2)). |
 | `CALL_PHONE`, `SEND_SMS` | Not needed: a contact's Call / Message only *pre-fill* the dialer / messaging app (`ACTION_DIAL`, `ACTION_SENDTO`); the user presses call/send there. |
-| Accessibility service | Not yet: still a stub until M5 (see [Coming in M4–M5](#coming-in-m4m5)). |
+| Accessibility service | Not yet: still a stub until M5 (see [Coming in M5](#coming-in-m5)). |
 
 Library components in the merged manifest (none needs a permission from the user):
 `androidx.startup.InitializationProvider` (not exported), Room's
@@ -550,13 +550,28 @@ access is on. Code: `HomeViewModel.onboarding` / `OnboardingCard.next`,
 
 ---
 
-## Coming in M4-M5
+## Wallpaper colours and the wallpaper window (M4, D61–D62)
 
-Notification counts, media sessions, the default-home card, calendar and usage stats are done
-(M3, sections above). **Only these remain stubbed**, bound to `Unavailable…` classes in
+No permission is needed for any of this: Reach reads the wallpaper's *colours*, never its bitmap
+(`READ_EXTERNAL_STORAGE`/`READ_MEDIA_*` are not involved).
+
+| API | Where | Level | Notes |
+|---|---|---|---|
+| `WallpaperManager.getWallpaperColors(FLAG_SYSTEM)` → `WallpaperColors.primaryColor` | `core/system/…/wallpaper/WallpaperManagerColorSource.kt` | Android 8.1 (27) | Below Reach's `minSdk` 28, so no version check. Returns null for some wallpapers/OEMs; null (also from `SecurityException` or OEM `RuntimeException`) means "unknown" and the palette accent is used. It's a binder call, so it runs on `Dispatchers.IO`. |
+| `WallpaperManager.addOnColorsChangedListener(listener, handler)` / `removeOnColorsChangedListener` | same, inside a `callbackFlow` | 27 | Re-emits when the system wallpaper changes; only `FLAG_SYSTEM` changes are used; null colours in the callback trigger a re-read. Registered only while wallpaper mode is on (`flatMapLatest` in `HomeViewModel.theme`). |
+| `WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER` via `Window.addFlags` / `clearFlags` | `app/…/ReachWindow.kt` | all | Same as the theme attribute `windowShowWallpaper`, but switchable at run time without recreating the Activity (which Reach never does). Paired with a transparent window background. |
+| `Window.setBackgroundBlurRadius(px)` | `ReachWindow.applyBlur` | **Android 12 (31)** | 40dp (converted to px), only while wallpaper mode is on and blur is enabled; 0 otherwise. |
+| `WindowManager.addCrossWindowBlurEnabledListener(executor, consumer)` / `remove…` | `ReachWindow` | 31 | Blur can be off (battery saver, developer option, some GPUs); the radius follows the listener. Without blur, the 82 %/86 % scrim alone keeps text readable. |
+
+Below Android 12 the wallpaper is shown unblurred under the scrim. Accent contrast rules
+(`WallpaperAccent`): `accentInk` ≥ 4.5:1 on bg, and `onAccent` is the more contrasting of bg/fg.
+
+## Coming in M5
+
+Notification counts, media sessions, the default-home card, calendar, usage stats and wallpaper
+colours are done. **Only this remains stubbed**, bound to an `Unavailable…` class in
 `core/system/…/di/SystemModule.kt` (`core/system/…/unavailable/UnavailableSources.kt`):
 
-- **Wallpaper colours** — `WallpaperManager.getWallpaperColors(FLAG_SYSTEM)` for the wallpaper-mode accent (M4).
 - **Accessibility service** — opt-in, `GLOBAL_ACTION_LOCK_SCREEN` / `GLOBAL_ACTION_NOTIFICATIONS`, with the Play accessibility-API disclosure text (M5).
 
 Also planned (not behind a stub): **work-profile contacts** via

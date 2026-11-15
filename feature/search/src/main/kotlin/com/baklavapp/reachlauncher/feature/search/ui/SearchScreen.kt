@@ -136,7 +136,8 @@ fun SearchScreen(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(ReachTheme.colors.bg)
+                // bg normally; transparent in wallpaper mode (Home's root paints the scrim).
+                .background(ReachTheme.colors.backdrop)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(start = ReachTheme.dimens.gutter, end = ReachTheme.dimens.gutter, top = ScreenTopPadding, bottom = ResultGap),
     ) {

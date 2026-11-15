@@ -16,7 +16,7 @@ the Android side with Flutter analogies — start with
 
 ---
 
-## Status: M3 — System features (done)
+## Status: M4 — Personalisation (done)
 
 | | Milestone | Scope |
 |---|---|---|
@@ -24,10 +24,16 @@ the Android side with Flutter analogies — start with
 | ● | **M1 — Core launcher** | App catalog (LauncherApps, live updates, cache), intent auto-assignment, Home, intent detail, launching with animation, launch history, the Now row, Home/Back behaviour |
 | ● | **M2 — Speed** | Search with ranking, commands, shortcuts, contacts and web fallback; All Apps with the word wall, letter rail and long-press menu; press-slide-release; haptics; the shared `LaunchApp` use case |
 | ● | **M3 — System features** | Notification counts ("3 NEW"), media row + Now Playing card, next calendar event, usage-stats blend, onboarding/permission cards, `PRIVACY.md` |
-| ☐ | M4 — Personalisation | Appearance sheet, DataStore persistence, Auto theme, thumb side, wallpaper mode, move/hide apps |
+| ● | **M4 — Personalisation** | Appearance sheet (theme Auto/Dark/Light, 7 palettes, thumb side, wallpaper mode with blur and scrim), live DataStore persistence, no theme flash on start, long-press menu (App info / Move / Hide / Uninstall) on intent-detail apps too |
 | ☐ | M5 — Polish | Accessibility pass, optional accessibility service, work profile + private space, Turkish strings, Baseline Profile, release config |
 
-### What works now (M1 + M2 + M3)
+### What works now (M1 – M4)
+
+New in M4: **long-press the clock** (or use TalkBack's "Appearance" action) to open the Appearance
+sheet: theme Auto/Dark/Light, seven palettes, thumb side, and **Show wallpaper**, which lets your
+wallpaper through a scrim (blurred on Android 12+) and takes the accent from its colours. Every
+change applies live and is saved. Long-pressing an app in an intent's list now opens the same
+menu as All Apps (App info, Move to intent…, Hide, Uninstall). No new permissions.
 
 New in M3 (each is optional and switched on from a small Home card; see [How to try it](#how-to-try-m3)):
 
@@ -93,13 +99,10 @@ From M1:
   sentence ("Talk, 5 apps"); the clock long-press and the swipe-up have TalkBack custom
   actions ("Appearance", "All apps"); "Remove animations" reduces transitions to a fade.
 
-### Placeholders (so you know what you're looking at)
+### Not done yet (so you know what you're looking at)
 
-- **Long-press the clock** (~450 ms) → a placeholder sheet (Appearance, **M4**). The theme
-  follows Android's dark mode, and the thumb side is fixed to the default until M4. The search
-  commands "Switch to <Palette>" and "dark/light theme" already change and save the setting.
-- Work-profile contacts in search are not included yet (**M5**). Wallpaper colours (**M4**) and
-  the accessibility service (**M5**) are still stubs.
+- Work-profile contacts in search are not included yet (**M5**). The accessibility
+  service (**M5**) is still a stub.
 
 ---
 
@@ -286,11 +289,11 @@ New in M2:
 :core:model           Pure Kotlin domain types (ReachIntent, AppKey, CatalogApp, Prediction, PaletteId, …) + TextFolding
 :core:designsystem    ReachTheme, palettes, derived tokens, colour maths, typography, fonts, components (IntentWordRow, NowTile, AppRow, …)
 :core:data            Repository + system-source interfaces, Room/DataStore implementations, catalog/prediction logic, fakes
-:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts, notification listener, media, calendar, usage stats; stubs for wallpaper colours (M4) and the accessibility service (M5)
-:feature:home         HomeViewModel (surface state machine + fan), Home, intent detail, press-slide-release, Appearance placeholder
+:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts, notification listener, media, calendar, usage stats; wallpaper colours (M4); a stub for the accessibility service (M5)
+:feature:home         HomeViewModel (surface state machine + fan), Home, intent detail, press-slide-release
 :feature:search       Type to launch: SearchViewModel, SearchRanker, commands, contacts prompt
 :feature:allapps      A–Z word wall, letter rail, long-press menu
-:feature:appearance   Appearance sheet — empty until M4
+:feature:appearance   Appearance sheet (AppearanceViewModel, theme / palette / wallpaper / thumb side)
 ```
 
 Features talk to Android only through the interfaces in `:core:data`; `:core:system`
@@ -300,7 +303,7 @@ data flows are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | Doc | What's in it |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module diagram, layers, data flows from system event to pixel, the Home state machine, startup, privacy, where to add a feature |
-| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v3; extended M4–M5) |
+| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v4; extended in M5) |
 | [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v3) |
 | [`docs/GESTURES.md`](docs/GESTURES.md) | Press-slide-release, the letter rail, Home swipes and the clock long-press, step by step: pointer passes, consumption vs. the gesture arena, and how the tests drive them |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D51) |
@@ -321,7 +324,7 @@ later.)
 
 **An app is in the "wrong" intent.** Auto-assignment uses the app's Play category
 (`ApplicationInfo.category`); many apps declare none and land in **Tools**. "Move to…"
-arrives in M4.
+in the long-press menu (All Apps or an intent's app list) fixes it.
 
 **A new app doesn't show up.** Package changes arrive through `LauncherApps` callbacks and
 a refresh on every resume. If it's still missing, check it has a launcher activity

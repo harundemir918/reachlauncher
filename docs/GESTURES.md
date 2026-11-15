@@ -1,9 +1,9 @@
 # Reach — gestures, step by step
 
-**v1 (M2).** How Reach's custom touch handling works, written for a Flutter developer:
+**v2 (M4).** How Reach's custom touch handling works, written for a Flutter developer:
 press-slide-release on Home (spec §6.5), the All Apps letter rail (§6.7), Home's pull-down /
 swipe-up (§6.3) and the clock's long-press. Everything here describes code that exists at
-the end of M2; the reasons are in [`DECISIONS.md`](DECISIONS.md) (D29, D30, D41, D48–D50).
+the end of M4 (M4 added the intent-detail app-row long-press, §5a); the reasons are in [`DECISIONS.md`](DECISIONS.md) (D29, D30, D41, D48–D50, D64).
 The general Flutter → Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md).
 
 Paths are abbreviated: `feature/home/…/ui/` = `feature/home/src/main/kotlin/com/baklavapp/reachlauncher/feature/home/ui/`.
@@ -16,6 +16,7 @@ Code excerpts are trimmed ("simplified from …"); the real files have more comm
 | Pull down → Search, swipe up → All Apps | `feature/home/…/ui/HomeGestures.kt` | `NestedScrollConnection` on Home's scroll |
 | Clock long-press → Appearance | `feature/home/…/ui/HomeClock.kt` | stock `detectTapGestures(onLongPress = …)` |
 | Long-press a name in All Apps → menu | `feature/allapps/…/ui/AllAppsScreen.kt` | stock `combinedClickable` (via `reachClickable(onLongClick = …)`) |
+| Long-press an app row in intent detail → the same menu (M4) | `feature/home/…/ui/IntentDetailScreen.kt` | same `reachClickable(onLongClick = …)`; menu is `AppActionsMenu` from `:core:designsystem` |
 
 ---
 
@@ -446,6 +447,18 @@ The timeout is `max(450 ms, system long-press timeout)`, applied by overriding
 { override val longPressTimeoutMillis … }`) — the same "never shorter than the user's Touch &
 hold delay" rule as the fan. The accessible paths are a long-click semantics action, an
 "Appearance" custom action and Enter/Space on a hardware keyboard.
+
+### 5a. App-row long-press in intent detail (M4, D64)
+
+Intent detail's app rows use the same stock long-press as All Apps (`reachClickable(onLongClick = …,
+onLongClickLabel = appMenuOpenLabel())`) and open the same `AppActionsMenu` (`core/designsystem/…/component/AppActionsMenu.kt`):
+App info, Move to intent…, Hide, Uninstall. Detail lists only visible apps, so it offers
+"Hide" only; unhiding stays in All Apps' "Hidden" group. There is no gesture to learn for
+TalkBack: `appMenuAccessibilityActions(…)` adds each of those four as a direct custom action on the
+row (≈ Flutter's `Semantics(customSemanticsActions: …)`), plus "App options" for the menu
+itself, so nobody has to find the long-press. The `AppActionsMenu` claims system Back while open.
+Clock long-press → Appearance (§5) was already wired in M2 and still is; M4 only replaced the sheet
+it opens (the real `AppearanceRoute`).
 
 ---
 

@@ -12,6 +12,7 @@ import com.baklavapp.reachlauncher.core.data.fake.FakePredictionRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeUsageStatsSource
+import com.baklavapp.reachlauncher.core.data.fake.FakeWallpaperColorSource
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.model.AppKey
@@ -87,6 +88,7 @@ class HomeFixture(
     val media = FakeMediaSessionSource()
     val calendar = FakeCalendarSource()
     val usage = FakeUsageStatsSource()
+    val wallpaper = FakeWallpaperColorSource()
     val clock: Clock = Clock.fixed(Instant.parse("2026-11-08T09:41:00Z"), ZoneOffset.UTC)
 
     /**
@@ -109,6 +111,7 @@ class HomeFixture(
             calendarSource = calendar,
             usageStatsSource = usage,
             appLauncher = launcher,
+            wallpaperColorSource = wallpaper,
             defaultDispatcher = dispatcher,
         )
 

@@ -41,15 +41,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.baklavapp.reachlauncher.core.designsystem.component.AppActionsMenu
+import com.baklavapp.reachlauncher.core.designsystem.component.AppMenuActions
 import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.component.SearchPill
+import com.baklavapp.reachlauncher.core.designsystem.component.appMenuAccessibilityActions
+import com.baklavapp.reachlauncher.core.designsystem.component.appMenuOpenLabel
 import com.baklavapp.reachlauncher.core.designsystem.component.reachClickable
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachColors
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
@@ -175,7 +178,8 @@ fun AllAppsScreen(
     val railSidePadding = railEdgeInset + RailWidth + RailContentGap
     val gutter = ReachTheme.dimens.gutter
 
-    Box(modifier = modifier.fillMaxSize().background(ReachTheme.colors.bg)) {
+    // backdrop: bg normally; transparent in wallpaper mode, where Home's root paints the scrim.
+    Box(modifier = modifier.fillMaxSize().background(ReachTheme.colors.backdrop)) {
         Column(
             modifier =
                 Modifier
@@ -251,26 +255,32 @@ fun AllAppsScreen(
         menu?.let { request ->
             val app = request.app
             val close = { menu = null }
-            AppMenu(
-                app = app,
+            AppActionsMenu(
+                title = app.label,
+                currentIntent = app.intent,
+                isHidden = app.isHidden,
                 startInMove = request.move,
-                onDismiss = close,
-                onAppInfo = {
-                    close()
-                    onAppInfo(app)
-                },
-                onMoveTo = { intent ->
-                    close()
-                    if (intent != app.intent) onMoveToIntent(app, intent)
-                },
-                onToggleHidden = {
-                    close()
-                    onSetHidden(app, !app.isHidden)
-                },
-                onUninstall = {
-                    close()
-                    onUninstall(app)
-                },
+                intentLabel = { intentWord(it) },
+                actions =
+                    AppMenuActions(
+                        onDismiss = close,
+                        onAppInfo = {
+                            close()
+                            onAppInfo(app)
+                        },
+                        onMoveTo = { intent ->
+                            close()
+                            if (intent != app.intent) onMoveToIntent(app, intent)
+                        },
+                        onToggleHidden = {
+                            close()
+                            onSetHidden(app, !app.isHidden)
+                        },
+                        onUninstall = {
+                            close()
+                            onUninstall(app)
+                        },
+                    ),
             )
         }
     }
@@ -391,13 +401,12 @@ private fun WordWallName(
             if (hiddenGroup) stringResource(R.string.allapps_hidden) else null,
         ).joinToString(", ")
     val actions =
-        listOf(
-            action(stringResource(R.string.allapps_menu_app_info)) { callbacks.onAppInfo(app) },
-            action(stringResource(R.string.allapps_menu_move)) { callbacks.onOpenMenu(app, true) },
-            action(stringResource(if (app.isHidden) R.string.allapps_menu_unhide else R.string.allapps_menu_hide)) {
-                callbacks.onSetHidden(app, !app.isHidden)
-            },
-            action(stringResource(R.string.allapps_menu_uninstall)) { callbacks.onUninstall(app) },
+        appMenuAccessibilityActions(
+            isHidden = app.isHidden,
+            onAppInfo = { callbacks.onAppInfo(app) },
+            onOpenMove = { callbacks.onOpenMenu(app, true) },
+            onToggleHidden = { callbacks.onSetHidden(app, !app.isHidden) },
+            onUninstall = { callbacks.onUninstall(app) },
         )
     Row(
         modifier =
@@ -408,7 +417,7 @@ private fun WordWallName(
                     onClick = { callbacks.onLaunch(app, origin.toLaunchOrigin()) },
                     description = description,
                     onLongClick = { callbacks.onOpenMenu(app, false) },
-                    onLongClickLabel = stringResource(R.string.allapps_menu_open),
+                    onLongClickLabel = appMenuOpenLabel(),
                     accessibilityActions = actions,
                 ).heightIn(min = ReachDimens.minTouchTarget)
                 .padding(horizontal = NamePadding),
@@ -418,14 +427,6 @@ private fun WordWallName(
         Text(text = app.label, style = ReachTheme.typography.wordWall, color = color, modifier = Modifier.weight(1f, fill = false))
         if (tag != null) MonoLabel(text = tag, style = ReachTheme.typography.labelSmall, maxLines = 1)
     }
-}
-
-private fun action(
-    label: String,
-    block: () -> Unit,
-) = CustomAccessibilityAction(label) {
-    block()
-    true
 }
 
 @Preview(name = "All apps", widthDp = 390, heightDp = 844)

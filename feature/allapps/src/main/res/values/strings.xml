@@ -23,16 +23,7 @@
     <string name="allapps_rail">Letter index</string>
     <string name="allapps_rail_jump">Jump to %1$s</string>
 
-    <!-- Long-press menu. The long-press verb TalkBack announces: "double-tap and hold to app options". -->
-    <string name="allapps_menu_open">App options</string>
-    <string name="allapps_menu_app_info">App info</string>
-    <string name="allapps_menu_move">Move to intent…</string>
-    <string name="allapps_menu_hide">Hide</string>
-    <string name="allapps_menu_unhide">Unhide</string>
-    <string name="allapps_menu_uninstall">Uninstall</string>
-    <!-- Mono label above the intent chips in the menu. -->
-    <string name="allapps_menu_move_label">move to</string>
-    <string name="allapps_menu_close">Close</string>
+    <!-- The long-press menu's strings live in :core:designsystem (ds_app_menu_*), shared with intent detail. -->
 
     <!-- The six intent words, for the Move-to chips. Same words as on Home. -->
     <string name="allapps_intent_talk">Talk</string>

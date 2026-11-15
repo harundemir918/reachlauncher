@@ -14,6 +14,7 @@ import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
+import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -26,6 +27,7 @@ import com.baklavapp.reachlauncher.core.model.SystemScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +36,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -90,6 +94,7 @@ class HomeViewModel
         calendarSource: CalendarSource,
         usageStatsSource: UsageStatsSource,
         private val appLauncher: AppLauncher,
+        private val wallpaperColorSource: WallpaperColorSource,
         @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
@@ -131,14 +136,31 @@ class HomeViewModel
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
 
         /**
-         * Just the theme choice, for the root `ReachTheme`. Separate and `distinctUntilChanged`
-         * so a catalog or prediction update doesn't recompose the theme root.
+         * Just the theme choice, for the root `ReachTheme` and the window. Separate and
+         * `distinctUntilChanged` so a catalog or prediction update doesn't recompose the
+         * theme root.
+         *
+         * Starts as `null` = "not read yet": the Activity then uses the snapshot it read
+         * synchronously before the first frame (docs/DECISIONS.md D63), so a user who forced
+         * Light never sees a dark first frame.
+         *
+         * The wallpaper colour is only collected while wallpaper mode is on (`flatMapLatest`
+         * switches to it and cancels it again), so the `WallpaperManager` listener isn't
+         * registered for users who never enable the mode.
          */
-        val theme: StateFlow<HomeTheme> =
+        @OptIn(ExperimentalCoroutinesApi::class)
+        val theme: StateFlow<HomeTheme?> =
             settingsRepository.settings
-                .map { HomeTheme(themeMode = it.themeMode, palette = it.palette) }
+                .map { HomeTheme(themeMode = it.themeMode, palette = it.palette, showWallpaper = it.showWallpaper) }
                 .distinctUntilChanged()
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeTheme())
+                .flatMapLatest { base ->
+                    if (base.showWallpaper) {
+                        wallpaperColorSource.primaryColor.map { base.copy(wallpaperColor = it) }
+                    } else {
+                        flowOf(base)
+                    }
+                }.distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
         private val onboarding: Flow<OnboardingCard?> =
             combine(
@@ -282,6 +304,37 @@ class HomeViewModel
             origin: LaunchOrigin?,
         ) {
             onLaunchResult(launchApp.app(app.key, origin), app.label)
+        }
+
+        // ---- Intent detail's app menu (spec §6.1, §6.4) -----------------------------------
+        //
+        // The same four actions as All Apps' menu, through the same repository and launcher
+        // calls. The catalog re-emits after a move or hide, so the detail list (precomputed
+        // for all six intents in uiState) updates by itself: a moved app leaves this intent
+        // and appears in its new one, a hidden app leaves every intent and the Now row.
+
+        /** Menu "App info": the system's App info screen. */
+        fun openAppInfo(app: CatalogApp) {
+            appLauncher.openAppInfo(app.key)
+        }
+
+        /** Menu "Move to intent…": the user's choice, which always beats auto-assignment. */
+        fun moveToIntent(
+            app: CatalogApp,
+            intent: ReachIntent,
+        ) {
+            if (intent == app.intent) return
+            viewModelScope.launch { bestEffort { catalogRepository.moveToIntent(app.key, intent) } }
+        }
+
+        /** Menu "Hide". Undone from All Apps' "Hidden" group, the one place hidden apps are listed. */
+        fun hideApp(app: CatalogApp) {
+            viewModelScope.launch { bestEffort { catalogRepository.setHidden(app.key, hidden = true) } }
+        }
+
+        /** Menu "Uninstall": the system shows its own confirmation (D26). */
+        fun uninstall(app: CatalogApp) {
+            appLauncher.requestUninstall(app.key)
         }
 
         /** Launches an app-shortcut pill; recorded against the app it belongs to. */

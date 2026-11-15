@@ -523,3 +523,86 @@ Reviewed by a Sonnet reviewer agent; fixed by the orchestrator (process per D52)
   are caught; usage data is an optional blend.
 - New `NotificationListenerHubTest` (connect → post/update → ongoing → remove → disconnect,
   reconnect replaces stale state, Reach's own notifications never count).
+
+## D60 — Appearance sheet: own module, live writes, hand-built controls (M4)
+**Decision.** `:feature:appearance` exposes `AppearanceRoute(onClose)`; Home hosts it in an
+`appearanceContent` slot (like Search/All Apps) and draws it over Home inside the existing
+`AnimatedVisibility` (fade only with "Remove animations"). `AppearanceViewModel` keeps no
+draft: every control calls the `SettingsRepository` setter and the sheet's state comes back
+from the same settings flow, so DataStore is the single source of truth and Home re-themes
+behind the sheet live. No contract change was needed (the setters existed since M0). The
+segmented controls, swatches and switch row are drawn with Reach tokens but carry Material's
+semantics: `selectable(role = RadioButton)` in a `selectableGroup()`, and one
+`toggleable(role = Switch)` row with a visual-only M3 `Switch`. Swatches are painted in each
+palette's real colours for the *current* dark/light theme; min-height (not fixed) so names
+wrap at 200 % font; the card scrolls.
+
+## D61 — Wallpaper colour source and the scrim (M4)
+**Decision.** `WallpaperManagerColorSource` reads `getWallpaperColors(FLAG_SYSTEM).primaryColor`
+(no permission, never the bitmap) and listens with `addOnColorsChangedListener` inside a
+`callbackFlow`; unsupported wallpaper, null colours, `SecurityException` and OEM
+`RuntimeException`s all mean "unknown" (null → palette accent). `HomeViewModel.theme` collects
+it only while wallpaper mode is on (`flatMapLatest`), so the listener isn't registered
+otherwise. `ReachColors` gained `wallpaperMode` plus two computed tokens: `root` (bg, or the
+82 %/86 % scrim) painted once by `HomeRoute`, and `backdrop` (bg, or transparent) painted by
+full-screen surfaces above it (Search, All Apps), so the scrim is never stacked. With
+wallpaper mode off both equal `bg`: behaviour unchanged. The date line shows "ACCENT FROM
+WALLPAPER" with an accent dot in wallpaper mode (§6.3). `WallpaperAccent` (D6) was already
+complete; its tests now also assert, for pure white/yellow, mid-grey and near-black in every
+palette × theme, that `onAccent` is the stronger of bg/fg.
+
+## D62 — Wallpaper window: runtime flag, not a second theme (M4)
+**Decision.** `ReachWindow` (in `:app`) toggles `FLAG_SHOW_WALLPAPER` and sets a transparent
+window background at run time, instead of switching to a theme with
+`windowShowWallpaper=true`. **Why:** a theme only applies when the Activity is recreated, and
+Reach never recreates Home (it would flash and lose the surface state; see `configChanges`).
+The theme attribute is just that flag, which a window may change at any time, so the switch
+applies live. On Android 12+ `Window.setBackgroundBlurRadius(40dp)` blurs the wallpaper while
+`WindowManager.addCrossWindowBlurEnabledListener` reports blur enabled (battery saver or the
+developer option turn it off); otherwise radius 0 and the scrim alone keeps text readable.
+In opaque mode the window background is the palette bg (not the static Lime colour from
+`themes.xml`).
+
+## D63 — First-frame theme: bounded synchronous DataStore read (M4)
+**Decision.** `MainActivity.onCreate` reads `settings.first()` with `runBlocking` +
+`withTimeoutOrNull(250 ms)` before `setContent`, applies the window (wallpaper flag or palette
+bg, system-bar icons) and passes the snapshot to `ReachApp` as `initialTheme`, used until
+`HomeViewModel.theme` (now `StateFlow<HomeTheme?>`, null = not read yet) answers.
+**Alternatives:** a SharedPreferences mirror written on every change. **Why this one:** it's
+the same small file read Home needs a few milliseconds later anyway (it warms the DataStore
+singleton), it can't drift from DataStore, and it happens once per process (the Activity is
+never recreated). The timeout falls back to defaults rather than delay Home on a broken disk.
+Known gap: the wallpaper *accent* still arrives a frame or two later (the colour is a binder
+call); only the palette accent shows for that moment.
+
+## D64 — One app menu for All Apps and intent detail (M4)
+**Decision.** The long-press menu moved from `:feature:allapps` to `:core:designsystem`
+(`AppActionsMenu`, `AppMenuActions`, `appMenuAccessibilityActions`, `appMenuOpenLabel`), with
+its strings as `ds_app_menu_*` (EN + TR, removed from All Apps). Intent detail's app rows now
+offer the same menu: App info, Move to intent…, Hide, Uninstall — on long-press, and each as a
+direct TalkBack custom action (plus "App options" for the menu itself). The ViewModel side is
+four one-line calls on `HomeViewModel` (`openAppInfo`, `moveToIntent`, `hideApp`,
+`uninstall`) on the same repository/launcher APIs All Apps uses; the precomputed details
+update by themselves when the catalog re-emits. Detail lists only visible apps, so it offers
+"Hide" only; unhiding stays in All Apps' "Hidden" group. `:core:designsystem` gained an
+`implementation` dependency on `activity-compose` (already in the catalog) for the menu's
+`BackHandler`; `:feature:allapps` dropped it.
+
+## D65 — M4 review fixes: wallpaper-safe text, no overlapping fades, modal sheet (M4)
+The M4 review found that the scrim (82 % dark / 86 % light) still lets 14–18 % of the
+wallpaper through, so contrast measured against the opaque `bg` overstated it.
+- **Text tokens over the wallpaper.** In wallpaper mode `ReachColors.from` re-checks `fg`,
+  `muted`, `accentInk`, `soft` and `groupDim` against the worst case
+  (`wallpaperWorstBackground`: the scrim composited over pure white for dark themes, pure
+  black for light ones) and nudges them with `ensureContrast`. Any real wallpaper lands
+  between that and `bg`, so 4.5:1 holds over every photo, blurred or not. Text on accent
+  fills and opaque surfaces is unaffected. Tested for every palette, theme and the hard
+  accent colours.
+- **No overlapping fades.** Surfaces paint a transparent `backdrop` in wallpaper mode, so a
+  cross-fade would draw two screens' text on top of each other. In wallpaper mode the
+  entering surface waits until the exiting one has faded out.
+- **Modal sheet for TalkBack.** While the Appearance sheet is open, Home behind it is
+  removed from the accessibility tree (`clearAndSetSemantics`).
+- **Robustness.** The first-frame settings read falls back to defaults on any exception
+  (a crash in a launcher's `onCreate` is a crash loop); the wallpaper source's fallback
+  re-read runs on the IO dispatcher instead of the main thread.

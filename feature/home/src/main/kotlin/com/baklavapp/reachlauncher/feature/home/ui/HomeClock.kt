@@ -5,8 +5,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.text.format.DateFormat
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
@@ -18,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.Key
@@ -37,6 +45,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -112,7 +121,11 @@ internal fun rememberWallClock(): State<ClockReading> {
     return reading
 }
 
-/** "SUN 08 NOV" / "PAZ 08 KAS": weekday, day, month in the current locale, mono and muted. */
+/**
+ * "SUN 08 NOV" / "PAZ 08 KAS": weekday, day, month in the current locale, mono and muted.
+ * In wallpaper mode it is followed by an accent dot and "ACCENT FROM WALLPAPER" (spec §6.3),
+ * wrapping under the date at large font sizes.
+ */
 @Composable
 internal fun HomeDateLine(
     reading: ClockReading,
@@ -120,12 +133,25 @@ internal fun HomeDateLine(
 ) {
     val locale = LocalLocale.current.platformLocale
     val formatter = remember(locale) { DateTimeFormatter.ofPattern("EEE dd MMM", locale) }
-    MonoLabel(
-        text = reading.now.format(formatter),
-        style = ReachTheme.typography.count,
+    val colors = ReachTheme.colors
+    FlowRow(
         modifier = modifier,
-    )
+        horizontalArrangement = Arrangement.spacedBy(WallpaperTagGap),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        MonoLabel(text = reading.now.format(formatter), style = ReachTheme.typography.count)
+        if (colors.wallpaperMode) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(WallpaperDotGap)) {
+                Box(Modifier.size(WallpaperDotSize).background(colors.accentInk, CircleShape))
+                MonoLabel(text = stringResource(R.string.home_accent_from_wallpaper), style = ReachTheme.typography.labelSmall)
+            }
+        }
+    }
 }
+
+private val WallpaperTagGap = 12.dp
+private val WallpaperDotGap = 6.dp
+private val WallpaperDotSize = 6.dp
 
 /**
  * The 112sp clock. It's a real focusable element (keyboard Enter works too); a long-press

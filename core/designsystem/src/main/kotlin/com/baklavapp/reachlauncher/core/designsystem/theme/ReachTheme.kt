@@ -45,28 +45,40 @@ val LocalReachTypography = staticCompositionLocalOf<ReachTypography> { error("No
  *
  * @param wallpaperAccent primary wallpaper colour in wallpaper mode, or null. When set,
  *   the palette's accent trio is replaced by one derived from it ([WallpaperAccent]).
+ * @param wallpaperMode the window shows the wallpaper ([ReachColors.wallpaperMode]): the
+ *   root paints the scrim instead of the opaque bg. Independent of [wallpaperAccent], which
+ *   may still be unknown (null) while wallpaper mode is on.
  */
 @Composable
 fun ReachTheme(
     palette: PaletteId = PaletteId.DEFAULT,
     themeMode: ThemeMode = ThemeMode.AUTO,
     wallpaperAccent: Color? = null,
+    wallpaperMode: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val isDark =
-        when (themeMode) {
-            ThemeMode.AUTO -> isSystemInDarkTheme()
-            ThemeMode.DARK -> true
-            ThemeMode.LIGHT -> false
-        }
+    val isDark = resolveDark(themeMode)
     val colors =
-        remember(palette, isDark, wallpaperAccent) {
+        remember(palette, isDark, wallpaperAccent, wallpaperMode) {
             val base = Palettes.colors(palette, isDark)
             val withAccent = if (wallpaperAccent != null) WallpaperAccent.apply(base, wallpaperAccent) else base
-            ReachColors.from(withAccent, isDark)
+            ReachColors.from(withAccent, isDark, wallpaperMode)
         }
     ReachTheme(colors = colors, content = content)
 }
+
+/**
+ * Whether [themeMode] means dark right now: Auto follows Android's dark-mode setting
+ * (`isSystemInDarkTheme()` ≈ `MediaQuery.platformBrightnessOf(context)`), and recomposes
+ * when the user flips it, because `uiMode` is in the Activity's `configChanges`.
+ */
+@Composable
+fun resolveDark(themeMode: ThemeMode): Boolean =
+    when (themeMode) {
+        ThemeMode.AUTO -> isSystemInDarkTheme()
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+    }
 
 /** Lower-level overload taking a ready [ReachColors]; used by previews and tests. */
 @Composable

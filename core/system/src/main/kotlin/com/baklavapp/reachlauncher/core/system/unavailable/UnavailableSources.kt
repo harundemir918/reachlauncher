@@ -1,7 +1,6 @@
 package com.baklavapp.reachlauncher.core.system.unavailable
 
 import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
-import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import javax.inject.Inject
@@ -15,13 +14,6 @@ import javax.inject.Inject
  * Flutter analogy: registering a no-op implementation in get_it until the real plugin
  * integration exists.
  */
-
-/** Wallpaper colour unknown. Replaced in M4 (wallpaper mode) by a `WallpaperManager` source. */
-class UnavailableWallpaperColorSource
-    @Inject
-    constructor() : WallpaperColorSource {
-        override val primaryColor: Flow<Int?> = flowOf(null)
-    }
 
 /** Accessibility service off. Replaced in M5 by the opt-in accessibility service. */
 class UnavailableScreenActionsSource

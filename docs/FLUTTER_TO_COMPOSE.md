@@ -1,13 +1,13 @@
 # Flutter → Compose (and Android) for Reach
 
-**v4 (M3) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
+**v5 (M4) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
 illustrative examples with real code from the M1 launcher (events, lifecycle effects,
 `callbackFlow`, nested scroll, semantics, UI tests); v3 adds what M2 brought: custom
 gestures (`pointerInput` / `awaitEachGesture`, in depth in [GESTURES.md](GESTURES.md)),
 `LazyColumn` + `FlowRow` in All Apps, the search text field and focus, runtime permission
 requests, debounced flows, composable slots, the shared `LaunchApp` use case and haptics; v4 adds what M3 brought: Android `Service`s
 (the notification listener), broadcast receivers, special accesses versus runtime
-permissions, and re-checking on resume (see [the M3 sections](#system-features-m3-services-receivers-special-access-and-resume)).
+permissions, and re-checking on resume (see [the M3 sections](#system-features-m3-services-receivers-special-access-and-resume)); v5 adds what M4 brought: hand-built segmented controls, swatches and switch rows with proper semantics, `flatMapLatest` to start/stop a listener, a bounded `runBlocking` before the first frame, and window-level wallpaper/blur (see [the M4 section](#personalisation-m4-appearance-controls-and-the-window)).
 
 ## How to read this
 
@@ -1406,6 +1406,64 @@ The onboarding card then simply disappears when the flow flips to `true`: UI = f
 
 ---
 
+## Personalisation (M4): appearance controls and the window
+
+### Segmented control, swatches, switch row ↔ `CupertinoSegmentedControl`, `ChoiceChip`, `SwitchListTile`
+
+Reach's Appearance sheet (`feature/appearance/…/ui/AppearanceSheet.kt`) draws these with its own
+tokens instead of using Material widgets, but must still be accessible. In Flutter you'd wrap
+a custom widget in `Semantics(inMutuallyExclusiveGroup: true, selected: …, button: true)`. In
+Compose the same job is done by modifiers:
+
+- `Modifier.selectableGroup()` on the container (≈ `inMutuallyExclusiveGroup`), and
+  `Modifier.selectable(selected = …, role = Role.RadioButton, onClick = …)` on each option.
+  TalkBack then says "Dark, radio button, selected, 1 of 3".
+- The "Show wallpaper" row is one `Modifier.toggleable(value, role = Role.Switch, onValueChange)`
+  on the whole row (≈ `SwitchListTile`: label and switch are one tap target), with the Material
+  `Switch` inside it purely visual (`onCheckedChange = null`) so it isn't announced twice.
+- Swatches use `minHeight`, not a fixed height, so palette names wrap at 200 % font size, and the
+  card scrolls (≈ `ConstrainedBox(minHeight)` inside a `SingleChildScrollView`).
+- There is no draft state or "Save" button: each tap calls a `SettingsRepository` setter and the
+  UI re-reads the same DataStore flow (D60). ≈ a Riverpod `ref.watch` on a provider backed by
+  `shared_preferences`, where the write *is* the state change.
+
+### `flatMapLatest` ↔ `switchMap`: a listener that only exists while it's needed
+
+`HomeViewModel.theme` maps settings to a `HomeTheme`, then
+`flatMapLatest { if (it.showWallpaper) wallpaperColorSource.primaryColor.map { … } else flowOf(it) }`.
+Whenever the setting changes, the previous inner flow is cancelled — which runs the `awaitClose`
+of the `callbackFlow` and so unregisters the `WallpaperManager` listener. Same as RxDart's
+`switchMap`; the benefit is that users who never turn wallpaper mode on never register a listener.
+`@OptIn(ExperimentalCoroutinesApi::class)` just marks the operator as not yet stable.
+
+### Nullable state as "not loaded yet", and `runBlocking` before the first frame
+
+`theme` is `StateFlow<HomeTheme?>`: `null` means "DataStore hasn't answered yet" (≈ `AsyncValue.loading`).
+Showing defaults for that moment would flash the wrong theme for users who forced Light or Dark,
+so `MainActivity.onCreate` reads the settings once with `runBlocking { withTimeoutOrNull(250) { settings.first() } }`
+and passes it to `ReachApp` as `initialTheme`. In Flutter you'd `await` in `main()` before `runApp`
+(`WidgetsFlutterBinding.ensureInitialized(); final prefs = await SharedPreferences.getInstance();`).
+Android's `onCreate` can't be `async`, so `runBlocking` is the equivalent. It's normally a smell
+because it blocks the main thread; it is acceptable here because the read is a tiny local file,
+happens once per process, and has a 250 ms cap that falls back to defaults (D63).
+
+### Window flags ↔ the embedding's transparent mode
+
+Showing the system wallpaper behind the app is a *window* property, not something Compose can
+paint: `FLAG_SHOW_WALLPAPER` plus a transparent window background (`app/…/ReachWindow.kt`).
+Flutter analogy: `FlutterActivity` `BackgroundMode.transparent` in the Android embedding. A
+theme attribute (`windowShowWallpaper`) only applies on Activity creation, so Reach flips the flag
+at run time to avoid recreating Home. On Android 12+ `Window.setBackgroundBlurRadius` blurs
+what's behind the window (≈ `BackdropFilter`, but of other windows); it is only available when
+`isCrossWindowBlurEnabled`, which can change at run time (battery saver), hence a listener.
+
+### One shared menu in the design system
+
+The long-press menu moved from `:feature:allapps` to `:core:designsystem` (`AppActionsMenu`) so
+that All Apps and intent detail use one implementation. Features can't depend on each other
+([ARCHITECTURE.md](ARCHITECTURE.md), dependency rule 1), so a widget used by two features goes in the shared UI package — the same
+reason you'd move a widget from `lib/features/a/` to `lib/shared/widgets/` in Flutter.
+
 ## Mental model differences that bite Flutter devs
 
 1. **Recomposition isn't rebuilding a tree you hold.** You never get a widget object back
@@ -1502,5 +1560,4 @@ M3 additions: the system-feature code lives in `core/system/…/notifications/`,
 `feature/home/…/ui/SystemCards.kt`, `HomeViewModel.kt` (`onboarding`, `system`) and
 `MediaProgress.kt`.
 
-Coming in later versions of this file: window themes/wallpaper and the Appearance bottom
-sheet (M4); the accessibility service (M5).
+Coming in later versions of this file: the accessibility service (M5).

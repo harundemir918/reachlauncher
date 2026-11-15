@@ -1,4 +1,4 @@
-package com.baklavapp.reachlauncher.feature.allapps.ui
+package com.baklavapp.reachlauncher.core.designsystem.component
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -31,23 +31,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.baklavapp.reachlauncher.core.designsystem.component.IntentChip
-import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
-import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
-import com.baklavapp.reachlauncher.core.designsystem.component.reachClickable
+import com.baklavapp.reachlauncher.core.designsystem.R
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
-import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.ReachIntent
-import com.baklavapp.reachlauncher.feature.allapps.R
 
 /*
- * The long-press menu of an app name (spec §6.7): App info, Move to intent…, Hide/Unhide,
- * Uninstall.
+ * The long-press menu of an app (spec §6.1, §6.4, §6.7): App info, Move to intent…,
+ * Hide/Unhide, Uninstall. Shared by All Apps' word wall and intent detail's app rows, so
+ * both offer the same actions with the same words (moved here from `:feature:allapps` in M4).
  *
  * Flutter analogy: a small `showModalBottomSheet` / `showMenu` — but drawn inside the same
  * screen (a `Stack` with a scrim and a card) instead of a new route, because Reach has no
@@ -62,37 +59,52 @@ private val ChipSpacing = 6.dp
 private const val SCRIM_ALPHA = 0.6f
 
 /**
- * The menu for [app], anchored at the bottom (in thumb reach) over a scrim. Tapping the
+ * What the menu's items do. Each callback is responsible for closing the menu (the caller
+ * owns the "is open" state).
+ *
+ * Flutter analogy: the bundle of `VoidCallback`s you'd pass to a menu widget.
+ */
+class AppMenuActions(
+    val onDismiss: () -> Unit,
+    val onAppInfo: () -> Unit,
+    val onMoveTo: (ReachIntent) -> Unit,
+    val onToggleHidden: () -> Unit,
+    val onUninstall: () -> Unit,
+)
+
+/**
+ * The menu for one app, anchored at the bottom (in thumb reach) over a scrim. Tapping the
  * scrim or pressing Back dismisses it. "Move to intent…" swaps the items for the six
- * [IntentChip]s, the app's current intent selected.
+ * [IntentChip]s, the app's [currentIntent] selected.
  *
  * Accessibility: the card is a pane titled with the app's name (TalkBack announces it when
  * it opens); the scrim is not a control — Back and the "Close" item are the accessible ways
- * out. The screen behind hides its semantics while the menu is open.
+ * out. Callers hide the screen behind from TalkBack while the menu is open.
  *
+ * @param title the app's name.
+ * @param intentLabel the localised intent word (the words live in the feature modules).
  * @param startInMove open directly on the intent chips (TalkBack's "Move to intent…" action).
  */
 @Composable
-internal fun AppMenu(
-    app: CatalogApp,
+fun AppActionsMenu(
+    title: String,
+    currentIntent: ReachIntent,
+    isHidden: Boolean,
     startInMove: Boolean,
-    onDismiss: () -> Unit,
-    onAppInfo: () -> Unit,
-    onMoveTo: (ReachIntent) -> Unit,
-    onToggleHidden: () -> Unit,
-    onUninstall: () -> Unit,
+    intentLabel: @Composable (ReachIntent) -> String,
+    actions: AppMenuActions,
     modifier: Modifier = Modifier,
 ) {
     val colors = ReachTheme.colors
-    var moving by remember(app.key, startInMove) { mutableStateOf(startInMove) }
-    BackHandler(onBack = onDismiss)
+    var moving by remember(title, startInMove) { mutableStateOf(startInMove) }
+    BackHandler(onBack = actions.onDismiss)
     val shape = RoundedCornerShape(ReachDimens.sheetCorner)
     Box(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(colors.bg.copy(alpha = SCRIM_ALPHA))
-                .pointerInput(Unit) { detectTapGestures { onDismiss() } }
+                .pointerInput(Unit) { detectTapGestures { actions.onDismiss() } }
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(ReachTheme.dimens.gutter),
         contentAlignment = Alignment.BottomCenter,
@@ -106,20 +118,20 @@ internal fun AppMenu(
                     .border(ReachComponentDimens.hairline, colors.line2, shape)
                     // Swallow taps on the card so they don't reach the scrim.
                     .pointerInput(Unit) { detectTapGestures { } }
-                    .semantics { paneTitle = app.label }
+                    .semantics { paneTitle = title }
                     // At 200 % font the menu can outgrow a short screen: scroll, don't clip.
                     .verticalScroll(rememberScrollState())
                     .padding(MenuPadding),
             verticalArrangement = Arrangement.spacedBy(MenuGap),
         ) {
             Text(
-                text = app.label,
+                text = title,
                 style = ReachTheme.typography.title,
                 color = colors.fg,
                 modifier = Modifier.padding(horizontal = ItemPadding).semantics { heading() },
             )
             if (moving) {
-                MonoLabel(text = stringResource(R.string.allapps_menu_move_label), modifier = Modifier.padding(horizontal = ItemPadding))
+                MonoLabel(text = stringResource(R.string.ds_app_menu_move_label), modifier = Modifier.padding(horizontal = ItemPadding))
                 // selectableGroup(): TalkBack announces "tab 2 of 6" for the chips inside.
                 FlowRow(
                     modifier = Modifier.selectableGroup(),
@@ -128,24 +140,56 @@ internal fun AppMenu(
                 ) {
                     ReachIntent.entries.forEach { intent ->
                         IntentChip(
-                            label = intentWord(intent),
-                            selected = intent == app.intent,
-                            onClick = { onMoveTo(intent) },
+                            label = intentLabel(intent),
+                            selected = intent == currentIntent,
+                            onClick = { actions.onMoveTo(intent) },
                         )
                     }
                 }
             } else {
-                MenuItem(stringResource(R.string.allapps_menu_app_info), onClick = onAppInfo)
-                MenuItem(stringResource(R.string.allapps_menu_move)) { moving = true }
+                MenuItem(stringResource(R.string.ds_app_menu_app_info), onClick = actions.onAppInfo)
+                MenuItem(stringResource(R.string.ds_app_menu_move)) { moving = true }
                 MenuItem(
-                    stringResource(if (app.isHidden) R.string.allapps_menu_unhide else R.string.allapps_menu_hide),
-                    onClick = onToggleHidden,
+                    stringResource(if (isHidden) R.string.ds_app_menu_unhide else R.string.ds_app_menu_hide),
+                    onClick = actions.onToggleHidden,
                 )
-                MenuItem(stringResource(R.string.allapps_menu_uninstall), onClick = onUninstall)
+                MenuItem(stringResource(R.string.ds_app_menu_uninstall), onClick = actions.onUninstall)
             }
-            MenuItem(stringResource(R.string.allapps_menu_close), muted = true, onClick = onDismiss)
+            MenuItem(stringResource(R.string.ds_app_menu_close), muted = true, onClick = actions.onDismiss)
         }
     }
+}
+
+/**
+ * The menu's actions as direct TalkBack custom actions on an app (row or name), so nobody
+ * has to open the menu to hide, move or uninstall (spec §6.10). [onOpenMove] should open the
+ * menu on its intent chips.
+ */
+@Composable
+fun appMenuAccessibilityActions(
+    isHidden: Boolean,
+    onAppInfo: () -> Unit,
+    onOpenMove: () -> Unit,
+    onToggleHidden: () -> Unit,
+    onUninstall: () -> Unit,
+): List<CustomAccessibilityAction> =
+    listOf(
+        action(stringResource(R.string.ds_app_menu_app_info), onAppInfo),
+        action(stringResource(R.string.ds_app_menu_move), onOpenMove),
+        action(stringResource(if (isHidden) R.string.ds_app_menu_unhide else R.string.ds_app_menu_hide), onToggleHidden),
+        action(stringResource(R.string.ds_app_menu_uninstall), onUninstall),
+    )
+
+/** The long-press verb TalkBack announces for an app: "double-tap and hold for app options". */
+@Composable
+fun appMenuOpenLabel(): String = stringResource(R.string.ds_app_menu_open)
+
+private fun action(
+    label: String,
+    block: () -> Unit,
+) = CustomAccessibilityAction(label) {
+    block()
+    true
 }
 
 @Composable

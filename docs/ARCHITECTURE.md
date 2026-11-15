@@ -1,10 +1,10 @@
 # Reach — architecture
 
-**v3 (M3).** Describes the code as it is at the end of milestone M3 ("System features":
-notification badges, media, calendar, usage stats, onboarding cards; only wallpaper colours
-(M4) and the accessibility service (M5) are still stubs). Things that don't exist yet are marked with the milestone that
+**v4 (M4).** Describes the code as it is at the end of milestone M4 ("Personalisation":
+the Appearance sheet, wallpaper colours and wallpaper mode, the shared app menu; only the
+accessibility service (M5) is still a stub). Things that don't exist yet are marked with the milestone that
 brings them. The product spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the
-reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D58); the Flutter →
+reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D65); the Flutter →
 Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md); custom touch
 handling is explained in [`GESTURES.md`](GESTURES.md).
 
@@ -21,7 +21,7 @@ graph TD
     home[":feature:home<br/>HomeViewModel, Home, intent detail, fan"]
     search[":feature:search<br/>SearchViewModel, SearchRanker, SearchRoute"]
     allapps[":feature:allapps<br/>AllAppsViewModel, word wall, letter rail"]
-    appearance[":feature:appearance<br/>(empty until M4)"]
+    appearance[":feature:appearance<br/>AppearanceViewModel, Appearance sheet"]
     ds[":core:designsystem<br/>ReachTheme, tokens, components"]
     data[":core:data<br/>contracts, Room, DataStore, domain logic, fakes"]
     system[":core:system<br/>Android system integrations"]
@@ -60,15 +60,15 @@ readability.
 
 | Module | Kind | What lives there (M2) |
 |---|---|---|
-| `:app` | Android application | `MainActivity` (HOME activity), `ReachApp` (root composable), `ReachApplication` (`@HiltAndroidApp`), the manifest, window theme, backup rules |
+| `:app` | Android application | `MainActivity` (HOME activity; reads the settings snapshot before the first frame, D63), `ReachWindow.kt` (`WindowAppearance` + `ReachWindow`: wallpaper flag, window background, blur, D62), `ReachApp` (root composable), `ReachApplication` (`@HiltAndroidApp`), the manifest, window theme, backup rules |
 | `:core:model` | **pure Kotlin/JVM** (no Android) | `AppKey`, `PackageUser`, `CatalogApp`, `InstalledApp`, `ProfileState`, `ReachIntent`, `LaunchEvent`, `Prediction`, `AppearanceSettings`, `LaunchOrigin`, `SystemScreen`, `ExternalAction`, `TextFolding`… |
-| `:core:designsystem` | Android library + Compose | `ReachTheme`, palettes, `PaletteNames.kt` (localised palette names, shared by Search's commands and Appearance in M4), derived tokens, `ColorMath`, typography + fonts, components (`IntentWordRow`, `NowTile`, `AppRow`, `SearchPill`, `Monogram`, `reachClickable`…), `util/Motion.kt` (`rememberReducedMotion`, `rememberHapticTick`) |
+| `:core:designsystem` | Android library + Compose | `ReachTheme`, palettes, `PaletteNames.kt` (localised palette names, shared by Search's commands and the Appearance sheet), derived tokens, `ColorMath`, typography + fonts, `ReachColors.wallpaperMode` with the derived `root` / `backdrop` tokens, `resolveDark()`, components (`AppActionsMenu` — the long-press menu shared by All Apps and intent detail, D64 —, `IntentWordRow`, `NowTile`, `AppRow`, `SearchPill`, `Monogram`, `reachClickable`…), `util/Motion.kt` (`rememberReducedMotion`, `rememberHapticTick`) |
 | `:core:data` | Android library | **Contracts** (`repository/Repositories.kt`, `source/SystemSources.kt`), their **implementations** for data (`repository/impl`, `db`, `domain` — incl. the shared `LaunchApp` use case —, `time`), Hilt modules (`di`), and **fakes** (`fake`, in `src/main` — D4) |
 | `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, **`LauncherAppsShortcutSource`** and **`ContactsProviderSource`** (M2), **M3:** `ReachNotificationListenerService` + `NotificationListenerHub` / `NotificationListenerCountSource` / `NotificationAccess`, `MediaSessionsSource`, `CalendarProviderSource`, `UsageStatsManagerSource`, `AccessRechecks`; two `Unavailable…` stubs left: wallpaper colours and screen actions), `ActivityTracker`, `SystemModule` |
 | `:feature:home` | Android library + Compose | `HomeViewModel` (the surface state machine + the fan's state), `HomeRoute` (hosts Search / All Apps as slots, D51), Home and intent-detail screens, `ui/SystemCards.kt` (Now Playing card, calendar line, onboarding cards), `MediaProgress.kt`, press-slide-release (`ui/PressSlideRelease.kt`, `ui/FanOverlay.kt`, `ui/HomeWithFan.kt`), Home swipes (`ui/HomeGestures.kt`), the Appearance placeholder sheet (`ui/PlaceholderSurfaces.kt`, until M4) |
 | `:feature:search` | Android library + Compose | `SearchRoute` (public), `SearchViewModel`, `SearchRanker` + `CommandKeywords` (pure), `SearchResult` / `SearchUiState`, `ui/SearchScreen.kt` |
-| `:feature:allapps` | Android library + Compose | `AllAppsRoute` (public), `AllAppsViewModel`, `LetterIndex` (ICU), `ui/AllAppsScreen.kt` (word wall), `ui/LetterRail.kt`, `ui/AppMenu.kt` (long-press menu) |
-| `:feature:appearance` | Android library + Compose | Build file only; the sheet is a placeholder in `:feature:home` until **M4** |
+| `:feature:allapps` | Android library + Compose | `AllAppsRoute` (public), `AllAppsViewModel`, `LetterIndex` (ICU), `ui/AllAppsScreen.kt` (word wall), `ui/LetterRail.kt`, long-press menu from `:core:designsystem` (D64) |
+| `:feature:appearance` | Android library + Compose | `AppearanceRoute(onClose)` (public), `AppearanceViewModel` (no draft: every control calls a `SettingsRepository` setter), `ui/AppearanceSheet.kt` (theme Auto/Dark/Light, 7 palette swatches, Show wallpaper switch, thumb side) — D60 |
 
 ### Dependency rules and why
 
@@ -77,8 +77,8 @@ readability.
    `:core:data/…/source/SystemSources.kt` (D3). Consequences:
    - `HomeViewModelTest` is a plain JVM test with fakes (`HomeTestFixtures.kt` builds the
      ViewModel from `FakeAppCatalogRepository`, `FakeAppLauncher`, …).
-   - Every system integration is optional: as of M3, only two sources (wallpaper colours, screen
-     actions) are still `Unavailable…` stubs, and every access-gated source degrades to
+   - Every system integration is optional: as of M4, only one source (screen
+     actions) is still an `Unavailable…` stub (wallpaper colours became `WallpaperManagerColorSource`), and every access-gated source degrades to
      "none" without its permission — Home and Search work anyway.
 2. **Contracts live in `:core:data`, not in `:core:system`.** `:core:system` depends on
    `:core:data` to implement them (dependency inversion). Flutter analogy: the
@@ -555,7 +555,7 @@ every successful launch (D50, [GESTURES.md §2](GESTURES.md#2-press-slide-releas
 - **Back** (`BackHandler(enabled = true)` in `HomeRoute`) is *always* consumed: sub-surfaces
   → `onBack()` → Home; on Home it changes nothing. Letting Back through would finish the
   launcher Activity.
-- **The on-screen back/close buttons** of intent detail, Search and the Appearance placeholder
+- **The on-screen back/close buttons** of intent detail, Search and the Appearance sheet
   call the same `onBack()` (Search via `SurfaceCallbacks.onClose`). Search and All Apps add
   no `BackHandler` of their own; only All Apps' open long-press menu claims Back (D42, D51).
 - **Home button** → `onHomePressed()` from any state (§3d), plus `HideKeyboard`.
@@ -571,10 +571,9 @@ every successful launch (D50, [GESTURES.md §2](GESTURES.md#2-press-slide-releas
   sheet is drawn *over* Home by a separate `AnimatedVisibility`); all `IntentDetail(…)` states
   share `"detail"`, so a chip switch updates the list in place. With "Remove animations" on
   (`rememberReducedMotion()`), only a cross-fade remains.
-- **Real screens and one placeholder.** Search renders `:feature:search`'s `SearchRoute`, All
-  Apps renders `:feature:allapps`'s `AllAppsRoute` (both through slots, §4a). Appearance still
-  renders `AppearancePlaceholderSheet` (`feature/home/…/ui/PlaceholderSurfaces.kt`) until
-  **M4** (`:feature:appearance`).
+- **Three real screens, all through slots (§4a).** Search renders `:feature:search`'s `SearchRoute`, All
+  Apps `:feature:allapps`'s `AllAppsRoute`, and Appearance `:feature:appearance`'s
+  `AppearanceRoute` via `HomeRoute`'s `appearanceContent` slot (D60). The placeholders are gone.
 - **Home swipes** come from a `NestedScrollConnection` (`VerticalSwipeConnection` in
   `ui/HomeGestures.kt`, D29): Home scrolls at large font sizes, so pull-down / swipe-up use
   the drag the scroll couldn't consume (72dp past the edge, or a ≥ 1200dp/s flick with ≥ 16dp
@@ -642,12 +641,29 @@ Spec §4: "Home must render immediately when Home is pressed."
 - **Ticks without timers.** The clock re-reads time on `ACTION_TIME_TICK` /
   `ACTION_TIME_CHANGED` / `ACTION_TIMEZONE_CHANGED` and on resume (D30). Predictions re-rank
   on hour changes via `hourTicks()`, which sleeps to the next hour (capped at 5 min, D25).
+- **No theme flash (M4, D63).** `MainActivity.onCreate` reads `settings.first()` with
+  `runBlocking` + `withTimeoutOrNull(250 ms)` before `setContent`, applies the window
+  (`ReachWindow.apply`: wallpaper flag or palette bg, system-bar icons) and hands the snapshot
+  to `ReachApp` as `initialTheme`. `HomeViewModel.theme` is a `StateFlow<HomeTheme?>`
+  (null = "not read yet"), so `ReachApp` uses `theme ?: initialTheme`. It's the same small
+  file Home needs milliseconds later, once per process (Home is never recreated); a timeout
+  falls back to defaults. Known gap: the wallpaper *accent* arrives a frame or two later
+  (a binder call), so only the palette accent shows for that moment.
+- **Wallpaper mode (M4, D61/D62).** `ReachColors` has `wallpaperMode` plus two computed
+  tokens: `root` (bg, or the 82 % dark / 86 % light scrim) painted once by `HomeRoute`, and
+  `backdrop` (bg, or transparent) painted by full-screen surfaces above it (Search, All Apps),
+  so the scrim is never stacked. With the mode off both equal `bg`. `ReachWindow` toggles
+  `FLAG_SHOW_WALLPAPER` at run time (a theme attribute would need an Activity recreate) and
+  on Android 12+ blurs the wallpaper by 40dp while cross-window blur is enabled.
+  `HomeViewModel.theme` collects `WallpaperColorSource.primaryColor` only while the mode is
+  on (`flatMapLatest`), so the `WallpaperManager` listener isn't registered otherwise.
 - **No blank frame.** The window theme's `windowBackground` (`app/src/main/res/values*/themes.xml`)
   is the default palette's bg (light `#F4F2EC`, night `#101114`), so the window isn't white
   before Compose's first frame. `configChanges` stops Android from recreating Home on
   rotation, dark mode, font scale or locale changes; Compose recomposes instead (D8).
-  Trade-off: the window background doesn't switch if dark mode toggles while Reach runs —
-  only visible on the first frame of a cold start.
+  Since M4, `ReachWindow` sets the window background to the resolved palette bg (or transparent
+  in wallpaper mode) before the first frame, so the static `themes.xml` colour is only the
+  fallback until `onCreate` runs.
 - **Not yet:** a Baseline Profile (M5). `androidx.profileinstaller` is already a dependency
   of `:app`.
 
@@ -736,7 +752,7 @@ Spec §4: "Home must render immediately when Home is pressed."
 
 ### A new search command
 
-E.g. "Wallpaper mode" (M4). All in `:feature:search`:
+E.g. a command that jumps to a settings surface (Search already has Appearance commands, `PaletteNames.kt` supplies the palette names). All in `:feature:search`:
 
 1. **Model** — add a case to `sealed interface SearchCommand` (`SearchResult.kt`). The `when`s
    in `SearchViewModel.run` and in `SearchScreen` (title/icon of the row) stop compiling until
@@ -781,7 +797,7 @@ E.g. calendar events or settings screens:
    string later — it's what's on disk) and map it in `toSettings()`.
 3. Update `FakeSettingsRepository` and `SettingsRepositoryImplTest`.
 4. Read it from `HomeViewModel` via `settingsRepository.settings` → `HomeUiState`, and add the
-   control to the Appearance sheet (M4).
+   control to the Appearance sheet (`:feature:appearance`, `AppearanceViewModel` + `AppearanceSheet`).
 
 ### Where tests go
 

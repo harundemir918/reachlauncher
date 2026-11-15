@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings of the Appearance sheet (spec §6.8). Mono labels are natural case here; the
+    components upper-case them with the current locale at display time (D20).
+    Prefix "appearance_" keeps these from colliding with other modules after resource merging.
+    Palette names live in :core:designsystem (ds_palette_*), shared with Search.
+-->
+<resources>
+    <!-- Sheet title; also the pane title TalkBack announces when the sheet opens. -->
+    <string name="appearance_title">Appearance</string>
+    <string name="appearance_done">Done</string>
+
+    <!-- Section label above Auto / Dark / Light. The second form is shown while Auto is selected. -->
+    <string name="appearance_theme">theme</string>
+    <string name="appearance_theme_follows">theme · follows Android</string>
+    <string name="appearance_theme_auto">Auto</string>
+    <string name="appearance_theme_dark">Dark</string>
+    <string name="appearance_theme_light">Light</string>
+
+    <!-- Section label above the palette swatches. The second form is shown in wallpaper mode. -->
+    <string name="appearance_palette">palette</string>
+    <string name="appearance_palette_wallpaper">palette · accent from wallpaper</string>
+
+    <!-- Wallpaper-mode switch and its subtitle. -->
+    <string name="appearance_wallpaper">Show wallpaper</string>
+    <string name="appearance_wallpaper_subtitle">Blurred behind Reach, accent picked from it</string>
+
+    <!-- Section label above Left / Right: which side the intent words, fan and letter rail hug. -->
+    <string name="appearance_thumb_side">thumb side</string>
+    <string name="appearance_thumb_left">Left</string>
+    <string name="appearance_thumb_right">Right</string>
+</resources>

@@ -28,6 +28,11 @@ import com.baklavapp.reachlauncher.core.model.PaletteId
  * @property dim intent words that are *inactive* while the press-slide-release fan is open:
  *   mix(bg, fg, 0.20). **Not** text-safe (~1.5–1.9:1): allowed only for text of a
  *   temporarily inactive control, which WCAG 1.4.3 exempts. Never for readable content.
+ * @property wallpaperMode the wallpaper shows through the window (spec §6.9). The root
+ *   surface then paints [scrim] instead of [bg], and full-screen surfaces paint [backdrop]
+ *   (transparent) so the scrim is applied exactly once. 14–18 % of the wallpaper still shows
+ *   through the scrim (fully when blur is off), so text tokens are re-checked against the
+ *   worst case ([wallpaperWorstBackground]) and nudged if needed (D65).
  */
 @Immutable
 data class ReachColors(
@@ -48,14 +53,57 @@ data class ReachColors(
     val soft: Color,
     val groupDim: Color,
     val dim: Color,
+    val wallpaperMode: Boolean = false,
 ) {
+    /** What the root surface paints: the opaque [bg], or the [scrim] over the wallpaper. */
+    val root: Color get() = if (wallpaperMode) scrim else bg
+
+    /**
+     * What a full-screen surface drawn *over* the root (Search, All Apps) paints: [bg]
+     * normally, transparent in wallpaper mode so the root's scrim isn't stacked twice.
+     */
+    val backdrop: Color get() = if (wallpaperMode) Color.Transparent else bg
+
     companion object {
         /** Opacity of the wallpaper-mode scrim (spec §6.9). */
         const val SCRIM_ALPHA_DARK = 0.82f
         const val SCRIM_ALPHA_LIGHT = 0.86f
 
+        /**
+         * The colour text actually sits on in wallpaper mode, in the worst case: the scrim
+         * composited over a wallpaper of the *opposite* extreme (pure white behind a dark
+         * scrim, pure black behind a light one). Any real wallpaper gives a colour between
+         * this and [bg], so text that passes here passes everywhere.
+         */
+        fun wallpaperWorstBackground(
+            bg: Color,
+            isDark: Boolean,
+        ): Color = mix(ColorMath.extremeFor(bg), bg, if (isDark) SCRIM_ALPHA_DARK else SCRIM_ALPHA_LIGHT)
+
         /** Derives the full token set from a palette's base colours. */
         fun from(
+            base: PaletteColors,
+            isDark: Boolean,
+            wallpaperMode: Boolean = false,
+        ): ReachColors {
+            val tokens = opaque(base, isDark)
+            if (!wallpaperMode) return tokens
+            // Text tokens drawn straight on the root must stay readable over any wallpaper.
+            // (Text on accent fills or on opaque surfaces doesn't see the wallpaper.)
+            val worst = wallpaperWorstBackground(base.bg, isDark)
+
+            fun Color.safe() = ColorMath.ensureContrast(this, worst)
+            return tokens.copy(
+                wallpaperMode = true,
+                fg = tokens.fg.safe(),
+                muted = tokens.muted.safe(),
+                accentInk = tokens.accentInk.safe(),
+                soft = tokens.soft.safe(),
+                groupDim = tokens.groupDim.safe(),
+            )
+        }
+
+        private fun opaque(
             base: PaletteColors,
             isDark: Boolean,
         ): ReachColors =

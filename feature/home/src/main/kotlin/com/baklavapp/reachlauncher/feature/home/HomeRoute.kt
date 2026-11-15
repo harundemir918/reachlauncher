@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -46,7 +47,8 @@ import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDim
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.feature.allapps.AllAppsRoute
-import com.baklavapp.reachlauncher.feature.home.ui.AppearancePlaceholderSheet
+import com.baklavapp.reachlauncher.feature.appearance.AppearanceRoute
+import com.baklavapp.reachlauncher.feature.home.ui.AppMenuCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.FanCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.HomeWithFan
 import com.baklavapp.reachlauncher.feature.home.ui.IntentDetailScreen
@@ -100,8 +102,10 @@ private const val SLIDE_FRACTION = 12
  *
  * @param searchContent the Search surface; defaults to `:feature:search`'s [SearchRoute].
  * @param allAppsContent the All Apps surface; defaults to `:feature:allapps`'s [AllAppsRoute].
- *   Both are slots (≈ passing a `Widget` builder in Flutter) so tests can render Home without
- *   Hilt: the real routes create their ViewModels with `hiltViewModel()`.
+ * @param appearanceContent the Appearance sheet drawn over Home; defaults to
+ *   `:feature:appearance`'s [AppearanceRoute].
+ *   All three are slots (≈ passing a `Widget` builder in Flutter) so tests can render Home
+ *   without Hilt: the real routes create their ViewModels with `hiltViewModel()`.
  */
 @Composable
 fun HomeRoute(
@@ -109,6 +113,7 @@ fun HomeRoute(
     modifier: Modifier = Modifier,
     searchContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { SearchRoute(it.onClose, it.onOpenAppearance) },
     allAppsContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { AllAppsRoute(it.onClose, it.onOpenSearch) },
+    appearanceContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { AppearanceRoute(it.onClose) },
 ) {
     // Two separate subscriptions on purpose: the surface is always current (it has no
     // upstream to restart after WhileSubscribed's timeout), so the first frame after Home is
@@ -151,8 +156,15 @@ fun HomeRoute(
     }
     BackHandler(enabled = true) { viewModel.onBack() }
 
-    Box(modifier = modifier.fillMaxSize().background(ReachTheme.colors.bg)) {
-        HomeSurfaces(HomeFrame(surface, state), viewModel, scrollToTopRequests, searchContent, allAppsContent)
+    // root: the opaque bg, or in wallpaper mode the 82/86 % scrim over the wallpaper — painted
+    // once here; every surface above paints `backdrop` (transparent in wallpaper mode).
+    Box(modifier = modifier.fillMaxSize().background(ReachTheme.colors.root)) {
+        HomeSurfaces(
+            HomeFrame(surface, state),
+            viewModel,
+            scrollToTopRequests,
+            SurfaceSlots(searchContent, allAppsContent, appearanceContent),
+        )
         failure?.let { LaunchFailedMessage(it.label, Modifier.align(Alignment.BottomCenter)) }
     }
 }
@@ -172,13 +184,19 @@ private data class HomeFrame(
     val state: HomeUiState,
 )
 
+/** The feature surfaces [HomeRoute] hosts, bundled so [HomeSurfaces] takes one parameter. */
+private class SurfaceSlots(
+    val search: @Composable (SurfaceCallbacks) -> Unit,
+    val allApps: @Composable (SurfaceCallbacks) -> Unit,
+    val appearance: @Composable (SurfaceCallbacks) -> Unit,
+)
+
 @Composable
 private fun HomeSurfaces(
     frame: HomeFrame,
     viewModel: HomeViewModel,
     scrollToTopRequests: Int,
-    searchContent: @Composable (SurfaceCallbacks) -> Unit,
-    allAppsContent: @Composable (SurfaceCallbacks) -> Unit,
+    slots: SurfaceSlots,
 ) {
     val reducedMotion = rememberReducedMotion()
     val surfaceCallbacks =
@@ -202,14 +220,23 @@ private fun HomeSurfaces(
         remember(viewModel) {
             FanCallbacks(viewModel::onFanOpen, viewModel::onFanHighlight, viewModel::onFanRelease, viewModel::onFanCancel)
         }
+    val appMenuCallbacks =
+        remember(viewModel) {
+            AppMenuCallbacks(viewModel::openAppInfo, viewModel::moveToIntent, viewModel::hideApp, viewModel::uninstall)
+        }
     // targetState is the whole frame, so an exiting surface keeps rendering the snapshot it
     // was showing (e.g. the detail list) while it fades out. contentKey decides when a
     // transition runs: switching intents via the chips updates detail in place, and the
     // Appearance sheet opens *over* Home, so both share Home's key.
+    val wallpaperMode = ReachTheme.colors.wallpaperMode
+    val sheetOpen = frame.surface == HomeSurface.Appearance
     AnimatedContent(
         targetState = frame,
+        // While the Appearance sheet is open, Home behind it is dimmed and out of reach:
+        // hide it from TalkBack too, so swipe navigation stays inside the sheet (modal).
+        modifier = if (sheetOpen) Modifier.clearAndSetSemantics { } else Modifier,
         contentKey = { it.surface.contentKey() },
-        transitionSpec = { surfaceTransition(reducedMotion) },
+        transitionSpec = { surfaceTransition(reducedMotion, wallpaperMode) },
         label = "surface",
     ) { shown ->
         val state = shown.state
@@ -241,25 +268,27 @@ private fun HomeSurfaces(
                     onIntentSelected = viewModel::onIntentSelected,
                     media = system.media,
                     mediaCallbacks = mediaCallbacks,
+                    appMenu = appMenuCallbacks,
                 )
             }
 
             HomeSurface.Search -> {
-                searchContent(surfaceCallbacks)
+                slots.search(surfaceCallbacks)
             }
 
             HomeSurface.AllApps -> {
-                allAppsContent(surfaceCallbacks)
+                slots.allApps(surfaceCallbacks)
             }
         }
     }
+    // The sheet slides up over Home, which stays visible (and re-themes live) above it.
     AnimatedVisibility(
-        visible = frame.surface == HomeSurface.Appearance,
+        visible = sheetOpen,
         enter = if (reducedMotion) fadeIn() else fadeIn() + slideInVertically { it / 2 },
         exit = if (reducedMotion) fadeOut() else fadeOut() + slideOutVertically { it / 2 },
         label = "appearance",
     ) {
-        AppearancePlaceholderSheet(onClose = viewModel::onBack)
+        slots.appearance(surfaceCallbacks)
     }
 }
 
@@ -276,13 +305,29 @@ private fun HomeSurface.contentKey(): String =
  * A short fade with a slight slide in the gesture's direction (Search from above, All Apps
  * and detail from below). With "Remove animations" on, only a cross-fade remains: what
  * moves changes, not just how fast (spec §6.10).
+ *
+ * In wallpaper mode surfaces paint a transparent `backdrop`, so during a cross-fade the old
+ * and new text would be drawn on top of each other with nothing opaque between them. There
+ * the new surface fades in only after the old one has faded out (D65).
  */
-private fun AnimatedContentTransitionScope<HomeFrame>.surfaceTransition(reducedMotion: Boolean): ContentTransform {
-    val enterFade = fadeIn(tween(ENTER_MILLIS))
+private fun AnimatedContentTransitionScope<HomeFrame>.surfaceTransition(
+    reducedMotion: Boolean,
+    wallpaperMode: Boolean,
+): ContentTransform {
+    val delay = if (wallpaperMode) EXIT_MILLIS else 0
+    val enterFade = fadeIn(tween(ENTER_MILLIS, delayMillis = delay))
     val exitFade = fadeOut(tween(EXIT_MILLIS))
     if (reducedMotion) return enterFade togetherWith exitFade
     val fromAbove = targetState.surface == HomeSurface.Search
-    val slide = slideInVertically(tween(ENTER_MILLIS)) { height -> if (fromAbove) -height / SLIDE_FRACTION else height / SLIDE_FRACTION }
+    val slide =
+        slideInVertically(tween(ENTER_MILLIS, delayMillis = delay)) { height ->
+            if (fromAbove) {
+                -height / SLIDE_FRACTION
+            } else {
+                height /
+                    SLIDE_FRACTION
+            }
+        }
     return (enterFade + slide) togetherWith exitFade
 }
 

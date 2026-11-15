@@ -54,9 +54,3 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
-
-// Gradle 9 fails a test task that finds no tests. This module gets its first tests in a
-// later milestone; remove this block then.
-tasks.withType<Test>().configureEach {
-    failOnNoDiscoveredTests = false
-}

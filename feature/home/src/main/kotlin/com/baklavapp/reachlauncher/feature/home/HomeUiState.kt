@@ -92,13 +92,20 @@ data class FanState(
 }
 
 /**
- * The theme choice the root `ReachTheme` needs — a small, separate state so the theme root
- * only recomposes when these two values change.
+ * The theme choice the root `ReachTheme` and the window need — a small, separate state so
+ * the theme root only recomposes when these values change.
+ *
+ * @property showWallpaper wallpaper mode (spec §6.9): the window shows the wallpaper and Home
+ *   paints the scrim instead of its opaque bg.
+ * @property wallpaperColor the wallpaper's primary colour as ARGB, only while
+ *   [showWallpaper] is on and the system knows it; the accent is derived from it.
  */
 @Immutable
 data class HomeTheme(
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val palette: PaletteId = PaletteId.DEFAULT,
+    val showWallpaper: Boolean = false,
+    val wallpaperColor: Int? = null,
 )
 
 /**

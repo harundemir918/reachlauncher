@@ -32,10 +32,8 @@
     <string name="home_detail_shortcuts">app shortcuts</string>
     <string name="home_detail_empty">No apps here yet.</string>
 
-    <!-- Temporary surfaces until their real screens land. -->
-    <string name="home_appearance_title">Appearance</string>
-    <string name="home_appearance_placeholder">Theme, palette and thumb side arrive in M4.</string>
-    <string name="home_done">Done</string>
+    <!-- Wallpaper mode: tag after the date line, "SUN 08 NOV · ACCENT FROM WALLPAPER" (shown upper-cased in mono). -->
+    <string name="home_accent_from_wallpaper">accent from wallpaper</string>
 
     <!-- Press-slide-release: hint shown in the search pill's place while the fan is open (shown upper-cased in mono). -->
     <string name="home_fan_hint">release to open · slide off to cancel</string>

@@ -36,6 +36,15 @@
     <string name="ds_media_playing">çalıyor · %1$s</string>
     <string name="ds_media_paused">duraklatıldı · %1$s</string>
 
+    <string name="ds_app_menu_open">Uygulama seçenekleri</string>
+    <string name="ds_app_menu_app_info">Uygulama bilgisi</string>
+    <string name="ds_app_menu_move">Amaca taşı…</string>
+    <string name="ds_app_menu_hide">Gizle</string>
+    <string name="ds_app_menu_unhide">Göster</string>
+    <string name="ds_app_menu_uninstall">Kaldır</string>
+    <string name="ds_app_menu_move_label">taşı</string>
+    <string name="ds_app_menu_close">Kapat</string>
+
     <string name="ds_palette_lime">Limon</string>
     <string name="ds_palette_paper_ink">Kâğıt ve Mürekkep</string>
     <string name="ds_palette_night_tide">Gece Gelgiti</string>

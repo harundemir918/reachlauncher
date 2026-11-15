@@ -24,8 +24,8 @@ import com.baklavapp.reachlauncher.core.system.roles.RoleHomeRoleSource
 import com.baklavapp.reachlauncher.core.system.roles.TelephonyDefaultAppsSource
 import com.baklavapp.reachlauncher.core.system.shortcuts.LauncherAppsShortcutSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableScreenActionsSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableWallpaperColorSource
 import com.baklavapp.reachlauncher.core.system.usage.UsageStatsManagerSource
+import com.baklavapp.reachlauncher.core.system.wallpaper.WallpaperManagerColorSource
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -97,10 +97,10 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindContactsSource(impl: ContactsProviderSource): ContactsSource
 
-    /** M4 placeholder. */
+    /** `WallpaperManager.getWallpaperColors`, for wallpaper mode's accent (no permission). */
     @Binds
     @Singleton
-    abstract fun bindWallpaperColorSource(impl: UnavailableWallpaperColorSource): WallpaperColorSource
+    abstract fun bindWallpaperColorSource(impl: WallpaperManagerColorSource): WallpaperColorSource
 
     /** M5 placeholder. */
     @Binds

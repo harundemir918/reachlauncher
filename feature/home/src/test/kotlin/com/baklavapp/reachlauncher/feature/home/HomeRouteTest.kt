@@ -1,9 +1,11 @@
 package com.baklavapp.reachlauncher.feature.home
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -58,6 +60,7 @@ class HomeRouteTest {
     private companion object {
         const val SEARCH_STUB = "search surface"
         const val ALL_APPS_STUB = "all apps surface"
+        const val APPEARANCE_STUB = "appearance sheet"
     }
 
     private fun setContent(
@@ -67,11 +70,12 @@ class HomeRouteTest {
         composeRule.setContent {
             WithFontScale(fontScale) {
                 ReachTheme {
-                    // Stand-ins for the real Search/All Apps routes, which need Hilt.
+                    // Stand-ins for the real Search/All Apps/Appearance routes, which need Hilt.
                     HomeRoute(
                         fixture.viewModel,
                         searchContent = { Text(SEARCH_STUB) },
                         allAppsContent = { Text(ALL_APPS_STUB) },
+                        appearanceContent = { Text(APPEARANCE_STUB, Modifier.clickable(onClick = it.onClose)) },
                     )
                 }
             }
@@ -148,10 +152,45 @@ class HomeRouteTest {
         clock.assertIsDisplayed()
         invokeCustomAction(clock, "Appearance")
         assertThat(fixture.surface).isEqualTo(HomeSurface.Appearance)
-        composeRule.onNodeWithText("Theme, palette and thumb side arrive in M4.").assertIsDisplayed()
+        composeRule.onNodeWithText(APPEARANCE_STUB).assertIsDisplayed()
 
-        composeRule.onNodeWithContentDescription("Done").performClick()
+        composeRule.onNodeWithText(APPEARANCE_STUB).performClick()
         assertThat(fixture.surface).isEqualTo(HomeSurface.Home)
+    }
+
+    @Test
+    fun longPressOnAnAppRowOpensTheMenuAndHideRemovesIt() {
+        val fixture = HomeFixture(sampleApps)
+        setContent(fixture)
+        word("Talk").performClick()
+
+        composeRule.onNodeWithContentDescription("Messages").performTouchInput { longClick(durationMillis = LONG_PRESS_MILLIS) }
+        composeRule.onNodeWithContentDescription("Hide").performClick()
+
+        assertThat(
+            fixture.catalog.state.value
+                .first { it.label == "Messages" }
+                .isHidden,
+        ).isTrue()
+        composeRule.onNodeWithContentDescription("Messages").assertDoesNotExist()
+        assertThat(fixture.surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.TALK))
+    }
+
+    @Test
+    fun appRowMoveToIsATalkBackActionThatOpensTheIntentChips() {
+        val fixture = HomeFixture(sampleApps)
+        setContent(fixture)
+        word("Talk").performClick()
+
+        invokeCustomAction(composeRule.onNodeWithContentDescription("Phone"), "Move to intent…")
+        composeRule.onNodeWithText("Tools").performClick()
+
+        assertThat(
+            fixture.catalog.state.value
+                .first { it.label == "Phone" }
+                .intent,
+        ).isEqualTo(ReachIntent.TOOLS)
+        composeRule.onNodeWithContentDescription("Phone").assertDoesNotExist()
     }
 
     @Test

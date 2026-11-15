@@ -95,7 +95,7 @@ Each milestone ends with: `./gradlew build test lint` green at the root, docs up
 | **M1 Core launcher** | Wave 1: **catalog-agent** (`:core:data` impl: Room, categoriser, catalog repo, launch history, predictions; `:core:system`: LauncherApps source + callback, launcher with clip-reveal, default dialer/SMS roles) ∥ **designsystem-agent** (components: Monogram, AppRow, Pill, IntentWordRow, SectionLabel, NowTile). Wave 2: **home-agent** (HomeViewModel state machine, Home, intent detail, Home/Back behaviour). Then docs-agent, reviewer-agent. |
 | **M2 Speed** | **search-agent** (`:feature:search`, plus the real `ShortcutSource` and `ContactsSource` in `:core:system`, which search needs) ∥ **allapps-agent** (`:feature:allapps`) ∥ **home-agent** (press-slide-release, haptics). docs-agent (GESTURES.md), reviewer. |
 | **M3 System features** | Wave 1: **system-agent** (notification listener, media sessions, usage stats, calendar, default-home role, permission state). Wave 2: **home-agent** (badges, Listen row + Now Playing card, shortcut pills, onboarding, permissions UX). docs-agent (ANDROID_APIS.md), reviewer. |
-| **M4 Personalisation** | **appearance-agent** (`:feature:appearance`, DataStore settings, Auto theme, thumb side, move/hide UI) ∥ **system-agent** (wallpaper colours, window theme/blur). docs, reviewer. |
+| **M4 Personalisation** (done) | **appearance-agent** (`:feature:appearance`, DataStore settings, Auto theme, thumb side, move/hide UI) ∥ **system-agent** (wallpaper colours, window theme/blur). docs, reviewer. |
 | **M5 Polish** | **system-agent** (accessibility service, work profile, private space) ∥ **a11y pass agent** (TalkBack, 200% font, reduced motion, Turkish strings) ∥ **perf agent** (Baseline Profile, release config). Final docs pass, final review, final report. |
 
 ### Carried-over notes (from the M0 review)
@@ -111,10 +111,9 @@ Each milestone ends with: `./gradlew build test lint` green at the root, docs up
   `Modifier.trackLaunchOrigin()`.
 - **M3:** Home context line slot (calendar) and the Now Playing card slot are marked in
   `HomeScreen` / `IntentDetailScreen`.
-- **M4:** replace `AppearancePlaceholderSheet`; app-row long-press "Move to… / Hide" (TODO in
-  `IntentDetailScreen`); avoid the one-frame theme flash for users who forced Light/Dark
-  (settings arrive from DataStore a few ms after the first frame — needs a synchronous
-  settings snapshot); consider a `LaunchResult` type (D32).
+- ~~M4: replace `AppearancePlaceholderSheet`; app-row long-press "Move to… / Hide"; avoid the one-frame
+  theme flash~~ — done in M4 (D60, D63, D64).
+- **Later:** consider a `LaunchResult` type (D32).
 - **Later (cleanup):** intent-word strings are duplicated in `:feature:home` and `:feature:allapps`;
   move them (with the launch-origin helpers) into `:core:designsystem`. Extract a shared
   clip-reveal helper in `:core:system` (shortcut source copies `animationFor`).

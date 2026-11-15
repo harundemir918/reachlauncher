@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appearance_title">Görünüm</string>
+    <string name="appearance_done">Tamam</string>
+
+    <string name="appearance_theme">tema</string>
+    <string name="appearance_theme_follows">tema · Android\'i izler</string>
+    <string name="appearance_theme_auto">Otomatik</string>
+    <string name="appearance_theme_dark">Koyu</string>
+    <string name="appearance_theme_light">Açık</string>
+
+    <string name="appearance_palette">palet</string>
+    <string name="appearance_palette_wallpaper">palet · vurgu duvar kağıdından</string>
+
+    <string name="appearance_wallpaper">Duvar kağıdını göster</string>
+    <string name="appearance_wallpaper_subtitle">Reach\'in arkasında bulanık, vurgu rengi ondan seçilir</string>
+
+    <string name="appearance_thumb_side">başparmak tarafı</string>
+    <string name="appearance_thumb_left">Sol</string>
+    <string name="appearance_thumb_right">Sağ</string>
+</resources>

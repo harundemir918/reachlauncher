@@ -52,6 +52,18 @@
     <string name="ds_media_playing">playing · %1$s</string>
     <string name="ds_media_paused">paused · %1$s</string>
 
+    <!-- App long-press menu (AppActionsMenu), shared by All Apps and intent detail.
+         ds_app_menu_open is the long-press verb TalkBack announces: "double-tap and hold to app options". -->
+    <string name="ds_app_menu_open">App options</string>
+    <string name="ds_app_menu_app_info">App info</string>
+    <string name="ds_app_menu_move">Move to intent…</string>
+    <string name="ds_app_menu_hide">Hide</string>
+    <string name="ds_app_menu_unhide">Unhide</string>
+    <string name="ds_app_menu_uninstall">Uninstall</string>
+    <!-- Mono label above the intent chips in the menu. -->
+    <string name="ds_app_menu_move_label">move to</string>
+    <string name="ds_app_menu_close">Close</string>
+
     <!-- Palette names (PaletteNames.kt): Appearance swatches and Search's "Switch to …" command. -->
     <string name="ds_palette_lime">Lime</string>
     <string name="ds_palette_paper_ink">Paper &amp; Ink</string>

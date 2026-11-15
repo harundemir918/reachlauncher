@@ -1,15 +1,16 @@
 package com.baklavapp.reachlauncher
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
-import com.baklavapp.reachlauncher.core.model.ThemeMode
+import com.baklavapp.reachlauncher.core.designsystem.theme.resolveDark
 import com.baklavapp.reachlauncher.feature.home.HomeRoute
+import com.baklavapp.reachlauncher.feature.home.HomeTheme
 import com.baklavapp.reachlauncher.feature.home.HomeViewModel
 
 /**
@@ -23,33 +24,37 @@ import com.baklavapp.reachlauncher.feature.home.HomeViewModel
  * when the catalog and the default-home role must be re-read (`HomeViewModel.onResume`).
  * Compose has no `didChangeAppLifecycleState`; this effect is its lifecycle-aware equivalent.
  *
- * @param onDarkSystemBars called with the *resolved* dark/light theme (after applying a
- *   forced Dark/Light choice), so the Activity can pick status/navigation bar icon colours
- *   that stay visible.
+ * @param initialTheme the settings snapshot `MainActivity` read synchronously before the
+ *   first frame; used until the ViewModel's own theme state has answered (D63).
+ * @param onWindowAppearance called with the *resolved* theme (after applying a forced
+ *   Dark/Light choice) and wallpaper mode, so the Activity can style the window and the
+ *   status/navigation bar icons to match.
  */
 @Composable
 fun ReachApp(
     viewModel: HomeViewModel,
-    onDarkSystemBars: (isDark: Boolean) -> Unit,
+    initialTheme: HomeTheme,
+    onWindowAppearance: (WindowAppearance) -> Unit,
 ) {
     // Only the theme choice, not the whole Home state: a catalog or prediction update must
     // not recompose the theme root (≈ `BlocSelector` instead of `BlocBuilder`).
-    val theme by viewModel.theme.collectAsStateWithLifecycle()
+    val loaded by viewModel.theme.collectAsStateWithLifecycle()
+    val theme = loaded ?: initialTheme
     LifecycleResumeEffect(viewModel) {
         viewModel.onResume()
         onPauseOrDispose { }
     }
-    val isDark =
-        when (theme.themeMode) {
-            ThemeMode.AUTO -> isSystemInDarkTheme()
-            ThemeMode.DARK -> true
-            ThemeMode.LIGHT -> false
-        }
-    val currentOnDarkSystemBars by rememberUpdatedState(onDarkSystemBars)
-    LaunchedEffect(isDark) { currentOnDarkSystemBars(isDark) }
+    val isDark = resolveDark(theme.themeMode)
+    val appearance = WindowAppearance(isDark, theme.palette, theme.showWallpaper)
+    val currentOnWindowAppearance by rememberUpdatedState(onWindowAppearance)
+    LaunchedEffect(appearance) { currentOnWindowAppearance(appearance) }
 
-    // Wallpaper accent (spec §6.9) is passed here from M4 on.
-    ReachTheme(palette = theme.palette, themeMode = theme.themeMode) {
+    ReachTheme(
+        palette = theme.palette,
+        themeMode = theme.themeMode,
+        wallpaperAccent = theme.wallpaperColor?.takeIf { theme.showWallpaper }?.let { Color(it) },
+        wallpaperMode = theme.showWallpaper,
+    ) {
         HomeRoute(viewModel)
     }
 }
