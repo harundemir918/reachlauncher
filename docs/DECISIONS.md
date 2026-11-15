@@ -370,3 +370,45 @@ from TalkBack — not a `Dialog`, to fit the single-surface model (D28). Every m
 also a direct custom accessibility action on the app name. Hidden apps appear in a final
 dimmed "Hidden" group (not on the rail) so they can be un-hidden. Only
 `LaunchResult.LAUNCHED` closes All Apps.
+
+## D43 — Search ranking (M2)
+**Decision.** Matching is folded (`TextFolding`) and punctuation-collapsed. Tiers: label
+prefix 2.25 > word prefix 2.0 > substring 1.0. Launch frequency adds at most 0.5
+(`0.5 · min(1, ln(1+n) / ln 51)`, saturating at 50 launches), so it reorders within a tier
+but never lifts a substring match above a word-prefix match. Ties: apps > shortcuts >
+contacts > commands > alphabetical. At most 6 rows (≤ 3 shortcuts, ≤ 3 contacts), then
+"Search the web for '<q>'" always last. Empty query: 4 predictions.
+
+## D44 — Commands: ≥ 2 letters, bilingual keywords in code **[deviation]** (M2)
+**Context.** §6.6 only requires ≥ 2 typed letters for palette commands.
+**Decision.** *All* commands need ≥ 2 letters and match word prefixes, so a single "a" doesn't
+flood the list with commands. Keywords live in code (`CommandKeywords`) in English **and**
+Turkish ("theme"/"tema", "appearance"/"görünüm", "palette"/"palet", "dark"/"koyu",
+"light"/"açık") and match whatever the UI language — resources only expose the current
+language. Display text is localised from resources. Palette display names live in
+`:core:designsystem` `PaletteNames.kt` (reused by Appearance in M4); the keyword list must stay
+in sync with them.
+
+## D45 — Contacts in search (M2)
+**Decision.** `READ_CONTACTS` (runtime) is requested only from an "Include contacts" row shown
+after ≥ 2 typed letters, with a one-line rationale. Any denial hides the row for the session
+(not persisted; it may reappear once after a process restart — a persisted flag would need a
+new setting). Lookups use `Contacts.CONTENT_FILTER_URI` with a limit, then one Phone query
+ordered `IS_SUPER_PRIMARY DESC, IS_PRIMARY DESC`; the ViewModel debounces 150 ms, keeps only
+the latest lookup (`mapLatest`) and re-matches names with `TextFolding`. Tapping a contact
+opens inline Call / Message / Contact-card pills. Work-profile contacts are left for M5.
+
+## D46 — Search query lives in the UI (M2)
+**Decision.** The text field's text is UI state (`rememberSaveable`) mirrored to the
+Activity-scoped `SearchViewModel`, so typing never waits on ranking. `onOpened` / `onClosed`
+reset per-opening state. Enter re-ranks the current query directly if the state lags a
+keystroke behind. Search adds no `BackHandler`; Home's closes it.
+
+## D47 — Shortcut source re-reads (M2)
+**Decision.** `LauncherAppsShortcutSource` re-reads everything on collection start,
+`onShortcutsChanged`, package callbacks and profile broadcasts. It skips locked private
+spaces, returns nothing for locked/paused profiles (the system throws
+`IllegalStateException`), drops disabled or unlabelled shortcuts, and prefers the short
+label. There is no broadcast when Reach becomes default home, so the permission change is
+noticed on the next collection or callback. Turkish palette names ("Kâğıt ve Mürekkep"…)
+await the owner's review.
