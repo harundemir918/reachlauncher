@@ -127,4 +127,6 @@ class FakeSettingsRepository(
     override suspend fun setDoubleTapToLock(enabled: Boolean) = state.update { it.copy(doubleTapToLock = enabled) }
 
     override suspend fun setHiddenApiShadeFallback(enabled: Boolean) = state.update { it.copy(hiddenApiShadeFallback = enabled) }
+
+    override suspend fun dismissTip(tipKey: String) = state.update { it.copy(dismissedTips = it.dismissedTips + tipKey) }
 }

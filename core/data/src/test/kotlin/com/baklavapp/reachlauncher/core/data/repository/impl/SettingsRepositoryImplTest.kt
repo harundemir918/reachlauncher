@@ -5,6 +5,7 @@ package com.baklavapp.reachlauncher.core.data.repository.impl
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import app.cash.turbine.test
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.PaletteId
@@ -60,6 +61,19 @@ class SettingsRepositoryImplTest {
                     .isEqualTo(AppearanceSettings(ThemeMode.DARK, PaletteId.DUSK, true, ThumbSide.RIGHT, true, true))
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+
+    @Test
+    fun `dismissed tips accumulate and survive a new repository on the same file`() =
+        runTest {
+            val file = File(tmp.root, "tips.preferences_pb")
+            val store = dataStore(file)
+            val repo = SettingsRepositoryImpl(store)
+            repo.dismissTip("notification_access")
+            repo.dismissTip("calendar")
+            repo.dismissTip("calendar")
+            assertThat(repo.settings.first().dismissedTips).containsExactly("notification_access", "calendar")
+            assertThat(store.data.first()[stringSetPreferencesKey("dismissed_tips")]).containsExactly("notification_access", "calendar")
         }
 
     @Test

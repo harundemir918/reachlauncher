@@ -11,6 +11,7 @@ import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.feature.home.FanState
+import com.baklavapp.reachlauncher.feature.home.HomeSystemUi
 import com.baklavapp.reachlauncher.feature.home.HomeUiState
 
 /*
@@ -46,6 +47,9 @@ internal fun HomeWithFan(
     onAppearance: () -> Unit,
     scrollToTopRequests: Int,
     modifier: Modifier = Modifier,
+    system: HomeSystemUi = HomeSystemUi(),
+    mediaCallbacks: MediaCallbacks = MediaCallbacks.None,
+    onboardingCallbacks: OnboardingCallbacks = OnboardingCallbacks.None,
 ) {
     val gesture =
         rememberPressSlideReleaseState(
@@ -73,6 +77,9 @@ internal fun HomeWithFan(
             scrollToTopRequests = scrollToTopRequests,
             wordModifier = { intent -> Modifier.pressSlideRelease(intent, gesture) },
             heldIntent = openFan?.intent,
+            system = system,
+            mediaCallbacks = mediaCallbacks,
+            onboardingCallbacks = onboardingCallbacks,
         )
         FanOverlay(fan = openFan, state = gesture, thumbSide = state.thumbSide, modifier = Modifier.fillMaxSize())
     }

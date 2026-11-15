@@ -107,4 +107,10 @@ interface SettingsRepository {
 
     /** Feature flag for the best-effort hidden-API notification-shade fallback. */
     suspend fun setHiddenApiShadeFallback(enabled: Boolean)
+
+    /**
+     * Remembers that the user dismissed the onboarding/permission card [tipKey] ("Not now"),
+     * so it is never shown again ([AppearanceSettings.dismissedTips]). Idempotent.
+     */
+    suspend fun dismissTip(tipKey: String)
 }

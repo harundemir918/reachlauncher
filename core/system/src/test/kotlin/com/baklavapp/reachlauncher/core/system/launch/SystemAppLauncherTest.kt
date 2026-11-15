@@ -18,6 +18,7 @@ import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.system.ActivityTracker
+import com.baklavapp.reachlauncher.core.system.access.AccessRechecks
 import com.baklavapp.reachlauncher.core.system.profile.Profiles
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -30,7 +31,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 class SystemAppLauncherTest {
     private val app: Application = ApplicationProvider.getApplicationContext()
-    private val tracker = ActivityTracker()
+    private val tracker = ActivityTracker(AccessRechecks())
     private val launcher = SystemAppLauncher(app, tracker, Profiles(app))
 
     private fun nextStarted(): Intent = checkNotNull(shadowOf(app).nextStartedActivity) { "no activity started" }
@@ -39,7 +40,8 @@ class SystemAppLauncherTest {
     fun `settings screens map to their system intents`() {
         val expected =
             mapOf(
-                SystemScreen.NOTIFICATION_ACCESS to Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS,
+                // API 30+: straight to Reach's own listener switch (the list is the fallback).
+                SystemScreen.NOTIFICATION_ACCESS to Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS,
                 SystemScreen.USAGE_ACCESS to Settings.ACTION_USAGE_ACCESS_SETTINGS,
                 SystemScreen.ACCESSIBILITY_SERVICE to Settings.ACTION_ACCESSIBILITY_SETTINGS,
             )
@@ -50,6 +52,13 @@ class SystemAppLauncherTest {
             // No Activity is resumed, so the app context needs a new task.
             assertThat(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK).isNotEqualTo(0)
         }
+    }
+
+    @Test
+    fun `notification access names Reach's listener`() {
+        launcher.open(SystemScreen.NOTIFICATION_ACCESS)
+        val component = nextStarted().getStringExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME)
+        assertThat(component).endsWith("notifications.ReachNotificationListenerService")
     }
 
     @Test

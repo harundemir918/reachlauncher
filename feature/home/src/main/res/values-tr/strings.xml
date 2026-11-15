@@ -31,4 +31,34 @@
 
     <!-- Press-slide-release: hint shown in the search pill's place while the fan is open (shown upper-cased in mono). -->
     <string name="home_fan_hint">açmak için bırak · iptal için kaydır</string>
+
+    <!-- Context line under the clock (spec §6.3): the next calendar event. %1$s is a time ("10:30"), %2$s the event title. -->
+    <string name="home_event_today_timed">%1$s · %2$s</string>
+    <string name="home_event_tomorrow_timed">Yarın %1$s · %2$s</string>
+    <!-- All-day events: %1$s is the title. -->
+    <string name="home_event_today_all_day">Bugün · %1$s</string>
+    <string name="home_event_tomorrow_all_day">Yarın · %1$s</string>
+    <!-- TalkBack prefix for the context line. -->
+    <string name="home_event_description">Sıradaki etkinlik: %1$s</string>
+
+    <!-- Now Playing card in Listen (spec §6.4). Mono label, shown upper-cased. -->
+    <string name="home_now_playing">şimdi çalıyor · %1$s</string>
+    <!-- Progress bar value for TalkBack: "3:45 içinde 1:23". -->
+    <string name="home_media_progress">%2$s içinde %1$s</string>
+
+    <!-- Onboarding / permission cards on Home (spec §4, §7). -->
+    <string name="home_card_not_now">Şimdi değil</string>
+    <string name="home_card_not_now_description">Şimdi değil, “%1$s” kartını gizle</string>
+    <string name="home_card_home_title">Reach\'i ana ekranın yap</string>
+    <string name="home_card_home_why">Ana ekran tuşu seni buraya getirsin ve uygulama kısayolları çalışsın.</string>
+    <string name="home_card_home_action">Ana ekran yap</string>
+    <string name="home_card_notifications_title">Okunmamışlar ve müzik kontrolü</string>
+    <string name="home_card_notifications_why">Bildirim erişimi amaçlarda “3 YENİ” ve çalanı gösterir. Hiçbir şey telefonundan çıkmaz.</string>
+    <string name="home_card_notifications_action">Erişime izin ver</string>
+    <string name="home_card_calendar_title">Sıradaki etkinliğin saatin altında</string>
+    <string name="home_card_calendar_why">İsteğe bağlı. Reach yalnızca bugünün ve yarının sıradaki etkinliğini okur.</string>
+    <string name="home_card_calendar_action">Takvime izin ver</string>
+    <string name="home_card_usage_title">Şimdi satırında daha iyi tahminler</string>
+    <string name="home_card_usage_why">İsteğe bağlı. Kullanım erişimi hangi uygulamayı hangi saatte açtığını söyler. Telefonunda kalır.</string>
+    <string name="home_card_usage_action">Kullanım erişimine izin ver</string>
 </resources>

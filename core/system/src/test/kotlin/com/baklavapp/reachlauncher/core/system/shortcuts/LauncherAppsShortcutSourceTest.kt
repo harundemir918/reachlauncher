@@ -10,6 +10,7 @@ import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.system.ActivityTracker
+import com.baklavapp.reachlauncher.core.system.access.AccessRechecks
 import com.baklavapp.reachlauncher.core.system.profile.Profiles
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,7 +35,7 @@ class LauncherAppsShortcutSourceTest {
     private val launcherApps = app.getSystemService(LauncherApps::class.java)
 
     private fun TestScope.source() =
-        LauncherAppsShortcutSource(app, Profiles(app), ActivityTracker(), UnconfinedTestDispatcher(testScheduler))
+        LauncherAppsShortcutSource(app, Profiles(app), ActivityTracker(AccessRechecks()), UnconfinedTestDispatcher(testScheduler))
 
     private fun shortcutInfo(
         id: String,

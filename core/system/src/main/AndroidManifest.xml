@@ -3,7 +3,8 @@
     :core:system's manifest. Library manifests are merged into the app's at build time,
     so permissions and <queries> live next to the code that needs them.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
         Normal (install-time) permission. Apps targeting API 28+ need it to open the
@@ -21,6 +22,25 @@
         sent anywhere (Reach has no network access).
     -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!--
+        Runtime permission, optional. Home's context line shows the next calendar event of
+        today/tomorrow (CalendarProviderSource). Asked for only from a dismissible Home card;
+        denying it hides the line. Events are read on demand, never stored.
+    -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+    <!--
+        Special access, optional ("Usage access" in Settings). Declaring it grants nothing:
+        the user switches Reach on in Settings, which Reach checks through the
+        OPSTR_GET_USAGE_STATS app-op (UsageStatsManagerSource). It blends which apps the user
+        opens at what hour into the Now row. Lint calls it a "protected" (system-only)
+        permission because a plain install never grants it; that's expected for special
+        accesses, hence tools:ignore.
+    -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <!--
         Package visibility (Android 11+): the hand-off targets Reach may start or, later,
@@ -44,5 +64,29 @@
             <data android:mimeType="vnd.android.cursor.item/contact" />
         </intent>
     </queries>
+
+    <application>
+        <!--
+            Notification listener (ReachNotificationListenerService): unread counts for the
+            "N NEW" badges and the key to MediaSessionManager for the media controls. The
+            system binds it from outside Reach's process, so it must be exported; the
+            BIND_NOTIFICATION_LISTENER_SERVICE permission means only the system can bind it.
+            Nothing happens until the user enables "Notification access" for Reach.
+            default_filter_types (API 31+): Reach only counts non-ongoing notifications, so it
+            asks not to receive ongoing ones (music, navigation) at all; the user may change it
+            in Settings.
+        -->
+        <service
+            android:name=".notifications.ReachNotificationListenerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="conversations|alerting|silent" />
+        </service>
+    </application>
 
 </manifest>

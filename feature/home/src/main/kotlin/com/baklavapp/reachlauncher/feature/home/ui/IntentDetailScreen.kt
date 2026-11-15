@@ -38,6 +38,7 @@ import com.baklavapp.reachlauncher.core.designsystem.component.PillButtonStyle
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.feature.home.AppItem
 import com.baklavapp.reachlauncher.feature.home.IntentDetailUi
@@ -45,8 +46,8 @@ import com.baklavapp.reachlauncher.feature.home.R
 import com.baklavapp.reachlauncher.feature.home.ShortcutItem
 
 /*
- * Intent detail (spec §6.4): back header, accent dot + intent word, app shortcuts, the app
- * list and the intent chips.
+ * Intent detail (spec §6.4): back header, accent dot + intent word, app shortcuts, Listen's
+ * Now Playing card, the app list and the intent chips.
  *
  * Flutter analogy: same layout trick as Home — a `SingleChildScrollView` with a min-height
  * child and `spaceBetween`, so the app list and chips sit at the bottom (in thumb reach)
@@ -67,7 +68,11 @@ private val ChipsTopGap = 16.dp
 private val ChipSpacing = 6.dp
 private val EmptyPadding = 14.dp
 
-/** Stateless intent-detail content for [detail]. */
+/**
+ * Stateless intent-detail content for [detail].
+ *
+ * @param media the active media session; shown as the Now Playing card on Listen only.
+ */
 @Composable
 internal fun IntentDetailScreen(
     detail: IntentDetailUi,
@@ -76,6 +81,8 @@ internal fun IntentDetailScreen(
     onLaunchShortcut: (ShortcutItem, LaunchOrigin?) -> Unit,
     onIntentSelected: (ReachIntent) -> Unit,
     modifier: Modifier = Modifier,
+    media: MediaState? = null,
+    mediaCallbacks: MediaCallbacks = MediaCallbacks.None,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Column(
@@ -92,7 +99,9 @@ internal fun IntentDetailScreen(
                 if (detail.shortcuts.isNotEmpty()) {
                     Shortcuts(detail.shortcuts, onLaunchShortcut, Modifier.padding(top = SectionTopGap))
                 }
-                // Listen's Now Playing card (spec §6.4) goes here in M3.
+                if (detail.intent == ReachIntent.LISTEN && media != null) {
+                    NowPlayingCard(media, mediaCallbacks, Modifier.padding(top = SectionTopGap))
+                }
             }
             Column(modifier = Modifier.padding(top = SectionTopGap)) {
                 AppList(detail.apps, onLaunch)

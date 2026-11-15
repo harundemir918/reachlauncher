@@ -3,16 +3,21 @@ package com.baklavapp.reachlauncher.feature.home
 import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
+import com.baklavapp.reachlauncher.core.data.fake.FakeCalendarSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeHomeRoleSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeLaunchHistoryRepository
+import com.baklavapp.reachlauncher.core.data.fake.FakeMediaSessionSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeNotificationCountSource
 import com.baklavapp.reachlauncher.core.data.fake.FakePredictionRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
+import com.baklavapp.reachlauncher.core.data.fake.FakeUsageStatsSource
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.model.AppKey
+import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.CatalogApp
+import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import kotlinx.coroutines.CoroutineDispatcher
@@ -58,21 +63,30 @@ fun app(
  * @param dispatcher where `uiState` is built. `Dispatchers.Main` is the test dispatcher in
  *   ViewModel tests (`Dispatchers.setMain`) and Robolectric's main looper in UI tests, so
  *   state updates stay synchronous/deterministic; production uses `Dispatchers.Default`.
+ * @param onboarding false (the default) starts with every onboarding card already dismissed,
+ *   so tests about other things see Home without a card; onboarding tests pass true.
  */
 class HomeFixture(
     apps: List<CatalogApp> = emptyList(),
     catalogRepository: AppCatalogRepository? = null,
     historyRepository: LaunchHistoryRepository? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.Main,
+    onboarding: Boolean = false,
 ) {
     val catalog = FakeAppCatalogRepository(apps)
     val history = FakeLaunchHistoryRepository()
     val predictions = FakePredictionRepository()
-    val settings = FakeSettingsRepository()
+    val settings =
+        FakeSettingsRepository(
+            AppearanceSettings(dismissedTips = if (onboarding) emptySet() else OnboardingCard.entries.map { it.storageKey }.toSet()),
+        )
     val notifications = FakeNotificationCountSource()
     val shortcuts = FakeShortcutSource()
     val launcher = FakeAppLauncher()
     val homeRole = FakeHomeRoleSource()
+    val media = FakeMediaSessionSource()
+    val calendar = FakeCalendarSource()
+    val usage = FakeUsageStatsSource()
     val clock: Clock = Clock.fixed(Instant.parse("2026-11-08T09:41:00Z"), ZoneOffset.UTC)
 
     /**
@@ -91,13 +105,33 @@ class HomeFixture(
             shortcutSource = shortcuts,
             launchApp = LaunchApp(launcher, shortcuts, historyRepository ?: history, clock, appScope),
             homeRoleSource = homeRole,
+            mediaSessionSource = media,
+            calendarSource = calendar,
+            usageStatsSource = usage,
+            appLauncher = launcher,
             defaultDispatcher = dispatcher,
         )
 
     /** The data state and the active surface together, as `HomeRoute` sees them. */
     val state: HomeUiState get() = viewModel.uiState.value
     val surface: HomeSurface get() = viewModel.surface.value
+
+    /** Media, next event and onboarding card, as `HomeRoute` sees them. */
+    val system: HomeSystemUi get() = viewModel.system.value
 }
+
+/** A playing Spotify session, as the UI tests and ViewModel tests use it. */
+val dailyMix: MediaState =
+    MediaState(
+        title = "Daily Mix 1",
+        artist = "Various",
+        sourcePackage = "com.spotify.music",
+        sourceLabel = "Spotify",
+        isPlaying = true,
+        positionMillis = 60_000,
+        durationMillis = 180_000,
+        positionUpdatedAtMillis = 1_000,
+    )
 
 /** A small catalog spanning several intents, used by the UI tests. */
 val sampleApps: List<CatalogApp> =

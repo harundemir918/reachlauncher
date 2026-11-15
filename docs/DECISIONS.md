@@ -462,3 +462,48 @@ query (parameterised, fails closed), the shortcut source's callback lifecycle, t
 launch goes through `LaunchApp`, and the merged release manifest's permissions
 (`READ_CONTACTS`, `REQUEST_DELETE_PACKAGES`; no `INTERNET`). The process for M3–M5 will be
 agreed with the owner before M3 starts.
+
+## D53 — Access re-check on resume via `AccessRechecks` (M3)
+**Decision.** Special accesses (notification listener, usage access) and runtime permissions
+are granted in Settings, outside the app. `AccessRechecks` is a singleton `StateFlow` counter
+bumped by `ActivityTracker.onActivityResumed`; access-gated sources map it to a fresh read. No
+contract needs a `recheck()` and no screen can forget to call it (`HomeRoleSource.recheck()`
+stays as before). Additive contract changes in M3: `CalendarSource.isPermissionGranted:
+Flow<Boolean>` and `SettingsRepository.dismissTip(key)` + `AppearanceSettings.dismissedTips`.
+
+## D54 — Unread counting (M3)
+**Decision.** A notification counts if it is not ongoing (incl. foreground-service ones), not a
+group summary and not Reach's own. Counts are keyed by `StatusBarNotification.key` (an update
+never counts twice) and grouped per `PackageUser` via the notification's user serial. The hub
+clears on listener disconnect, so badges are never stale; `requestRebind` when access is
+granted but the listener isn't connected. Access is checked with
+`NotificationManager.isNotificationListenerAccessGranted(component)` (exact component).
+
+## D55 — Which media session shows (M3)
+**Decision.** Only sessions with a title that are playing (incl. buffering/connecting/
+seeking/skipping) or paused qualify; playing beats paused, then the system's priority order.
+Progress is extrapolated from `positionUpdatedAtMillis × speed`, ticking once a second only
+while playing and Home is STARTED; with reduced motion the bar steps instead of gliding. The
+Listen row's inline player is hidden while the press-slide-release fan is open.
+
+## D56 — Next calendar event (M3)
+**Decision.** Declined and untitled events are skipped. Order: today's next timed event →
+today's all-day event → tomorrow's first timed event → tomorrow's all-day event. All-day events
+are dated in UTC (as the provider stores them). Re-read on calendar `ACTION_PROVIDER_CHANGED`
+(registered *exported*: the provider's app sends it, not the system; a spoofed broadcast only
+triggers one cheap query), on time/date/zone changes and every minute while collected.
+
+## D57 — Usage-stats buckets (M3)
+**Decision.** Launches come from `UsageStatsManager.queryEvents` `ACTIVITY_RESUMED`
+(`MOVE_TO_FOREGROUND` on API 28); consecutive resumes of the same app count once; Reach's own
+resumes are ignored; hours are local. Access is checked through `AppOpsManager.checkOpNoThrow(
+OPSTR_GET_USAGE_STATS)` (falling back to the permission for `MODE_DEFAULT`).
+`PACKAGE_USAGE_STATS` is declared with `tools:ignore="ProtectedPermissions"` — it is granted
+only by the user in Settings.
+
+## D58 — Onboarding and permission cards (M3)
+**Decision.** One compact, dismissible card at a time on Home, in order: default home →
+notification access (badges + media) → calendar → usage access. Each has a one-line reason, a
+primary action and "Not now". "Not now", and a denied calendar permission, are stored
+permanently (`dismissedTips`) — Reach never nags (§7). If a settings screen can't be opened,
+the card dismisses itself. Cards disappear once the access is granted.

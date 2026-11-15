@@ -7,9 +7,13 @@ import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
+import com.baklavapp.reachlauncher.core.data.source.AppLauncher
+import com.baklavapp.reachlauncher.core.data.source.CalendarSource
 import com.baklavapp.reachlauncher.core.data.source.HomeRoleSource
+import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
+import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -18,6 +22,7 @@ import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.Prediction
 import com.baklavapp.reachlauncher.core.model.ReachIntent
+import com.baklavapp.reachlauncher.core.model.SystemScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -76,11 +81,15 @@ class HomeViewModel
     constructor(
         private val catalogRepository: AppCatalogRepository,
         predictionRepository: PredictionRepository,
-        settingsRepository: SettingsRepository,
+        private val settingsRepository: SettingsRepository,
         notificationCountSource: NotificationCountSource,
         shortcutSource: ShortcutSource,
         private val launchApp: LaunchApp,
         private val homeRoleSource: HomeRoleSource,
+        private val mediaSessionSource: MediaSessionSource,
+        calendarSource: CalendarSource,
+        usageStatsSource: UsageStatsSource,
+        private val appLauncher: AppLauncher,
         @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
@@ -130,6 +139,74 @@ class HomeViewModel
                 .map { HomeTheme(themeMode = it.themeMode, palette = it.palette) }
                 .distinctUntilChanged()
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeTheme())
+
+        private val onboarding: Flow<OnboardingCard?> =
+            combine(
+                homeRoleSource.isDefaultHome,
+                notificationCountSource.isAccessGranted,
+                calendarSource.isPermissionGranted,
+                usageStatsSource.isAccessGranted,
+                settingsRepository.settings.map { it.dismissedTips }.distinctUntilChanged(),
+                OnboardingCard::next,
+            )
+
+        /**
+         * Media, the next calendar event and the onboarding card ([HomeSystemUi]). Starts empty
+         * (nothing playing, no line, no card), so nothing flashes before the sources answer;
+         * the onboarding card waits for *all* its inputs, so a granted access never shows a
+         * card for a frame.
+         *
+         * Permissions granted in Settings are noticed on resume: `:core:system` re-reads every
+         * access-gated source whenever a Reach Activity resumes (docs/DECISIONS.md), so these
+         * flows re-emit without the ViewModel doing anything.
+         */
+        val system: StateFlow<HomeSystemUi> =
+            combine(mediaSessionSource.mediaState, calendarSource.nextEvent, onboarding, ::HomeSystemUi)
+                .distinctUntilChanged()
+                .flowOn(defaultDispatcher)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeSystemUi())
+
+        /** Listen row / Now Playing card: toggle play/pause on the shown session. */
+        fun onPlayPause() = mediaSessionSource.playPause()
+
+        /** Now Playing card: next track. */
+        fun onSkipNext() = mediaSessionSource.skipToNext()
+
+        /** Now Playing card: previous track. */
+        fun onSkipPrevious() = mediaSessionSource.skipToPrevious()
+
+        /**
+         * The primary button of an onboarding [card]. Special accesses and the home role are
+         * granted in system screens, so this only opens them; the card disappears by itself
+         * when the user comes back with access on. If the system screen doesn't exist on this
+         * device, the card is dismissed — a button that does nothing would be a nag.
+         * [OnboardingCard.CALENDAR] is a runtime permission: the UI asks with its
+         * `ActivityResultLauncher` and reports through [onCalendarPermissionResult].
+         */
+        fun onOnboardingAction(card: OnboardingCard) {
+            val screen =
+                when (card) {
+                    OnboardingCard.DEFAULT_HOME -> SystemScreen.HOME_ROLE
+                    OnboardingCard.NOTIFICATION_ACCESS -> SystemScreen.NOTIFICATION_ACCESS
+                    OnboardingCard.USAGE_ACCESS -> SystemScreen.USAGE_ACCESS
+                    OnboardingCard.CALENDAR -> return
+                }
+            if (!appLauncher.open(screen)) onOnboardingDismissed(card)
+        }
+
+        /** "Not now": the card never comes back (persisted — Reach never nags, spec §7). */
+        fun onOnboardingDismissed(card: OnboardingCard) {
+            viewModelScope.launch { bestEffort { settingsRepository.dismissTip(card.storageKey) } }
+        }
+
+        /**
+         * The calendar permission dialog answered. A grant is picked up by the calendar source
+         * on resume; a denial (or "don't ask again", which answers `false` without a dialog)
+         * dismisses the card for good, so it is never offered again.
+         */
+        fun onCalendarPermissionResult(granted: Boolean) {
+            if (!granted) onOnboardingDismissed(OnboardingCard.CALENDAR)
+        }
 
         /** Tap on an intent word, or on a chip in intent detail: show that intent's apps. */
         fun onIntentSelected(intent: ReachIntent) {

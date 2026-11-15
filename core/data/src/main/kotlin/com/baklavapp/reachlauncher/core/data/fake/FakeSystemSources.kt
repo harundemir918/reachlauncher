@@ -209,11 +209,15 @@ class FakeUsageStatsSource : UsageStatsSource {
     override suspend fun launchesByHour(days: Int): Map<Int, Map<String, Int>> = if (granted.value) data else emptyMap()
 }
 
-/** Fake calendar; null (no event / no permission) by default. */
+/** Fake calendar; [state] is only visible while [granted] is true (denied by default). */
 class FakeCalendarSource : CalendarSource {
-    /** The next event, or null. */
+    /** Whether `READ_CALENDAR` is granted. */
+    val granted = MutableStateFlow(false)
+
+    /** The next event the provider would report with permission, or null. */
     val state = MutableStateFlow<CalendarEvent?>(null)
-    override val nextEvent: Flow<CalendarEvent?> = state
+    override val isPermissionGranted: Flow<Boolean> = granted
+    override val nextEvent: Flow<CalendarEvent?> = combine(granted, state) { g, e -> if (g) e else null }
 }
 
 /** Fake contacts; [contacts] are only searchable while [granted] is true. */

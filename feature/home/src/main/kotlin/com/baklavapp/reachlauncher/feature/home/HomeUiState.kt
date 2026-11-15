@@ -3,7 +3,9 @@ package com.baklavapp.reachlauncher.feature.home
 import androidx.compose.runtime.Immutable
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.AppShortcut
+import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.CatalogApp
+import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.PaletteId
 import com.baklavapp.reachlauncher.core.model.PredictionReason
 import com.baklavapp.reachlauncher.core.model.ReachIntent
@@ -149,6 +151,71 @@ data class IntentDetailUi(
     val apps: List<AppItem>,
     val shortcuts: List<ShortcutItem>,
 )
+
+/**
+ * The live system extras around Home's data (spec §6.3, §6.4, §7): what's playing, the next
+ * calendar event and the one onboarding card to show. A separate, small state from
+ * [HomeUiState] because it changes often (every play/pause, every track) and has nothing to
+ * do with the catalog: a track change must not regroup and re-sort every app.
+ *
+ * @property media the active media session, or null (nothing playing / no notification
+ *   access): the Listen row's inline player and the Now Playing card are hidden.
+ * @property nextEvent the context line under the clock; null hides it (no event, or no
+ *   calendar permission).
+ * @property onboarding the single card to show, or null for none (all granted, or dismissed).
+ */
+@Immutable
+data class HomeSystemUi(
+    val media: MediaState? = null,
+    val nextEvent: CalendarEvent? = null,
+    val onboarding: OnboardingCard? = null,
+)
+
+/**
+ * Onboarding and permission cards (spec §4, §7), in the order they are offered — one at a
+ * time, never a modal, never again after "Not now" ([storageKey] is what
+ * `SettingsRepository.dismissTip` persists; never rename it).
+ */
+enum class OnboardingCard(
+    val storageKey: String,
+) {
+    /** Reach isn't the default home app: the Home button wouldn't come here (spec §4). */
+    DEFAULT_HOME("default_home"),
+
+    /** Notification access: "N NEW" badges and the media controls (spec §7.1, §7.2). */
+    NOTIFICATION_ACCESS("notification_access"),
+
+    /** Optional `READ_CALENDAR`: the next event under the clock (spec §7.6). */
+    CALENDAR("calendar"),
+
+    /** Optional usage access: better Now-row guesses (spec §6.2). */
+    USAGE_ACCESS("usage_access"),
+    ;
+
+    companion object {
+        /**
+         * The card to show: the first in declaration order that is still needed and not
+         * dismissed. The essentials (home role, notification access) come before the two
+         * optional extras.
+         */
+        fun next(
+            isDefaultHome: Boolean,
+            hasNotificationAccess: Boolean,
+            hasCalendar: Boolean,
+            hasUsageAccess: Boolean,
+            dismissed: Set<String>,
+        ): OnboardingCard? {
+            val needed =
+                mapOf(
+                    DEFAULT_HOME to !isDefaultHome,
+                    NOTIFICATION_ACCESS to !hasNotificationAccess,
+                    CALENDAR to !hasCalendar,
+                    USAGE_ACCESS to !hasUsageAccess,
+                )
+            return entries.firstOrNull { needed.getValue(it) && it.storageKey !in dismissed }
+        }
+    }
+}
 
 /** One-off effects for the UI (≈ what a `BlocListener` reacts to). */
 sealed interface HomeEvent {

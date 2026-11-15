@@ -20,6 +20,7 @@ import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.system.ActivityTracker
+import com.baklavapp.reachlauncher.core.system.notifications.ReachNotificationListenerService
 import com.baklavapp.reachlauncher.core.system.profile.Profiles
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -116,6 +117,11 @@ class SystemAppLauncher
 
         override fun open(screen: SystemScreen): Boolean {
             if (screen == SystemScreen.HOME_ROLE && requestHomeRole()) return true
+            if (screen == SystemScreen.NOTIFICATION_ACCESS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Straight to Reach's own switch (API 30+); some OEM builds lack the screen.
+                val listener = ComponentName(context, ReachNotificationListenerService::class.java)
+                if (start(SystemIntents.notificationListenerDetail(listener))) return true
+            }
             return start(SystemIntents.settingsScreen(screen))
         }
 

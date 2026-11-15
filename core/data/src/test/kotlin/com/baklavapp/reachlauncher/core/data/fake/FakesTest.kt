@@ -3,6 +3,7 @@ package com.baklavapp.reachlauncher.core.data.fake
 import app.cash.turbine.test
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.AppShortcut
+import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.ProfileType
@@ -64,6 +65,20 @@ class FakesTest {
                 assertThat(awaitItem().thumbSide).isEqualTo(ThumbSide.LEFT)
                 repo.setThumbSide(ThumbSide.RIGHT)
                 assertThat(awaitItem().thumbSide).isEqualTo(ThumbSide.RIGHT)
+                repo.dismissTip("calendar")
+                assertThat(awaitItem().dismissedTips).containsExactly("calendar")
+            }
+        }
+
+    @Test
+    fun `calendar event is hidden until the permission is granted`() =
+        runTest {
+            val calendar = FakeCalendarSource()
+            calendar.state.value = CalendarEvent("Standup", beginEpochMillis = 1_000, isAllDay = false)
+            calendar.nextEvent.test {
+                assertThat(awaitItem()).isNull()
+                calendar.granted.value = true
+                assertThat(awaitItem()?.title).isEqualTo("Standup")
             }
         }
 

@@ -50,6 +50,8 @@ import com.baklavapp.reachlauncher.feature.home.ui.AppearancePlaceholderSheet
 import com.baklavapp.reachlauncher.feature.home.ui.FanCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.HomeWithFan
 import com.baklavapp.reachlauncher.feature.home.ui.IntentDetailScreen
+import com.baklavapp.reachlauncher.feature.home.ui.MediaCallbacks
+import com.baklavapp.reachlauncher.feature.home.ui.OnboardingCallbacks
 import com.baklavapp.reachlauncher.feature.search.SearchRoute
 import kotlinx.coroutines.delay
 
@@ -188,6 +190,14 @@ private fun HomeSurfaces(
             )
         }
     val fan by viewModel.fan.collectAsStateWithLifecycle()
+    // Media / calendar / onboarding: collected here, not in HomeFrame, so a track change
+    // never counts as a new frame for the surface transition.
+    val system by viewModel.system.collectAsStateWithLifecycle()
+    val mediaCallbacks = remember(viewModel) { MediaCallbacks(viewModel::onPlayPause, viewModel::onSkipNext, viewModel::onSkipPrevious) }
+    val onboardingCallbacks =
+        remember(viewModel) {
+            OnboardingCallbacks(viewModel::onOnboardingAction, viewModel::onOnboardingDismissed, viewModel::onCalendarPermissionResult)
+        }
     val fanCallbacks =
         remember(viewModel) {
             FanCallbacks(viewModel::onFanOpen, viewModel::onFanHighlight, viewModel::onFanRelease, viewModel::onFanCancel)
@@ -216,6 +226,9 @@ private fun HomeSurfaces(
                     onAllApps = viewModel::onAllAppsRequested,
                     onAppearance = viewModel::onAppearanceRequested,
                     scrollToTopRequests = scrollToTopRequests,
+                    system = system,
+                    mediaCallbacks = mediaCallbacks,
+                    onboardingCallbacks = onboardingCallbacks,
                 )
             }
 
@@ -226,6 +239,8 @@ private fun HomeSurfaces(
                     onLaunch = viewModel::launch,
                     onLaunchShortcut = viewModel::launchShortcut,
                     onIntentSelected = viewModel::onIntentSelected,
+                    media = system.media,
+                    mediaCallbacks = mediaCallbacks,
                 )
             }
 

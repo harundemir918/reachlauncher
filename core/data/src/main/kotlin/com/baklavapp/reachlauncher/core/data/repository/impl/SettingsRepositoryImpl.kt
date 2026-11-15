@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.PaletteId
@@ -60,6 +61,12 @@ class SettingsRepositoryImpl
 
         override suspend fun setHiddenApiShadeFallback(enabled: Boolean) = put(Keys.HIDDEN_API_SHADE_FALLBACK, enabled)
 
+        // Read-modify-write inside one `edit` transaction, so two quick dismissals can't
+        // overwrite each other.
+        override suspend fun dismissTip(tipKey: String) {
+            dataStore.edit { it[Keys.DISMISSED_TIPS] = it[Keys.DISMISSED_TIPS].orEmpty() + tipKey }
+        }
+
         private suspend fun <T> put(
             key: Preferences.Key<T>,
             value: T,
@@ -76,6 +83,7 @@ class SettingsRepositoryImpl
                 thumbSide = ThumbSide.fromStorageKey(this[Keys.THUMB_SIDE]),
                 doubleTapToLock = this[Keys.DOUBLE_TAP_TO_LOCK] ?: defaults.doubleTapToLock,
                 hiddenApiShadeFallback = this[Keys.HIDDEN_API_SHADE_FALLBACK] ?: defaults.hiddenApiShadeFallback,
+                dismissedTips = this[Keys.DISMISSED_TIPS] ?: defaults.dismissedTips,
             )
         }
 
@@ -87,5 +95,6 @@ class SettingsRepositoryImpl
             val THUMB_SIDE = stringPreferencesKey("thumb_side")
             val DOUBLE_TAP_TO_LOCK = booleanPreferencesKey("double_tap_to_lock")
             val HIDDEN_API_SHADE_FALLBACK = booleanPreferencesKey("hidden_api_shade_fallback")
+            val DISMISSED_TIPS = stringSetPreferencesKey("dismissed_tips")
         }
     }

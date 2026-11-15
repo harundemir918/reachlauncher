@@ -71,6 +71,10 @@ enum class ThumbSide(
  * @property doubleTapToLock requires the optional accessibility service.
  * @property hiddenApiShadeFallback best-effort, hidden-API way to open the notification
  *   shade when the accessibility service is off. Off by default (feature flag).
+ * @property dismissedTips storage keys of the onboarding/permission cards the user answered
+ *   with "Not now" (or a denied permission dialog). A dismissed card never comes back — Reach
+ *   never nags (spec §7). Plain strings so a feature can add a card without a model change;
+ *   unknown keys are simply ignored.
  */
 data class AppearanceSettings(
     val themeMode: ThemeMode = ThemeMode.AUTO,
@@ -79,4 +83,5 @@ data class AppearanceSettings(
     val thumbSide: ThumbSide = ThumbSide.LEFT,
     val doubleTapToLock: Boolean = false,
     val hiddenApiShadeFallback: Boolean = false,
+    val dismissedTips: Set<String> = emptySet(),
 )

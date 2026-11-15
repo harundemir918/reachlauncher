@@ -14,18 +14,18 @@ import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.system.apps.LauncherAppsInstalledAppsSource
+import com.baklavapp.reachlauncher.core.system.calendar.CalendarProviderSource
 import com.baklavapp.reachlauncher.core.system.contacts.ContactsProviderSource
 import com.baklavapp.reachlauncher.core.system.launch.SystemAppLauncher
+import com.baklavapp.reachlauncher.core.system.media.MediaSessionsSource
+import com.baklavapp.reachlauncher.core.system.notifications.NotificationListenerCountSource
 import com.baklavapp.reachlauncher.core.system.profile.UserManagerProfileSource
 import com.baklavapp.reachlauncher.core.system.roles.RoleHomeRoleSource
 import com.baklavapp.reachlauncher.core.system.roles.TelephonyDefaultAppsSource
 import com.baklavapp.reachlauncher.core.system.shortcuts.LauncherAppsShortcutSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableCalendarSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableMediaSessionSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableNotificationCountSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableScreenActionsSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableUsageStatsSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableWallpaperColorSource
+import com.baklavapp.reachlauncher.core.system.usage.UsageStatsManagerSource
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -67,30 +67,30 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindHomeRoleSource(impl: RoleHomeRoleSource): HomeRoleSource
 
-    /** M3 placeholder. */
+    /** Unread counts from Reach's `NotificationListenerService`. */
     @Binds
     @Singleton
-    abstract fun bindNotificationCountSource(impl: UnavailableNotificationCountSource): NotificationCountSource
+    abstract fun bindNotificationCountSource(impl: NotificationListenerCountSource): NotificationCountSource
 
-    /** M3 placeholder. */
+    /** `MediaSessionManager` sessions, readable with notification access. */
     @Binds
     @Singleton
-    abstract fun bindMediaSessionSource(impl: UnavailableMediaSessionSource): MediaSessionSource
+    abstract fun bindMediaSessionSource(impl: MediaSessionsSource): MediaSessionSource
 
     /** `LauncherApps.getShortcuts`, readable while Reach is the default home app. */
     @Binds
     @Singleton
     abstract fun bindShortcutSource(impl: LauncherAppsShortcutSource): ShortcutSource
 
-    /** M3 placeholder. */
+    /** `UsageStatsManager` foreground events, with usage access. */
     @Binds
     @Singleton
-    abstract fun bindUsageStatsSource(impl: UnavailableUsageStatsSource): UsageStatsSource
+    abstract fun bindUsageStatsSource(impl: UsageStatsManagerSource): UsageStatsSource
 
-    /** M3 placeholder. */
+    /** Calendar Provider's next event, with `READ_CALENDAR`. */
     @Binds
     @Singleton
-    abstract fun bindCalendarSource(impl: UnavailableCalendarSource): CalendarSource
+    abstract fun bindCalendarSource(impl: CalendarProviderSource): CalendarSource
 
     /** Contacts Provider name search, only with `READ_CONTACTS`. */
     @Binds

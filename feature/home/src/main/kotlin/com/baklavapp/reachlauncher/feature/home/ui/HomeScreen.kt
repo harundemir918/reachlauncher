@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.baklavapp.reachlauncher.core.designsystem.component.InlineMediaControl
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentRowTrailing
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentWordRow
 import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
@@ -46,15 +47,18 @@ import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
+import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.core.model.ThumbSide
+import com.baklavapp.reachlauncher.feature.home.HomeSystemUi
 import com.baklavapp.reachlauncher.feature.home.IntentSummary
 import com.baklavapp.reachlauncher.feature.home.NowItem
 import com.baklavapp.reachlauncher.feature.home.R
 
 /*
- * The Home surface (spec §6.3): date, clock, [context line], NOW row, flexible space,
- * six intent words in the thumb zone, the "Type to launch" pill.
+ * The Home surface (spec §6.3): date, clock, context line (next calendar event), the one
+ * onboarding card if any, NOW row, flexible space, six intent words in the thumb zone (Listen
+ * with its inline player while something plays), the "Type to launch" pill.
  *
  * Flutter analogy: a stateless widget built from the BLoC state — every value comes in as a
  * parameter and every interaction goes out as a callback (≈ `context.read<HomeBloc>().add`).
@@ -68,6 +72,7 @@ private val TopPadding = 12.dp
 private val BottomPadding = 20.dp
 private val DateClockGap = 6.dp
 private val NowTopGap = 28.dp
+private val CardTopGap = 20.dp
 private val NowLabelGap = 10.dp
 private val PillTopGap = 18.dp
 private const val NOW_ROW_SLOTS = 3
@@ -85,6 +90,9 @@ private const val NOW_ROW_SLOTS = 3
  * @param heldIntent the intent whose press-slide-release fan is open, or null. While set, that
  *   word turns `accentInk`, the other words `dim` (D18), counts are hidden, and the search
  *   pill is replaced by the hint "RELEASE TO OPEN · SLIDE OFF TO CANCEL".
+ * @param system media, next event and onboarding card (M3); the default shows none of them.
+ * @param mediaCallbacks the Listen row's play/pause.
+ * @param onboardingCallbacks the onboarding card's buttons.
  */
 @Composable
 internal fun HomeScreen(
@@ -101,6 +109,9 @@ internal fun HomeScreen(
     scrollToTopRequests: Int = 0,
     wordModifier: (ReachIntent) -> Modifier = { Modifier },
     heldIntent: ReachIntent? = null,
+    system: HomeSystemUi = HomeSystemUi(),
+    mediaCallbacks: MediaCallbacks = MediaCallbacks.None,
+    onboardingCallbacks: OnboardingCallbacks = OnboardingCallbacks.None,
 ) {
     val swipe = rememberVerticalSwipeConnection(onSwipeUp = onAllApps, onSwipeDown = onSearch)
     val reading by rememberWallClock()
@@ -133,14 +144,19 @@ internal fun HomeScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(DateClockGap)) {
                     HomeDateLine(reading)
                     HomeClock(reading, onOpenAppearance = onAppearance)
-                    // Context line (next calendar event, spec §6.3 item 3) goes here in M3.
+                    // Context line (spec §6.3 item 3): hidden without an event or calendar permission.
+                    system.nextEvent?.let { HomeContextLine(it, reading) }
+                }
+                system.onboarding?.let { card ->
+                    // key(card): the next card is a fresh composable (fresh permission launcher).
+                    key(card) { OnboardingCardView(card, onboardingCallbacks, Modifier.padding(top = CardTopGap)) }
                 }
                 if (catalogLoaded && now.isNotEmpty()) {
                     NowRow(now, onLaunch, Modifier.padding(top = NowTopGap))
                 }
             }
             Column {
-                IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier, heldIntent)
+                IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier, heldIntent, system.media, mediaCallbacks)
                 val allAppsLabel = stringResource(R.string.home_all_apps_action)
                 if (heldIntent != null) {
                     FanHint(Modifier.padding(top = PillTopGap))
@@ -229,6 +245,8 @@ private fun IntentWords(
     onIntentSelected: (ReachIntent) -> Unit,
     wordModifier: (ReachIntent) -> Modifier,
     heldIntent: ReachIntent?,
+    media: MediaState?,
+    mediaCallbacks: MediaCallbacks,
 ) {
     val colors = ReachTheme.colors
     val openLabel = stringResource(R.string.home_intent_open_action)
@@ -252,6 +270,21 @@ private fun IntentWords(
                         null -> Color.Unspecified
                         summary.intent -> colors.accentInk
                         else -> colors.dim
+                    },
+                // Listen's inline player (spec §6.3 item 6): only while a session is active,
+                // and not while the fan is open (the words are the only thing that matters then).
+                extraContent =
+                    if (media != null && summary.intent == ReachIntent.LISTEN && heldIntent == null) {
+                        {
+                            InlineMediaControl(
+                                trackTitle = media.title,
+                                appLabel = media.sourceLabel,
+                                isPlaying = media.isPlaying,
+                                onTogglePlay = mediaCallbacks.onPlayPause,
+                            )
+                        }
+                    } else {
+                        null
                     },
             )
         }

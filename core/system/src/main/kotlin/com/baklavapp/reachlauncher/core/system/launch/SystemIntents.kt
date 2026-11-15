@@ -1,11 +1,14 @@
 package com.baklavapp.reachlauncher.core.system.launch
 
 import android.app.SearchManager
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.UserHandle
 import android.provider.ContactsContract
 import android.provider.Settings
+import androidx.annotation.RequiresApi
 import com.baklavapp.reachlauncher.core.model.ExternalAction
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 
@@ -25,8 +28,7 @@ internal object SystemIntents {
      */
     fun settingsScreen(screen: SystemScreen): Intent =
         when (screen) {
-            // The listener list; the per-component detail screen (API 30) needs Reach's
-            // listener service, which arrives in M3.
+            // The listener list: the fallback for notificationListenerDetail (API 30+).
             SystemScreen.NOTIFICATION_ACCESS -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
 
             SystemScreen.USAGE_ACCESS -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
@@ -35,6 +37,15 @@ internal object SystemIntents {
 
             SystemScreen.HOME_ROLE -> Intent(Settings.ACTION_HOME_SETTINGS)
         }
+
+    /**
+     * The notification-access switch of one listener (API 30+), e.g. Reach's
+     * `ReachNotificationListenerService`, instead of the list of every listener.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun notificationListenerDetail(listener: ComponentName): Intent =
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, listener.flattenToString())
 
     /** Hand-off intents; none needs a permission (dialing pre-fills, it doesn't call). */
     fun external(action: ExternalAction): Intent =

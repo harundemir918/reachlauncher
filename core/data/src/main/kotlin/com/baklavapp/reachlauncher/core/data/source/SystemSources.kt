@@ -176,6 +176,13 @@ interface UsageStatsSource {
 
 /** Next calendar event (`READ_CALENDAR`). */
 interface CalendarSource {
+    /**
+     * Whether `READ_CALENDAR` is granted; re-checked whenever an Activity of Reach resumes
+     * (the permission dialog and the system settings both send the user away and back).
+     * Home uses it to decide whether to offer the optional calendar card.
+     */
+    val isPermissionGranted: Flow<Boolean>
+
     /** Next upcoming event today/tomorrow, or null (also when permission is denied). */
     val nextEvent: Flow<CalendarEvent?>
 }

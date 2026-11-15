@@ -39,4 +39,35 @@
 
     <!-- Press-slide-release: hint shown in the search pill's place while the fan is open (shown upper-cased in mono). -->
     <string name="home_fan_hint">release to open · slide off to cancel</string>
+
+    <!-- Context line under the clock (spec §6.3): the next calendar event. %1$s is a time ("10:30"), %2$s the event title. -->
+    <string name="home_event_today_timed">%1$s · %2$s</string>
+    <string name="home_event_tomorrow_timed">Tomorrow %1$s · %2$s</string>
+    <!-- All-day events: %1$s is the title. -->
+    <string name="home_event_today_all_day">Today · %1$s</string>
+    <string name="home_event_tomorrow_all_day">Tomorrow · %1$s</string>
+    <!-- TalkBack prefix for the context line: "Next event: 10:30 · Standup". -->
+    <string name="home_event_description">Next event: %1$s</string>
+
+    <!-- Now Playing card in Listen (spec §6.4). Mono label, shown upper-cased: "NOW PLAYING · SPOTIFY". -->
+    <string name="home_now_playing">now playing · %1$s</string>
+    <!-- Progress bar value for TalkBack: "1:23 of 3:45". -->
+    <string name="home_media_progress">%1$s of %2$s</string>
+
+    <!-- Onboarding / permission cards on Home (spec §4, §7): one line of why, one action, "Not now". -->
+    <string name="home_card_not_now">Not now</string>
+    <!-- TalkBack for "Not now": %1$s is the card title. -->
+    <string name="home_card_not_now_description">Not now, hide “%1$s”</string>
+    <string name="home_card_home_title">Make Reach your home screen</string>
+    <string name="home_card_home_why">So the Home button brings you here and app shortcuts work.</string>
+    <string name="home_card_home_action">Set as home</string>
+    <string name="home_card_notifications_title">Unread counts and music controls</string>
+    <string name="home_card_notifications_why">Notification access shows “3 NEW” on intents and what’s playing. Nothing leaves your phone.</string>
+    <string name="home_card_notifications_action">Allow access</string>
+    <string name="home_card_calendar_title">Your next event under the clock</string>
+    <string name="home_card_calendar_why">Optional. Reach reads only today’s and tomorrow’s next event.</string>
+    <string name="home_card_calendar_action">Allow calendar</string>
+    <string name="home_card_usage_title">Better guesses in the Now row</string>
+    <string name="home_card_usage_why">Optional. Usage access tells Reach which apps you open at what hour. It stays on your phone.</string>
+    <string name="home_card_usage_action">Allow usage access</string>
 </resources>

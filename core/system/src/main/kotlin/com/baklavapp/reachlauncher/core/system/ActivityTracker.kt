@@ -3,6 +3,7 @@ package com.baklavapp.reachlauncher.core.system
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import com.baklavapp.reachlauncher.core.system.access.AccessRechecks
 import java.lang.ref.WeakReference
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,13 +34,18 @@ import javax.inject.Singleton
  * All lifecycle callbacks run on the main thread; [resumedActivity] is meant to be read
  * there too (ViewModel event handlers run on the main thread).
  *
+ * Every resume also pokes [AccessRechecks]: permissions granted in system Settings are
+ * noticed the moment the user comes back (docs/DECISIONS.md, M3).
+ *
  * Flutter analogy: like a `NavigatorObserver` that keeps the current route's
  * `BuildContext` around — except Android hands us the Activity itself.
  */
 @Singleton
 class ActivityTracker
     @Inject
-    constructor() : Application.ActivityLifecycleCallbacks {
+    constructor(
+        private val rechecks: AccessRechecks,
+    ) : Application.ActivityLifecycleCallbacks {
         @Volatile
         private var resumed: WeakReference<Activity>? = null
 
@@ -49,6 +55,7 @@ class ActivityTracker
 
         override fun onActivityResumed(activity: Activity) {
             resumed = WeakReference(activity)
+            rechecks.recheck()
         }
 
         override fun onActivityPaused(activity: Activity) {
