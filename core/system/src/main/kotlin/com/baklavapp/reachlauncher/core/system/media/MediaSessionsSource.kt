@@ -84,6 +84,19 @@ class MediaSessionsSource
                 val handler = Handler(Looper.getMainLooper())
                 val tracked = mutableListOf<Pair<MediaController, MediaController.Callback>>()
 
+                // Every entry point below runs on the main Handler, where an uncaught exception
+                // crashes Home. A session can die, or access can be revoked, between any two
+                // binder calls (SecurityException / IllegalStateException): show nothing instead.
+                fun guarded(block: () -> Unit) {
+                    try {
+                        block()
+                    } catch (e: SecurityException) {
+                        trySend(null)
+                    } catch (e: IllegalStateException) {
+                        trySend(null)
+                    }
+                }
+
                 fun publish() {
                     val controllers = tracked.map { it.first }
                     val snapshots = controllers.map(::snapshotOf)
@@ -98,13 +111,13 @@ class MediaSessionsSource
                     controllers.forEach { controller ->
                         val callback =
                             object : MediaController.Callback() {
-                                override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
+                                override fun onPlaybackStateChanged(state: PlaybackState?) = guarded(::publish)
 
-                                override fun onMetadataChanged(metadata: MediaMetadata?) = publish()
+                                override fun onMetadataChanged(metadata: MediaMetadata?) = guarded(::publish)
 
                                 override fun onSessionDestroyed() {
                                     tracked.removeAll { it.first === controller }
-                                    publish()
+                                    guarded(::publish)
                                 }
                             }
                         controller.registerCallback(callback, handler)
@@ -113,13 +126,12 @@ class MediaSessionsSource
                     publish()
                 }
 
-                val listener = MediaSessionManager.OnActiveSessionsChangedListener { controllers -> track(controllers.orEmpty()) }
-                try {
+                val listener =
+                    MediaSessionManager.OnActiveSessionsChangedListener { controllers -> guarded { track(controllers.orEmpty()) } }
+                // Access may have been revoked between the check and these calls: nothing to show.
+                guarded {
                     manager.addOnActiveSessionsChangedListener(listener, access.listenerComponent, handler)
                     track(manager.getActiveSessions(access.listenerComponent))
-                } catch (e: SecurityException) {
-                    // Access was revoked between the check and the call: nothing to show.
-                    trySend(null)
                 }
                 awaitClose {
                     manager.removeOnActiveSessionsChangedListener(listener)

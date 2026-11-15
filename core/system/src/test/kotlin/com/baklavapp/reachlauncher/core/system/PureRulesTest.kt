@@ -143,4 +143,39 @@ class PureRulesTest {
         val later = listOf(InstanceRow("Later", at(9, 0) + 2 * day, isAllDay = false, declined = false))
         assertThat(NextEventPicker.pick(later, now, istanbul)).isNull()
     }
+
+    @Test
+    fun `a multi-day all-day event shows on every day it covers, not after`() {
+        // A 3-day trip that started yesterday (UTC dates 13, 14, 15; end is exclusive: 16).
+        val trip =
+            listOf(
+                InstanceRow(
+                    "Trip",
+                    beginMillis = utcMidnightToday - day,
+                    isAllDay = true,
+                    declined = false,
+                    endMillis = utcMidnightToday + 2 * day,
+                ),
+            )
+        assertThat(NextEventPicker.pick(trip, now, istanbul)?.title).isEqualTo("Trip")
+        // Two days later the trip is over (today = 16th): nothing to show.
+        assertThat(NextEventPicker.pick(trip, now + 2 * day, istanbul)).isNull()
+    }
+
+    @Test
+    fun `all-day events use their UTC date even far from UTC`() {
+        // Birthday on the 14th (stored as UTC midnight). In UTC-8 at 20:00 on the 13th, the
+        // local "today" is the 13th, so the birthday is tomorrow's all-day event; in UTC+13 at
+        // 08:00 on the 14th it is today's.
+        val birthday = listOf(InstanceRow("Birthday", utcMidnightToday, isAllDay = true, declined = false))
+        val losAngeles = ZoneId.of("America/Los_Angeles")
+        val evening13th = ZonedDateTime.of(2026, 11, 13, 20, 0, 0, 0, losAngeles).toInstant().toEpochMilli()
+        assertThat(NextEventPicker.pick(birthday, evening13th, losAngeles)?.title).isEqualTo("Birthday")
+        val tongatapu = ZoneId.of("Pacific/Tongatapu")
+        val morning14th = ZonedDateTime.of(2026, 11, 14, 8, 0, 0, 0, tongatapu).toInstant().toEpochMilli()
+        assertThat(NextEventPicker.pick(birthday, morning14th, tongatapu)?.title).isEqualTo("Birthday")
+        // …and in UTC+13 on the 15th it is gone, although it is still the 14th in UTC.
+        val morning15th = ZonedDateTime.of(2026, 11, 15, 8, 0, 0, 0, tongatapu).toInstant().toEpochMilli()
+        assertThat(NextEventPicker.pick(birthday, morning15th, tongatapu)).isNull()
+    }
 }

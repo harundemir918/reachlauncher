@@ -1,9 +1,10 @@
 # Reach — architecture
 
-**v2 (M2).** Describes the code as it is at the end of milestone M2 ("Speed": Search, All
-Apps, press-slide-release). Things that don't exist yet are marked with the milestone that
+**v3 (M3).** Describes the code as it is at the end of milestone M3 ("System features":
+notification badges, media, calendar, usage stats, onboarding cards; only wallpaper colours
+(M4) and the accessibility service (M5) are still stubs). Things that don't exist yet are marked with the milestone that
 brings them. The product spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the
-reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D51); the Flutter →
+reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D58); the Flutter →
 Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md); custom touch
 handling is explained in [`GESTURES.md`](GESTURES.md).
 
@@ -63,8 +64,8 @@ readability.
 | `:core:model` | **pure Kotlin/JVM** (no Android) | `AppKey`, `PackageUser`, `CatalogApp`, `InstalledApp`, `ProfileState`, `ReachIntent`, `LaunchEvent`, `Prediction`, `AppearanceSettings`, `LaunchOrigin`, `SystemScreen`, `ExternalAction`, `TextFolding`… |
 | `:core:designsystem` | Android library + Compose | `ReachTheme`, palettes, `PaletteNames.kt` (localised palette names, shared by Search's commands and Appearance in M4), derived tokens, `ColorMath`, typography + fonts, components (`IntentWordRow`, `NowTile`, `AppRow`, `SearchPill`, `Monogram`, `reachClickable`…), `util/Motion.kt` (`rememberReducedMotion`, `rememberHapticTick`) |
 | `:core:data` | Android library | **Contracts** (`repository/Repositories.kt`, `source/SystemSources.kt`), their **implementations** for data (`repository/impl`, `db`, `domain` — incl. the shared `LaunchApp` use case —, `time`), Hilt modules (`di`), and **fakes** (`fake`, in `src/main` — D4) |
-| `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, **`LauncherAppsShortcutSource`** and **`ContactsProviderSource`** (M2), six `Unavailable…` stubs), `ActivityTracker`, `SystemModule` |
-| `:feature:home` | Android library + Compose | `HomeViewModel` (the surface state machine + the fan's state), `HomeRoute` (hosts Search / All Apps as slots, D51), Home and intent-detail screens, press-slide-release (`ui/PressSlideRelease.kt`, `ui/FanOverlay.kt`, `ui/HomeWithFan.kt`), Home swipes (`ui/HomeGestures.kt`), the Appearance placeholder sheet (`ui/PlaceholderSurfaces.kt`, until M4) |
+| `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, **`LauncherAppsShortcutSource`** and **`ContactsProviderSource`** (M2), **M3:** `ReachNotificationListenerService` + `NotificationListenerHub` / `NotificationListenerCountSource` / `NotificationAccess`, `MediaSessionsSource`, `CalendarProviderSource`, `UsageStatsManagerSource`, `AccessRechecks`; two `Unavailable…` stubs left: wallpaper colours and screen actions), `ActivityTracker`, `SystemModule` |
+| `:feature:home` | Android library + Compose | `HomeViewModel` (the surface state machine + the fan's state), `HomeRoute` (hosts Search / All Apps as slots, D51), Home and intent-detail screens, `ui/SystemCards.kt` (Now Playing card, calendar line, onboarding cards), `MediaProgress.kt`, press-slide-release (`ui/PressSlideRelease.kt`, `ui/FanOverlay.kt`, `ui/HomeWithFan.kt`), Home swipes (`ui/HomeGestures.kt`), the Appearance placeholder sheet (`ui/PlaceholderSurfaces.kt`, until M4) |
 | `:feature:search` | Android library + Compose | `SearchRoute` (public), `SearchViewModel`, `SearchRanker` + `CommandKeywords` (pure), `SearchResult` / `SearchUiState`, `ui/SearchScreen.kt` |
 | `:feature:allapps` | Android library + Compose | `AllAppsRoute` (public), `AllAppsViewModel`, `LetterIndex` (ICU), `ui/AllAppsScreen.kt` (word wall), `ui/LetterRail.kt`, `ui/AppMenu.kt` (long-press menu) |
 | `:feature:appearance` | Android library + Compose | Build file only; the sheet is a placeholder in `:feature:home` until **M4** |
@@ -76,9 +77,9 @@ readability.
    `:core:data/…/source/SystemSources.kt` (D3). Consequences:
    - `HomeViewModelTest` is a plain JVM test with fakes (`HomeTestFixtures.kt` builds the
      ViewModel from `FakeAppCatalogRepository`, `FakeAppLauncher`, …).
-   - Every system integration is optional: in M2, six of the thirteen sources are still
-     `Unavailable…` stubs, and shortcuts/contacts degrade to "none" without their
-     permission — Home and Search work anyway.
+   - Every system integration is optional: as of M3, only two sources (wallpaper colours, screen
+     actions) are still `Unavailable…` stubs, and every access-gated source degrades to
+     "none" without its permission — Home and Search work anyway.
 2. **Contracts live in `:core:data`, not in `:core:system`.** `:core:system` depends on
    `:core:data` to implement them (dependency inversion). Flutter analogy: the
    `*_platform_interface` package of a federated plugin.
@@ -215,51 +216,92 @@ sequenceDiagram
     UI->>UI: IntentWordRow recomposes with the new count
 ```
 
-### 3b. A new notification → "3 NEW" badge (path ready, source arrives in M3)
+### 3b. A new notification → "3 NEW" badge (real since M3)
 
-The spec's example. **In M1 the path exists end to end, but the source is a stub:**
-`SystemModule` binds `NotificationCountSource` to `UnavailableNotificationCountSource`
-(`core/system/…/unavailable/UnavailableSources.kt`), which emits `isAccessGranted = false`
-and `countsByApp = emptyMap()` — exactly what the real source reports when the user hasn't
-granted notification access. So no badges show yet.
+The spec's example, now running end to end. The classes, in order:
 
-How it works once M3 lands:
-
-1. A `NotificationListenerService` in `:core:system` (M3) receives posted/removed
-   notifications, counts active, non-ongoing ones per **package and profile** (`PackageUser`,
-   D12) and exposes `countsByApp: Flow<Map<PackageUser, Int>>`.
-2. M3 changes **one line** in `SystemModule`: `bindNotificationCountSource` binds the real
-   class instead of the stub. Nothing in `:feature:home` changes.
-3. `HomeViewModel` already combines `notificationCountSource.countsByApp` into its
-   `CatalogSnapshot`. `buildUiState` → `unreadFor(apps, unread)` sums the counts over the
-   **distinct** `PackageUser`s of each intent's visible apps (D31): two launcher activities
-   of one app count once, personal and work copies count separately, hidden apps don't count.
-4. `IntentRowTrailing.of(appCount, unreadCount)` picks `NewBadge(unreadCount)` when
-   `unreadCount > 0` (else `AppCount`). `IntentWordRow` draws the accent badge
-   (`ds_badge_new`, e.g. "3 NEW") and folds it into the row's TalkBack description
-   ("Talk, 3 new notifications", D19).
-5. The same counts reach the intent-detail rows (`AppItem.unreadCount` → `AppRow` badge)
-   and predictions: `PredictionRepositoryImpl` also combines `countsByApp`, and
-   `PredictionEngine` boosts unread apps and labels them `PredictionReason.Unread` (D25).
-
-Tests already cover the M1 part with fakes: `HomeViewModelTest` — "unread counts are summed
-per intent and kept apart per profile", "no notification access means no badges";
-`HomeRouteTest.intentRowDescriptionIncludesTheBadge`.
+1. **`ReachNotificationListenerService`** (`core/system/…/notifications/`). A
+   `NotificationListenerService`: the *system* binds it once the user enables Notification
+   access, whether or not a Reach screen is open (Flutter: the native background half of a
+   plugin, pushing events to a stream). On `onNotificationPosted/Removed` it builds a
+   `NotificationEntry` (key, `PackageUser`, ongoing flag, group-summary flag) and hands it to
+   the hub. It never reads titles or text.
+2. **`NotificationListenerHub`**. A `@Singleton` that is the bridge between the
+   system-created service (it cannot be constructor-injected) and Hilt-created classes. It
+   keeps the active entries, runs `NotificationCounter` (D54: not ongoing, not a summary,
+   not Reach's own, keyed by `sbn.key`) and exposes `counts: Flow<Map<PackageUser, Int>>` and
+   `connected`. It clears on disconnect.
+3. **`NotificationListenerCountSource`** (the real `NotificationCountSource`, bound in
+   `SystemModule`). `isAccessGranted` comes from `NotificationAccess` (re-read on every
+   Activity resume via `AccessRechecks`, and on listener connect/disconnect; it also calls
+   `requestRebind` when granted-but-unbound). `countsByApp` is `combine(granted, hub.counts)`
+   and is empty when access is off.
+4. **`HomeViewModel`** combines `countsByApp` into its `CatalogSnapshot`. `buildUiState` ->
+   `unreadFor(apps, unread)` sums over the **distinct** `PackageUser`s of each intent's
+   visible apps (D31): two launcher activities of one app count once, personal and work
+   copies count separately, hidden apps do not count.
+5. **`IntentRowTrailing.of(appCount, unreadCount)`** picks `NewBadge(unreadCount)` when
+   `unreadCount > 0`; **`IntentWordRow`** draws the accent badge (`ds_badge_new`, "3 NEW")
+   and folds it into the TalkBack description ("Talk, 3 new notifications", D19).
+6. The same counts reach intent-detail rows (`AppItem.unreadCount`) and predictions
+   (`PredictionEngine` boosts unread apps, `PredictionReason.Unread`, D25).
 
 ```mermaid
 sequenceDiagram
-    participant NLS as NotificationListenerService (M3)
-    participant Src as NotificationCountSource
+    participant OS as Android (NotificationManager)
+    participant NLS as ReachNotificationListenerService
+    participant Hub as NotificationListenerHub
+    participant Src as NotificationListenerCountSource
     participant VM as HomeViewModel
     participant UI as IntentWordRow
 
-    Note over Src: M1 binding is UnavailableNotificationCountSource (always empty)
-    NLS->>Src: onNotificationPosted / onNotificationRemoved
-    Src-->>VM: countsByApp emits Map of PackageUser to Int
+    Note over Src: access = NotificationAccess.granted<br/>(re-read on resume via AccessRechecks)
+    OS->>NLS: onNotificationPosted(sbn)
+    NLS->>Hub: onPosted(NotificationEntry: key, PackageUser, flags)
+    Hub->>Hub: NotificationCounter: skip ongoing / summary / own
+    Hub-->>Src: counts Flow emits Map of PackageUser to Int
+    Src-->>VM: countsByApp (empty if access is off)
     VM->>VM: unreadFor() sums distinct PackageUsers per intent (D31)
     VM-->>UI: IntentSummary.unreadCount via uiState
     UI->>UI: IntentRowTrailing.of picks NewBadge, shows "3 NEW"
 ```
+
+**`AccessRechecks` (D53).** Special accesses are granted in Settings and Android sends no
+broadcast. `ActivityTracker.onActivityResumed` bumps the `AccessRechecks.ticks` counter and
+every access-gated source (`NotificationAccess`, `CalendarProviderSource`,
+`UsageStatsManagerSource`) re-reads its permission from it. So the card disappears and the
+badges appear the moment the user comes back from Settings, with no `recheck()` in any
+contract (Flutter: a `ValueNotifier` bumped on `AppLifecycleState.resumed`).
+
+Tests with fakes: `HomeViewModelTest` ("unread counts are summed per intent and kept apart
+per profile", "no notification access means no badges"),
+`HomeRouteTest.intentRowDescriptionIncludesTheBadge`, and `NotificationCounterTest` in `:core:system`.
+
+#### Media row and Now Playing card
+
+`MediaSessionsSource` (`core/system/…/media/`) reuses the same notification access:
+`MediaSessionManager.getActiveSessions(listenerComponent)` plus
+`OnActiveSessionsChangedListener` and a `MediaController.Callback` per session, wrapped in a
+`callbackFlow` and `flatMapLatest`-ed on `NotificationAccess.granted` (access off -> `null`).
+`MediaSessionChooser` (pure, D55) picks the session to show -> `Flow<MediaState?>` ->
+`HomeViewModel.system` (`HomeSystemUi.media`) -> the Listen row's inline player and
+`NowPlayingCard` in `SystemCards.kt`. Buttons call `onPlayPause/onSkipNext/onSkipPrevious`
+-> `MediaSessionSource` -> `transportControls`. The progress bar is not polled from the OS:
+`MediaProgress.kt` extrapolates `positionMillis + elapsed × speed` once a second, only while
+playing and Home is STARTED.
+
+#### Onboarding cards (D58)
+
+`HomeViewModel.onboarding` combines `homeRoleSource.isDefaultHome`,
+`notificationCountSource.isAccessGranted`, `calendarSource.isPermissionGranted`,
+`usageStatsSource.isAccessGranted` and `settings.dismissedTips` through `OnboardingCard.next`,
+which returns the first card that is still needed and not dismissed (home -> notifications ->
+calendar -> usage), or `null`. `HomeScreen` shows it with `OnboardingCardView`. The primary
+button calls `onOnboardingAction(card)`: it opens the Settings screen through
+`AppLauncher.open(SystemScreen…)` (calendar instead launches the runtime permission request
+and reports `onCalendarPermissionResult`). "Not now" -> `settingsRepository.dismissTip(key)`.
+On return from Settings, `AccessRechecks` makes the access flow emit `true`, `next()`
+skips the card, and the UI updates.
 
 ### 3c. Tap an app → launch
 
@@ -633,20 +675,28 @@ Spec §4: "Home must render immediately when Home is pressed."
      (`profileShortcuts`, D47), and `SearchRanker` drops shortcuts whose app isn't visible.
   Until M5 adds `ACCESS_HIDDEN_PROFILES`, Android 15+ doesn't show the private space to
   Reach at all, which is the safe default.
-- **Own launches only.** Predictions use Reach's own launch history (no permission). Usage
-  stats are an optional blend behind `UsageStatsSource`, stubbed until M3.
+- **Own launches by default.** Predictions use Reach's own launch history (no permission).
+  Usage stats (`UsageStatsManagerSource`, special access) are an optional blend; nothing is
+  stored.
+- **Notifications are counted, never read.** The listener forwards only key, package/profile
+  and two flags; counts live in memory in `NotificationListenerHub` and are cleared on
+  disconnect. Media titles and calendar events are likewise in-memory only. See
+  [`PRIVACY.md`](../PRIVACY.md).
 - **Contacts stay on device.** `ContactsProviderSource` queries the Contacts Provider on
   demand for the current query only (after `READ_CONTACTS` is granted from Search's "Include
   contacts" row); nothing is cached in Room or DataStore, and with no `INTERNET` permission
   nothing can be uploaded (D45).
-- **Receivers are not exported.** Every runtime broadcast receiver (clock ticks, profile
-  changes) is registered with `RECEIVER_NOT_EXPORTED`, so other apps can't fake those events.
+- **Receivers are not exported, with one reasoned exception.** Clock ticks and profile
+  changes use `RECEIVER_NOT_EXPORTED`. The calendar's `ACTION_PROVIDER_CHANGED` receiver is
+  `RECEIVER_EXPORTED` because the Calendar app (not the system) sends it; a spoofed one only
+  re-runs one cheap query (D56). The notification listener `<service>` is exported but
+  protected by `BIND_NOTIFICATION_LISTENER_SERVICE`.
 
 ---
 
 ## 7. Where to add a new feature
 
-### A new system integration (e.g. M3's notification counts)
+### A new system integration (e.g. M3's notification counts, a good worked example)
 
 1. **Contract** — in `core/data/…/source/SystemSources.kt`, add or extend an interface using
    only `:core:model` types. Define what it reports *without* permission (empty, `false`,

@@ -16,18 +16,33 @@ the Android side with Flutter analogies — start with
 
 ---
 
-## Status: M2 — Speed (done)
+## Status: M3 — System features (done)
 
 | | Milestone | Scope |
 |---|---|---|
 | ● | **M0 — Foundation** | Gradle + version catalog, modules, Hilt, `ReachTheme` with all palettes, derived tokens and contrast tests, bundled fonts, `MainActivity` registered as HOME, PLAN/DECISIONS, README, `FLUTTER_TO_COMPOSE.md` v1 |
 | ● | **M1 — Core launcher** | App catalog (LauncherApps, live updates, cache), intent auto-assignment, Home, intent detail, launching with animation, launch history, the Now row, Home/Back behaviour |
-| ◐ | **M2 — Speed** | Search with ranking, commands, shortcuts, contacts and web fallback; All Apps with the word wall, letter rail and long-press menu; press-slide-release; haptics; the shared `LaunchApp` use case — *implemented, awaiting the independent review* |
-| ☐ | M3 — System features | Notification counts, media controls, default-home onboarding, permissions UX |
+| ● | **M2 — Speed** | Search with ranking, commands, shortcuts, contacts and web fallback; All Apps with the word wall, letter rail and long-press menu; press-slide-release; haptics; the shared `LaunchApp` use case |
+| ● | **M3 — System features** | Notification counts ("3 NEW"), media row + Now Playing card, next calendar event, usage-stats blend, onboarding/permission cards, `PRIVACY.md` |
 | ☐ | M4 — Personalisation | Appearance sheet, DataStore persistence, Auto theme, thumb side, wallpaper mode, move/hide apps |
 | ☐ | M5 — Polish | Accessibility pass, optional accessibility service, work profile + private space, Turkish strings, Baseline Profile, release config |
 
-### What works now (M1 + M2)
+### What works now (M1 + M2 + M3)
+
+New in M3 (each is optional and switched on from a small Home card; see [How to try it](#how-to-try-m3)):
+
+- **"3 NEW" badges**: with Notification access on, each intent word shows how many unread
+  notifications its apps have. Reach only counts them (never reads their content), per app
+  and per profile.
+- **Media**: the Listen row shows an inline player (title, play/pause) when something is
+  playing or paused, and the **Now Playing** card adds previous/next and a progress bar.
+- **Calendar line**: with the Calendar permission, today's or tomorrow's next event appears
+  under the clock.
+- **Usage stats**: with Usage access, the Now row also learns which apps you open at what hour.
+- **Onboarding cards**: one compact card at a time (default home -> notification access ->
+  calendar -> usage access), each with a one-line reason and "Not now". Dismissed cards never
+  come back. Everything works with all of it denied.
+
 
 New in M2:
 
@@ -83,8 +98,8 @@ From M1:
 - **Long-press the clock** (~450 ms) → a placeholder sheet (Appearance, **M4**). The theme
   follows Android's dark mode, and the thumb side is fixed to the default until M4. The search
   commands "Switch to <Palette>" and "dark/light theme" already change and save the setting.
-- No "3 NEW" badges, media controls, calendar line or default-home onboarding card yet
-  (**M3**). Work-profile contacts in search are not included yet (**M5**).
+- Work-profile contacts in search are not included yet (**M5**). Wallpaper colours (**M4**) and
+  the accessibility service (**M5**) are still stubs.
 
 ---
 
@@ -97,15 +112,33 @@ Reach has **no analytics, no network access and sends no data off the device.**
 - **Cloud backup and device-to-device transfer are disabled** (`android:allowBackup="false"`
   plus backup/data-extraction rules that exclude everything), so launch history and
   settings are not copied anywhere. See [DECISIONS D9](docs/DECISIONS.md#d9--no-cloud-backup-m0).
-- Permissions in M2: `REQUEST_DELETE_PACKAGES` (normal, install-time), for the system's own
-  uninstall confirmation, and the **optional** runtime permission `READ_CONTACTS`. It is only
-  requested when you tap "Include contacts" in Search. Contacts are read on demand for the
-  current query and are never stored or sent anywhere. Details and everything that is *not*
-  requested: [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md).
-- A Play-listing-ready `PRIVACY.md` arrives in M3, together with the remaining optional
-  permissions (notification access, usage access, calendar).
+- Permissions: `REQUEST_DELETE_PACKAGES` (normal, install-time) for the system's own
+  uninstall confirmation, plus four **optional** ones you grant from Home/Search cards:
+  Notification access (unread counts + media), `READ_CONTACTS` (Search), `READ_CALENDAR`
+  (next event) and Usage access (Now-row predictions). Notifications are only counted in
+  memory, never read or stored. Details and everything that is *not* requested:
+  [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md).
+- The full plain-language policy, suitable for a Play listing: [`PRIVACY.md`](PRIVACY.md).
 
 (The *build* downloads Gradle, libraries and possibly a JDK — that's your machine, not the app.)
+
+---
+
+## How to try M3
+
+<a id="how-to-try-m3"></a>
+
+1. Make Reach your home app (below). A card on Home walks you through each optional step.
+2. **Badges and media:** tap "Allow access" on the *Unread counts and music controls* card. Settings
+   opens on Reach's Notification access switch: turn it on, press Back. The card disappears
+   and "NEW" badges appear when apps have unread notifications (on a fresh emulator, post
+   one with `adb shell cmd notification post -t Hello tag "Hi"`).
+3. **Play music** in any media app (Spotify, YouTube Music, any player): the Listen row shows what's playing; open Listen or the Now Playing card to pause or skip.
+4. **Calendar:** allow the *Your next event* card, then add an event for later today in the
+   Calendar app. The line under the clock updates when you return to Home.
+5. **Usage access** (optional): flip it on from its card; the Now row starts using your
+   hour-by-hour habits.
+6. "Not now" on any card hides it for good; you can still turn each on in Android Settings.
 
 ---
 
@@ -176,9 +209,8 @@ the default ([DECISIONS D8](docs/DECISIONS.md#d8--launcher-manifest-flags-m0)).
 On some devices, pressing Home right after installing a second home app shows a
 "Select a home app" chooser — pick Reach and *Always*.
 
-From M3 on, Reach itself will offer this on first run via
-`RoleManager.createRequestRoleIntent(ROLE_HOME)` (the code exists already; the onboarding
-card that calls it doesn't).
+Since M3, Reach also offers this itself: the first onboarding card on Home ("Make Reach your
+home screen") asks Android to make Reach the home app (`RoleManager.createRequestRoleIntent(ROLE_HOME)`).
 
 ### Via adb (developer convenience)
 
@@ -254,7 +286,7 @@ New in M2:
 :core:model           Pure Kotlin domain types (ReachIntent, AppKey, CatalogApp, Prediction, PaletteId, …) + TextFolding
 :core:designsystem    ReachTheme, palettes, derived tokens, colour maths, typography, fonts, components (IntentWordRow, NowTile, AppRow, …)
 :core:data            Repository + system-source interfaces, Room/DataStore implementations, catalog/prediction logic, fakes
-:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts; stubs for M3–M5
+:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts, notification listener, media, calendar, usage stats; stubs for wallpaper colours (M4) and the accessibility service (M5)
 :feature:home         HomeViewModel (surface state machine + fan), Home, intent detail, press-slide-release, Appearance placeholder
 :feature:search       Type to launch: SearchViewModel, SearchRanker, commands, contacts prompt
 :feature:allapps      A–Z word wall, letter rail, long-press menu
@@ -268,13 +300,13 @@ data flows are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | Doc | What's in it |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module diagram, layers, data flows from system event to pixel, the Home state machine, startup, privacy, where to add a feature |
-| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v2; extended M3–M5) |
+| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v3; extended M4–M5) |
 | [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v3) |
 | [`docs/GESTURES.md`](docs/GESTURES.md) | Press-slide-release, the letter rail, Home swipes and the clock long-press, step by step: pointer passes, consumption vs. the gesture arena, and how the tests drive them |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D51) |
 | [`docs/PLAN.md`](docs/PLAN.md) | Module layout, dependency rules, contracts, milestones, carried-over notes |
 | [`docs/reach-launcher-prompt.md`](docs/reach-launcher-prompt.md) | The full product and design spec (source of truth) |
-| `PRIVACY.md` | *M3* — privacy policy for the Play listing |
+| [`PRIVACY.md`](PRIVACY.md) | Plain-language privacy policy for the Play listing (M3) |
 
 ---
 

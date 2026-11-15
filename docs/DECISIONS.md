@@ -507,3 +507,19 @@ notification access (badges + media) → calendar → usage access. Each has a o
 primary action and "Not now". "Not now", and a denied calendar permission, are stored
 permanently (`dismissedTips`) — Reach never nags (§7). If a settings screen can't be opened,
 the card dismisses itself. Cards disappear once the access is granted.
+
+## D59 — M3 review fixes (M3)
+Reviewed by a Sonnet reviewer agent; fixed by the orchestrator (process per D52).
+- **Multi-day all-day events** now show on every day they cover (`Instances.END`, end date
+  exclusive, as the provider stores it), not only on their first day. Tested, including
+  UTC−8 and UTC+13 zones where the local date differs from the event's UTC date.
+- **Media listener crash-proofing:** every entry point of `MediaSessionsSource` that runs on
+  the main Handler (active-sessions listener, controller callbacks, initial read) is wrapped
+  in `guarded {}` — a session dying or access being revoked mid-callback shows nothing
+  instead of crashing Home.
+- **Rebind rate limit:** `NotificationAccess.granted` is cold and collected by several
+  screens; `requestRebind` now fires at most once per 10 s.
+- **Usage stats:** `RuntimeException`s from `queryEvents` / `getNextEvent` on some OEM builds
+  are caught; usage data is an optional blend.
+- New `NotificationListenerHubTest` (connect → post/update → ongoing → remove → disconnect,
+  reconnect replaces stale state, Reach's own notifications never count).

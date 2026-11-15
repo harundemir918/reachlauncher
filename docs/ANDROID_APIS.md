@@ -1,10 +1,11 @@
 # Android APIs and permissions used by Reach
 
-**v2 (M2).** Every Android API and permission the code uses *today*: what it does, why
+**v3 (M3).** Every Android API and permission the code uses *today*: what it does, why
 Reach needs it, how the user grants it (if at all), what happens without it, and Play
 policy notes. M2 added contacts, app shortcuts, ICU letter buckets, gesture-zone handling and
-haptics. M3–M5 extend this file as notification access, media, usage stats, calendar,
-wallpaper colours and the accessibility service arrive (see [the last section](#coming-in-m3m5)).
+haptics; M3 added the notification listener, media sessions, calendar, usage access and the
+resume re-check. M4–M5 extend this file with wallpaper colours and the accessibility service
+(see [the last section](#coming-in-m4m5)).
 
 Where it helps, an API is tagged with the Android version (API level) that introduced it.
 Reach's `minSdk` is **28** (Android 9); anything newer is behind a `Build.VERSION.SDK_INT`
@@ -24,9 +25,12 @@ APIs in the feature modules / `:app`), behind the interfaces in `:core:data` (se
 |---|---|---|---|---|
 | `REQUEST_DELETE_PACKAGES` | **normal** (granted at install, no dialog) | `core/system/src/main/AndroidManifest.xml` | Lets Reach open the system's "Uninstall this app?" confirmation (`ACTION_DELETE`) for apps targeting API 28+ (D26). It does **not** let Reach uninstall anything silently: the system always asks. Used by "Uninstall" in the All Apps long-press menu (M2). | The uninstall request would be refused. |
 | `READ_CONTACTS` | **runtime / "dangerous"** (system dialog), optional | `core/system/src/main/AndroidManifest.xml` | Search finds contacts by name and offers Call / Message / Contact card (spec §6.6, D45). See [Contacts](#contacts-contactscontract-m2). | No contact rows; everything else in Search works. |
+| `READ_CALENDAR` | **runtime / "dangerous"**, optional | `core/system/src/main/AndroidManifest.xml` | The "next event" line under the clock (D56). See [Calendar](#calendar-calendarcontract-m3). | No line; nothing else changes. |
+| `PACKAGE_USAGE_STATS` | **special access** (user flips a switch in Settings; `tools:ignore="ProtectedPermissions"`), optional | `core/system/src/main/AndroidManifest.xml` | Hour-of-day launch counts for the Now row (D57). See [Usage access](#usage-access-usagestatsmanager-m3). | Predictions use Reach's own launch history only. |
+| `BIND_NOTIFICATION_LISTENER_SERVICE` | **service permission** (held only by the system); the *user* grants "Notification access" in Settings, optional | `<service>` in `core/system/src/main/AndroidManifest.xml` | Unread counts and media controls. See [Notification listener](#notification-listener-m3) and [Media sessions](#media-sessions-m3). | No badges, no media row. |
 | *Shortcut host access* (not a manifest permission) | granted by **being the default home app** | — | `LauncherApps.getShortcuts` / `startShortcut` for app shortcuts in Search and intent detail. See [App shortcuts](#app-shortcuts-launcherapps-m2). | No shortcut rows or pills. |
 
-Those are the **only** permissions Reach declares in M2. The merged manifest additionally
+Those are the **only** permissions Reach declares as of M3 (the last four are all optional). The merged manifest additionally
 contains `com.baklavapp.reachlauncher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, a
 *signature* permission that AndroidX Core defines for Reach itself so
 `ContextCompat.registerReceiver(…, RECEIVER_NOT_EXPORTED)` can emulate non-exported runtime
@@ -42,7 +46,7 @@ receivers on Android versions before 13. It grants nothing to other apps.
 | `MODIFY_QUIET_MODE` | Not needed: `UserManager.requestQuietModeEnabled` is allowed for the foreground default launcher. |
 | `VIBRATE` | Not needed: haptics go through `View.performHapticFeedback` (Compose `LocalHapticFeedback`), which needs no permission ([Haptics](#haptics-m2)). |
 | `CALL_PHONE`, `SEND_SMS` | Not needed: a contact's Call / Message only *pre-fill* the dialer / messaging app (`ACTION_DIAL`, `ACTION_SENDTO`); the user presses call/send there. |
-| `READ_CALENDAR`, special accesses (notification listener, usage access, accessibility service) | Not yet: their sources are stubs in M2 (see [Coming in M3–M5](#coming-in-m3m5)). |
+| Accessibility service | Not yet: still a stub until M5 (see [Coming in M4–M5](#coming-in-m4m5)). |
 
 Library components in the merged manifest (none needs a permission from the user):
 `androidx.startup.InitializationProvider` (not exported), Room's
@@ -351,20 +355,211 @@ with other apps, excluded from cloud backup and device transfer (D9).
 
 ---
 
-## Coming in M3–M5
+## Access that is granted outside Reach, and the resume re-check (M3, D53)
 
-App shortcuts and contacts are done (M2, sections above). Most of what remains is already
-behind an interface in `core/data/…/source/SystemSources.kt` and bound to one of the six
-`Unavailable…` stubs in `core/system/…/di/SystemModule.kt`, which reports exactly
-what the real source reports with the permission denied. Milestones as stated in the stub's
-KDoc (`core/system/…/unavailable/UnavailableSources.kt`):
+**What.** Notification access and usage access are *special accesses*: no runtime dialog, the
+user flips a switch on a Settings screen. The calendar and contacts permissions are normal
+runtime permissions, but their dialog also happens outside Reach's own UI. Android sends **no
+broadcast** when any of these changes.
 
-- **Notification counts** — `NotificationListenerService`, enabled by the user in system settings; feeds the "3 NEW" badges (M3).
-- **Media sessions** — `MediaSessionManager.getActiveSessions(listenerComponent)`, reuses notification access; Listen row + Now Playing card (M3).
-- **Default-home onboarding card** — UI for the existing `HomeRoleSource` / `SystemScreen.HOME_ROLE` (M3).
-- **Calendar** — next event from `CalendarContract`, runtime permission `READ_CALENDAR` (M3).
-- **Work-profile contacts** — `ContactsContract.Contacts.ENTERPRISE_CONTENT_FILTER_URI`, subject to the admin's cross-profile contacts policy (M5).
-- **Usage stats** — `UsageStatsManager`, special access `PACKAGE_USAGE_STATS` via usage-access settings; optional prediction blend (M3).
+**How Reach notices.** To grant anything, the user leaves Reach's Activity and comes back, so
+the Activity *resumes*. `ActivityTracker.onActivityResumed` calls `AccessRechecks.recheck()`
+(`core/system/…/access/AccessRechecks.kt`), a singleton `StateFlow<Long>` counter. Each
+access-gated source maps it to a fresh read:
+
+```kotlin
+// simplified from core/system/…/access/AccessRechecks.kt (KDoc)
+override val isAccessGranted = rechecks.ticks.map { readAccess() }.distinctUntilChanged()
+```
+
+No contract needs a `recheck()` method, and no screen can forget to call it. Flutter: a
+`ValueNotifier<int>` bumped from `didChangeAppLifecycleState(resumed)`.
+
+---
+
+## Notification listener (M3)
+
+**What.** `ReachNotificationListenerService` (`core/system/…/notifications/`) extends
+`NotificationListenerService`. Once the user enables it, the *system* binds it and calls
+`onListenerConnected`, `onNotificationPosted` and `onNotificationRemoved`. It forwards only
+the notification `key`, the package + profile (`PackageUser`, D12) and two flags (ongoing,
+group summary) to `NotificationListenerHub`. It **never reads titles or text** and stores
+nothing (D54).
+
+**Manifest.**
+
+```xml
+<!-- simplified from core/system/src/main/AndroidManifest.xml -->
+<service android:name=".notifications.ReachNotificationListenerService"
+    android:exported="true"
+    android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+    <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+    </intent-filter>
+    <meta-data android:name="android.service.notification.default_filter_types"
+        android:value="conversations|alerting|silent" />
+</service>
+```
+
+- `exported="true"` because the system binds it from outside Reach's process;
+  `BIND_NOTIFICATION_LISTENER_SERVICE` means only the system (which holds it) can bind, so
+  no other app can.
+- `default_filter_types` (API 31+) says which kinds of notifications Reach wants delivered:
+  not the *ongoing* ones (music, navigation), which Reach would not count anyway. The user
+  can change it in Settings.
+
+**Why.** The "3 NEW" badges (spec §7.1), and it is the key to media sessions (next section).
+
+**How granted.** Home shows a card (below). Its button opens
+`Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS` with
+`EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME` on **API 30+** (the switch for Reach alone), or
+`ACTION_NOTIFICATION_LISTENER_SETTINGS` (the list of all listeners) before that
+(`SystemIntents.kt`). Android 13+ may grey the switch for apps not installed from a store
+("Restricted setting": Settings > Apps > Reach > ⋮ > *Allow restricted settings*).
+
+**Access check and rebind.** `NotificationAccess.isGranted()` calls
+`NotificationManager.isNotificationListenerAccessGranted(component)` (API 27+, no permission
+needed, exact component). It is re-read on every resume ([above](#access-that-is-granted-outside-reach-and-the-resume-re-check-m3-d53))
+and whenever the listener connects or disconnects. If access is granted but the hub says
+"not connected" (after an app update, or an OEM killing the process), Reach calls
+`NotificationListenerService.requestRebind(component)` (API 24+, a no-op if already bound) so
+badges do not silently freeze. The hub is cleared on disconnect, so counts are never stale.
+
+**Counting rules (D54).** Not ongoing (including foreground-service notifications), not a
+group summary, not Reach's own; keyed by `StatusBarNotification.key` so an update never
+counts twice; grouped per `PackageUser`.
+
+**Without it.** `NotificationCountSource` reports `isAccessGranted = false` and an empty map
+-> no badges, and `MediaSessionSource` reports nothing.
+
+**Play policy.** Notification access is a *sensitive* permission. Reach (1) uses it only for
+the user-visible features above, (2) processes on device only (no `INTERNET`), (3) never
+reads content and keeps counts in memory, (4) shows an in-app disclosure *before* sending the
+user to Settings (card text: "Notification access shows “3 NEW” on intents and what’s
+playing. Nothing leaves your phone.", D58), and (5) documents it in [PRIVACY.md](../PRIVACY.md).
+
+---
+
+## Media sessions (M3)
+
+**What.** `MediaSessionsSource` (`core/system/…/media/`) uses `MediaSessionManager`:
+
+```kotlin
+// simplified from core/system/…/media/MediaSessionsSource.kt
+manager.addOnActiveSessionsChangedListener(listener, access.listenerComponent, handler)
+track(manager.getActiveSessions(access.listenerComponent))   // throws SecurityException without access
+```
+
+Every music/podcast/video app publishes a *session*; reading and controlling other apps'
+sessions needs an enabled notification listener, which is why `getActiveSessions` takes
+Reach's `ComponentName`. Reach registers a `MediaController.Callback` on each session
+(`onPlaybackStateChanged`, `onMetadataChanged`, `onSessionDestroyed`) and re-chooses the
+session to show on every change (`MediaSessionChooser`, D55: has a title, playing beats
+paused, then the system's order).
+
+**Commands.** `controller.transportControls.play() / pause() / skipToNext() /
+skipToPrevious()` on the shown session's controller; with no session they do nothing.
+
+**Progress.** Sessions report position only on state changes, so the UI extrapolates
+(`MediaState.positionAt`: position + elapsed × speed) once a second, only while playing and
+Home is STARTED; with "Remove animations" the bar steps instead of gliding.
+
+**Why / how granted / without it.** The Listen row's inline player and the Now Playing card
+(spec §7.2). Granted by the same notification-access switch. Without it: `mediaState`
+emits `null`, nothing is shown. **Play policy:** same as above; title and app label are
+held in memory only.
+
+---
+
+## Calendar (`CalendarContract`, M3)
+
+**What.** `CalendarProviderSource` (`core/system/…/calendar/`) queries
+`CalendarContract.Instances` (occurrences, so recurring events just work) for local today +
+tomorrow, only *visible* calendars, and shows the next one (D56: declined and untitled
+events skipped; today's next timed event -> today's all-day -> tomorrow's first timed ->
+tomorrow's all-day).
+
+**Permission.** `READ_CALENDAR`, runtime, asked from a dismissible Home card with
+`ActivityResultContracts.RequestPermission`. Denied -> the card is dismissed for good.
+
+**When it re-reads** (only while Home collects it): on resume, on calendar
+`ACTION_PROVIDER_CHANGED`, on `ACTION_TIME_TICK` and time/date/zone changes.
+
+**Why an exported receiver.** The provider's *app* sends `ACTION_PROVIDER_CHANGED`, not the
+system, so a `RECEIVER_NOT_EXPORTED` receiver would never get it. Reach registers it
+`RECEIVER_EXPORTED`, filtered to the `content://com.android.calendar` authority. A spoofed
+broadcast can only make Reach run one cheap, permission-checked query. (All of Reach's
+other receivers are not exported.)
+
+```kotlin
+// simplified from core/system/…/calendar/CalendarProviderSource.kt
+val filter = IntentFilter(Intent.ACTION_PROVIDER_CHANGED).apply {
+    addDataScheme("content"); addDataAuthority(CalendarContract.AUTHORITY, null)
+}
+ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+```
+
+**Without it.** `nextEvent` is `null`; the line is hidden. **Play policy:** a dangerous
+permission with a clear user-facing feature; the data is read on demand, kept in memory and
+never stored or sent.
+
+---
+
+## Usage access (`UsageStatsManager`, M3)
+
+**What.** `UsageStatsManagerSource` (`core/system/…/usage/`) calls
+`UsageStatsManager.queryEvents(begin, end)` for the last N days and counts launches per hour
+and app (D57): `ACTIVITY_RESUMED` events (`MOVE_TO_FOREGROUND` on API 28); consecutive resumes
+of the same app count once; Reach's own resumes are ignored; hours are local. It only sees
+the current user's data. Nothing is stored. The Now row blends these counts into its
+predictions.
+
+**Permission.** `PACKAGE_USAGE_STATS`, declared with `tools:ignore="ProtectedPermissions"`:
+lint calls it "system only" because a normal install never grants it. Declaring it grants
+nothing; the user turns on *Usage access* for Reach (`Settings.ACTION_USAGE_ACCESS_SETTINGS`).
+
+**Access check.** Not `checkSelfPermission` (it says "denied" even when allowed). Instead:
+
+```kotlin
+// simplified from core/system/…/usage/UsageStatsManagerSource.kt
+val mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+// MODE_ALLOWED -> granted; MODE_DEFAULT -> fall back to the permission check
+```
+
+Re-read on every resume (D53).
+
+**Without it.** `isAccessGranted = false`, empty buckets; predictions use only Reach's own
+launch history (which needs no permission).
+
+**Play policy.** Usage access is *sensitive*. Reach asks only from an optional card ("Optional.
+Usage access tells Reach which apps you open at what hour. It stays on your phone.", D58),
+uses it only for on-device predictions, and lists it in [PRIVACY.md](../PRIVACY.md).
+
+---
+
+## In-app disclosure cards (D58)
+
+Before Reach sends the user to any of these screens, Home shows **one compact, dismissible
+card at a time**, in this order: default home -> notification access -> calendar -> usage
+access. Each has a one-line reason (the in-app disclosure Play expects for sensitive
+permissions), a primary action and "Not now". "Not now" and a denied calendar permission are
+stored permanently in DataStore (`dismissedTips`): Reach never nags. If a Settings screen
+cannot be opened on the device, the card dismisses itself. A card disappears as soon as the
+access is on. Code: `HomeViewModel.onboarding` / `OnboardingCard.next`,
+`feature/home/…/ui/SystemCards.kt`.
+
+---
+
+## Coming in M4-M5
+
+Notification counts, media sessions, the default-home card, calendar and usage stats are done
+(M3, sections above). **Only these remain stubbed**, bound to `Unavailable…` classes in
+`core/system/…/di/SystemModule.kt` (`core/system/…/unavailable/UnavailableSources.kt`):
+
 - **Wallpaper colours** — `WallpaperManager.getWallpaperColors(FLAG_SYSTEM)` for the wallpaper-mode accent (M4).
 - **Accessibility service** — opt-in, `GLOBAL_ACTION_LOCK_SCREEN` / `GLOBAL_ACTION_NOTIFICATIONS`, with the Play accessibility-API disclosure text (M5).
-- **Private space** — `ACCESS_HIDDEN_PROFILES` and the exact Android 15+ behaviour, verified in M5 (D13).
+
+Also planned (not behind a stub): **work-profile contacts** via
+`ContactsContract.Contacts.ENTERPRISE_CONTENT_FILTER_URI`, subject to the admin's
+cross-profile contacts policy (M5), and the **private space** via `ACCESS_HIDDEN_PROFILES`
+with the exact Android 15+ behaviour verified in M5 (D13).

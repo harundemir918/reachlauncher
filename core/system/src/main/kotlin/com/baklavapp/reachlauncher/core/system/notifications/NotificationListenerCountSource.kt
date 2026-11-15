@@ -3,6 +3,7 @@ package com.baklavapp.reachlauncher.core.system.notifications
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import androidx.core.content.getSystemService
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
@@ -12,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,12 +56,26 @@ class NotificationAccess
                 isGranted().also { granted -> if (granted && !connected) requestRebind() }
             }.distinctUntilChanged()
 
+        private val lastRebindAt = AtomicLong(Long.MIN_VALUE / 2)
+
+        /**
+         * [granted] is cold, so every collector (counts, media, onboarding) runs this check on
+         * each resume. A rebind is cheap but not free: at most one request per
+         * [REBIND_INTERVAL_MILLIS], however many collectors notice the listener is unbound.
+         */
         private fun requestRebind() {
+            val now = SystemClock.elapsedRealtime()
+            val last = lastRebindAt.get()
+            if (now - last < REBIND_INTERVAL_MILLIS || !lastRebindAt.compareAndSet(last, now)) return
             try {
                 NotificationListenerService.requestRebind(listenerComponent)
             } catch (e: SecurityException) {
                 // Access was revoked between the check and the call; the next check says so.
             }
+        }
+
+        private companion object {
+            const val REBIND_INTERVAL_MILLIS = 10_000L
         }
     }
 

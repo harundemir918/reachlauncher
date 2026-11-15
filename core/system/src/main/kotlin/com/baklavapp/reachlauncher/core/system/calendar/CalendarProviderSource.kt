@@ -43,20 +43,23 @@ import javax.inject.Singleton
  * @property beginMillis for all-day events this is *UTC midnight* of the event's date
  *   (Calendar Provider convention), not local midnight.
  * @property declined the user answered "No" (`SELF_ATTENDEE_STATUS == ATTENDEE_STATUS_DECLINED`).
+ * @property endMillis end of the occurrence (exclusive); for all-day events *UTC midnight* of
+ *   the day after the last day, so a 3-day trip spans three UTC dates. Null = a single day.
  */
 data class InstanceRow(
     val title: String?,
     val beginMillis: Long,
     val isAllDay: Boolean,
     val declined: Boolean,
+    val endMillis: Long? = null,
 )
 
 /**
  * Picks Home's context-line event (spec §6.3 item 3, §7.6): "what's next", today or
  * tomorrow. Pure, so the rules are JVM-testable:
  * 1. Untitled and declined events are skipped.
- * 2. Timed events count only if they haven't started yet; all-day events count for their
- *    whole (UTC-dated) day.
+ * 2. Timed events count only if they haven't started yet; all-day events count for *every*
+ *    (UTC-dated) day they cover — day 2 of a 3-day trip still shows it.
  * 3. Order: today's next timed event → today's all-day event → tomorrow's first timed event →
  *    tomorrow's all-day event. A meeting at 15:00 is more useful than "Birthday" all day,
  *    but today's birthday beats tomorrow's meeting.
@@ -76,7 +79,14 @@ object NextEventPicker {
 
         fun LocalDate.timed() = timed.firstOrNull { Instant.ofEpochMilli(it.beginMillis).atZone(zone).toLocalDate() == this }
 
-        fun LocalDate.allDay() = allDay.firstOrNull { Instant.ofEpochMilli(it.beginMillis).atZone(ZoneOffset.UTC).toLocalDate() == this }
+        fun Long.utcDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
+
+        fun LocalDate.allDay() =
+            allDay.firstOrNull { row ->
+                val first = row.beginMillis.utcDate()
+                val endExclusive = row.endMillis?.utcDate()?.takeIf { it > first } ?: first.plusDays(1)
+                this >= first && this < endExclusive
+            }
         val chosen = today.timed() ?: today.allDay() ?: tomorrow.timed() ?: tomorrow.allDay() ?: return null
         return CalendarEvent(title = chosen.title.orEmpty().trim(), beginEpochMillis = chosen.beginMillis, isAllDay = chosen.isAllDay)
     }
@@ -208,6 +218,7 @@ class CalendarProviderSource
                             beginMillis = getLong(1),
                             isAllDay = getInt(2) != 0,
                             declined = getInt(3) == CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED,
+                            endMillis = if (isNull(4)) null else getLong(4),
                         ),
                     )
                 }
@@ -220,6 +231,7 @@ class CalendarProviderSource
                     CalendarContract.Instances.BEGIN,
                     CalendarContract.Instances.ALL_DAY,
                     CalendarContract.Instances.SELF_ATTENDEE_STATUS,
+                    CalendarContract.Instances.END,
                 )
             val TIME_ACTIONS =
                 listOf(

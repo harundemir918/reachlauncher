@@ -1,11 +1,13 @@
 # Flutter → Compose (and Android) for Reach
 
-**v3 (M2) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
+**v4 (M3) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
 illustrative examples with real code from the M1 launcher (events, lifecycle effects,
 `callbackFlow`, nested scroll, semantics, UI tests); v3 adds what M2 brought: custom
 gestures (`pointerInput` / `awaitEachGesture`, in depth in [GESTURES.md](GESTURES.md)),
 `LazyColumn` + `FlowRow` in All Apps, the search text field and focus, runtime permission
-requests, debounced flows, composable slots, the shared `LaunchApp` use case and haptics.
+requests, debounced flows, composable slots, the shared `LaunchApp` use case and haptics; v4 adds what M3 brought: Android `Service`s
+(the notification listener), broadcast receivers, special accesses versus runtime
+permissions, and re-checking on resume (see [the M3 sections](#system-features-m3-services-receivers-special-access-and-resume)).
 
 ## How to read this
 
@@ -47,6 +49,10 @@ and `app/…/MainActivity.kt` = `app/src/main/kotlin/com/baklavapp/reachlauncher
 | get_it / injectable | Hilt (`@Inject constructor`, `@Module @InstallIn`, `@Binds`, `@Provides`, `@HiltViewModel`) |
 | `shared_preferences` | DataStore (`SettingsRepositoryImpl`) |
 | sqflite / drift | Room (`@Entity`, `@Dao`, `@Database`); KSP ≈ build_runner |
+| Native background component the OS binds to (plugin's `Service`) | `Service` / `NotificationListenerService` (`ReachNotificationListenerService`); no direct Flutter equivalent |
+| `EventChannel` of platform events | `BroadcastReceiver` registered at runtime, wrapped in `callbackFlow` |
+| `permission_handler` for Settings-only grants | special access (notification listener, usage access): switch in Settings, no dialog |
+| `didChangeAppLifecycleState(resumed)` | `LifecycleResumeEffect` / `AccessRechecks` on `onActivityResumed` |
 | `Theme.of(context)` / `ThemeExtension` | `CompositionLocal` — `ReachTheme.colors` reads `LocalReachColors` |
 | `Column` / `Row` / `Stack` / `Wrap` | `Column` / `Row` / `Box` / `FlowRow` |
 | `Padding` / `SizedBox` / `Container` | `Modifier` chains (order matters) |
@@ -1314,6 +1320,92 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 
 ---
 
+## System features (M3): services, receivers, special access and resume
+
+### Android `Service` / `NotificationListenerService` ↔ (no direct equivalent)
+
+A Flutter app has one process-wide Dart isolate you start yourself. Android has four kinds of
+*components* the **OS** creates and calls: `Activity` (a screen), `Service` (no UI),
+`BroadcastReceiver` (an event) and `ContentProvider` (data). They are declared in the
+manifest, and Android can start them even when none of your UI exists. The nearest Flutter
+thing is the *native background half of a plugin*: e.g. the Kotlin class in
+`flutter_local_notifications` or `audio_service` that the OS calls, which then pushes events
+to Dart through a channel.
+
+```kotlin
+// simplified from core/system/…/notifications/ReachNotificationListenerService.kt
+@AndroidEntryPoint                       // lets Hilt inject fields into a class Android creates
+class ReachNotificationListenerService : NotificationListenerService() {
+    @Inject lateinit var hub: NotificationListenerHub
+
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        sbn?.let { hub.onPosted(entryOf(it)) }     // forward only; the hub counts
+    }
+    override fun onListenerDisconnected() { hub.onDisconnected() }
+}
+```
+
+Because Android (not Hilt) creates the service, it cannot take constructor parameters. So it
+does one thing: forward to a Hilt `@Singleton` hub, which the rest of the app uses like any
+other `Flow` source. Think of the hub as the `StreamController` the plugin's native side
+writes into. The manifest entry (`exported="true"`, `BIND_NOTIFICATION_LISTENER_SERVICE`) is
+explained in [ANDROID_APIS.md](ANDROID_APIS.md#notification-listener-m3).
+
+### `BroadcastReceiver` ↔ `EventChannel`-style platform events
+
+A broadcast is a system-wide message ("time changed", "calendar provider changed"). You
+register a receiver, convert it into a stream, and unregister when nobody listens. Exactly an
+`EventChannel` stream with `onListen`/`onCancel`:
+
+```kotlin
+// simplified from core/system/…/calendar/CalendarProviderSource.kt
+private fun providerChanges(): Flow<Unit> = callbackFlow {
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) { trySend(Unit) }
+    }
+    ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+    awaitClose { context.unregisterReceiver(receiver) }          // ≈ onCancel
+}
+```
+
+Reach registers almost all receivers `RECEIVER_NOT_EXPORTED` ("only my app may send me this").
+This one is `EXPORTED` because the Calendar app sends it, not the system (D56).
+
+### Special accesses ↔ runtime permissions
+
+| | Runtime permission (`READ_CONTACTS`, `READ_CALENDAR`) | Special access (notification listener, usage access) |
+|---|---|---|
+| Flutter | `permission_handler`'s `request()` | the plugin tells you "open Settings and flip a switch" |
+| Android UI | a system dialog over your app | a full Settings screen you send the user to |
+| Reach asks with | `rememberLauncherForActivityResult(RequestPermission())` | `AppLauncher.open(SystemScreen.NOTIFICATION_ACCESS)` |
+| Check | `checkSelfPermission` | `isNotificationListenerAccessGranted(component)` / `AppOpsManager.checkOpNoThrow(…)` |
+| Result delivered | callback | **nothing**; you re-check when the app is resumed |
+
+### `LifecycleResumeEffect` / re-check on resume ↔ `didChangeAppLifecycleState(resumed)`
+
+Since nothing tells Reach that the user flipped a switch in Settings, Reach re-reads on every
+Activity resume. In Flutter you would bump a `ValueNotifier` from a `WidgetsBindingObserver`;
+Reach does it once, in `:core:system`, for every source:
+
+```kotlin
+// simplified from core/system/…/access/AccessRechecks.kt and notifications/NotificationAccess.kt
+@Singleton class AccessRechecks @Inject constructor() {
+    private val counter = MutableStateFlow(0L)
+    val ticks: StateFlow<Long> = counter.asStateFlow()
+    fun recheck() = counter.update { it + 1 }        // called from ActivityTracker.onActivityResumed
+}
+
+val granted: Flow<Boolean> = combine(rechecks.ticks, hub.connected) { _, connected ->
+    isGranted().also { granted -> if (granted && !connected) requestRebind() }
+}.distinctUntilChanged()
+```
+
+Screens that need their own resume hook still use `LifecycleResumeEffect` (see
+[the lifecycle section](#initstatedispose-and-app-lifecycle--disposableeffect--lifecycleresumeeffect)).
+The onboarding card then simply disappears when the flow flips to `true`: UI = f(state).
+
+---
+
 ## Mental model differences that bite Flutter devs
 
 1. **Recomposition isn't rebuilding a tree you hold.** You never get a widget object back
@@ -1405,6 +1497,10 @@ Backtick names are just Kotlin identifiers with spaces — handy for test names.
 | Lint/format rules (≈ `analysis_options.yaml`) | `.editorconfig`, the `lint { }` blocks in module build files |
 | Architecture, APIs, gestures, decisions | `docs/ARCHITECTURE.md`, `docs/ANDROID_APIS.md`, `docs/GESTURES.md`, `docs/DECISIONS.md`, `docs/PLAN.md` |
 
-Coming in later versions of this file: services (`NotificationListenerService`), special-access
-settings flows and the onboarding card (M3); window themes/wallpaper and the Appearance
-bottom sheet (M4).
+M3 additions: the system-feature code lives in `core/system/…/notifications/`, `…/media/`,
+`…/calendar/`, `…/usage/`, `…/access/AccessRechecks.kt`; the cards in
+`feature/home/…/ui/SystemCards.kt`, `HomeViewModel.kt` (`onboarding`, `system`) and
+`MediaProgress.kt`.
+
+Coming in later versions of this file: window themes/wallpaper and the Appearance bottom
+sheet (M4); the accessibility service (M5).

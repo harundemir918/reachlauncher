@@ -120,14 +120,18 @@ class UsageStatsManagerSource
                 val manager = context.getSystemService<UsageStatsManager>() ?: return@withContext emptyMap()
                 val end = clock.millis()
                 val begin = end - days * MILLIS_PER_DAY
-                val events =
+                val resumes =
                     try {
                         // Null while the user is locked (direct boot); throws if access vanished.
-                        manager.queryEvents(begin, end)
+                        manager.queryEvents(begin, end)?.resumes()
                     } catch (e: SecurityException) {
                         null
+                    } catch (e: RuntimeException) {
+                        // Some OEM builds throw from queryEvents/getNextEvent (e.g. a corrupt
+                        // usage database). Usage data is an optional blend: just skip it.
+                        null
                     } ?: return@withContext emptyMap()
-                UsageBuckets.launchesByHour(events.resumes(), clock.zone, context.packageName)
+                UsageBuckets.launchesByHour(resumes, clock.zone, context.packageName)
             }
 
         private fun UsageEvents.resumes(): List<ResumeEvent> {
