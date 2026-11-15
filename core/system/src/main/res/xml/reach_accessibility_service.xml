@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Configuration of ReachAccessibilityService (spec §7.4), deliberately minimal:
+    - No accessibilityEventTypes: the service subscribes to no events at all (the default
+      event mask is 0). It only performs two global actions, lock screen and open
+      notifications, which need no events.
+    - packageNames: even if some future change subscribed to events, they would be limited to
+      Reach's own windows.
+    - canRetrieveWindowContent="false" and no can* capabilities: it cannot read the screen,
+      perform gestures, filter keys or take screenshots.
+    - isAccessibilityTool="false": honest for Google Play — this is a convenience feature, not
+      an assistive tool (the Play accessibility-API disclosure is in docs/ANDROID_APIS.md).
+    - description / summary: what Settings shows before the user switches it on.
+    tools:ignore UnusedAttribute: isAccessibilityTool is read from API 31; older releases
+    ignore it harmlessly (they have no such Play/Settings distinction).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/system_a11y_service_description"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="0"
+    android:packageNames="com.baklavapp.reachlauncher"
+    android:summary="@string/system_a11y_service_summary"
+    tools:ignore="UnusedAttribute" />

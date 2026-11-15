@@ -19,3 +19,8 @@ local.properties
 # Agent worktrees and IDE state
 .claude/worktrees/
 .idea/
+
+# Release signing (D69): never commit keys or their passwords.
+keystore.properties
+*.jks
+*.keystore

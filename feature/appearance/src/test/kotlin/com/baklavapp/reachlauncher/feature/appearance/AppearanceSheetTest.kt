@@ -66,6 +66,8 @@ class AppearanceSheetTest {
                                 onPalette = { state = state.copy(palette = it) },
                                 onShowWallpaper = { state = state.copy(showWallpaper = it) },
                                 onThumbSide = { state = state.copy(thumbSide = it) },
+                                onDoubleTapToLock = { state = state.copy(doubleTapToLock = it) },
+                                onOpenAccessibilitySettings = { openedSettings++ },
                             ),
                         onClose = { closed++ },
                     )
@@ -74,6 +76,8 @@ class AppearanceSheetTest {
         }
         return { holder.value }
     }
+
+    private var openedSettings = 0
 
     private fun hasRole(role: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, role)
 
@@ -124,5 +128,17 @@ class AppearanceSheetTest {
         setSheet()
         composeRule.onNodeWithContentDescription("Done").performClick()
         assertThat(closed).isEqualTo(1)
+    }
+
+    @Test
+    fun doubleTapToLockIsASwitchAndTheServiceButtonWorksAt200PercentFont() {
+        val state = setSheet(fontScale = 2f)
+        val row = composeRule.onNode(hasRole(Role.Switch) and hasText("Double-tap to lock", substring = true))
+        row.performScrollTo().assertIsOff().performClick()
+        assertThat(state().doubleTapToLock).isTrue()
+        row.assertIsOn()
+
+        composeRule.onNodeWithContentDescription("Turn on in Accessibility settings").performScrollTo().performClick()
+        assertThat(openedSettings).isEqualTo(1)
     }
 }

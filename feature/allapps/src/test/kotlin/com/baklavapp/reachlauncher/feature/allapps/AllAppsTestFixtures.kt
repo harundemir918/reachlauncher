@@ -4,6 +4,7 @@ import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
 import com.baklavapp.reachlauncher.core.data.fake.FakeLaunchHistoryRepository
+import com.baklavapp.reachlauncher.core.data.fake.FakeProfileSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
@@ -74,6 +75,7 @@ class AllAppsFixture(
     val settings = FakeSettingsRepository()
     val history = FakeLaunchHistoryRepository()
     val launcher = RecordingAppLauncher()
+    val profiles = FakeProfileSource()
     private val clock: Clock = Clock.fixed(Instant.parse("2026-11-08T09:41:00Z"), ZoneOffset.UTC)
 
     val viewModel =
@@ -82,6 +84,7 @@ class AllAppsFixture(
             settingsRepository = settings,
             launchApp = LaunchApp(launcher, FakeShortcutSource(), history, clock, appScope),
             appLauncher = launcher,
+            profileSource = profiles,
             defaultDispatcher = dispatcher,
         )
 }

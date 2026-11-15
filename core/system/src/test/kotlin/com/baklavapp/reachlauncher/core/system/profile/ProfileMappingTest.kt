@@ -30,6 +30,19 @@ class ProfileMappingTest {
     }
 
     @Test
+    fun `launcher user info maps to a lookup`() {
+        assertThat(privateLookupOf("android.os.usertype.profile.PRIVATE")).isEqualTo(PrivateLookup.PRIVATE)
+        assertThat(privateLookupOf("android.os.usertype.profile.MANAGED")).isEqualTo(PrivateLookup.NOT_PRIVATE)
+        // No info for a listed profile: a work profile in transition, not a private space (D67).
+        assertThat(privateLookupOf(null)).isEqualTo(PrivateLookup.NOT_PRIVATE)
+    }
+
+    @Test
+    fun `the private user type constant matches the SDK`() {
+        assertThat(USER_TYPE_PROFILE_PRIVATE).isEqualTo(android.os.UserManager.USER_TYPE_PROFILE_PRIVATE)
+    }
+
+    @Test
     fun `application categories map to the mirror`() {
         assertThat(appCategoryOf(ApplicationInfo.CATEGORY_SOCIAL)).isEqualTo(AppCategory.SOCIAL)
         assertThat(appCategoryOf(ApplicationInfo.CATEGORY_MAPS)).isEqualTo(AppCategory.MAPS)

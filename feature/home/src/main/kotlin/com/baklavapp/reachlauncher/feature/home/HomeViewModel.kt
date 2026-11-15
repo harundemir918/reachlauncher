@@ -12,6 +12,7 @@ import com.baklavapp.reachlauncher.core.data.source.CalendarSource
 import com.baklavapp.reachlauncher.core.data.source.HomeRoleSource
 import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
+import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
 import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
@@ -22,6 +23,7 @@ import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.Prediction
+import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -95,6 +98,7 @@ class HomeViewModel
         usageStatsSource: UsageStatsSource,
         private val appLauncher: AppLauncher,
         private val wallpaperColorSource: WallpaperColorSource,
+        private val screenActionsSource: ScreenActionsSource,
         @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _surface = MutableStateFlow<HomeSurface>(HomeSurface.Home)
@@ -182,8 +186,21 @@ class HomeViewModel
          * access-gated source whenever a Reach Activity resumes (docs/DECISIONS.md), so these
          * flows re-emit without the ViewModel doing anything.
          */
+        private val gestures: Flow<HomeGesturesUi> =
+            combine(
+                settingsRepository.settings.map { it.doubleTapToLock to it.hiddenApiShadeFallback }.distinctUntilChanged(),
+                screenActionsSource.isServiceEnabled,
+            ) { (doubleTap, hiddenApiFallback), serviceOn ->
+                HomeGesturesUi(
+                    doubleTapToLock = doubleTap,
+                    canLock = serviceOn,
+                    canOpenShade = serviceOn,
+                    twoFingerSwipe = serviceOn || hiddenApiFallback,
+                )
+            }
+
         val system: StateFlow<HomeSystemUi> =
-            combine(mediaSessionSource.mediaState, calendarSource.nextEvent, onboarding, ::HomeSystemUi)
+            combine(mediaSessionSource.mediaState, calendarSource.nextEvent, onboarding, gestures, ::HomeSystemUi)
                 .distinctUntilChanged()
                 .flowOn(defaultDispatcher)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeSystemUi())
@@ -228,6 +245,43 @@ class HomeViewModel
          */
         fun onCalendarPermissionResult(granted: Boolean) {
             if (!granted) onOnboardingDismissed(OnboardingCard.CALENDAR)
+        }
+
+        // ---- Screen actions (spec §7.4, D66) ----------------------------------------------
+        //
+        // Both go through the optional accessibility service. Without it nothing destructive
+        // happens: Home shows a short hint that points to the Appearance sheet, where the user
+        // can turn the service on (Reach never opens Settings uninvited, never uses
+        // device-admin lockNow()).
+
+        /**
+         * Double-tap on empty Home (only detected while "Double-tap to lock" is on) or the
+         * "Lock screen" TalkBack action.
+         */
+        fun onLockScreenRequested() {
+            if (!screenActionsSource.lockScreen()) {
+                eventChannel.trySend(HomeEvent.ScreenActionUnavailable(ScreenAction.LOCK))
+            }
+        }
+
+        /**
+         * Two-finger swipe down on Home, or the "Open notifications" TalkBack action. Tries the
+         * service, then — only if the user's flag allows it — the hidden-API fallback.
+         */
+        fun onNotificationsRequested() {
+            viewModelScope.launch {
+                val allowHiddenApi =
+                    try {
+                        settingsRepository.settings.first().hiddenApiShadeFallback
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        false
+                    }
+                if (!screenActionsSource.openNotificationShade(allowHiddenApi)) {
+                    eventChannel.trySend(HomeEvent.ScreenActionUnavailable(ScreenAction.NOTIFICATIONS))
+                }
+            }
         }
 
         /** Tap on an intent word, or on a chip in intent detail: show that intent's apps. */
@@ -446,7 +500,9 @@ class HomeViewModel
                 catalog: CatalogSnapshot,
                 predictions: List<Prediction>,
             ): HomeUiState {
-                val visible = catalog.apps.filterNot { it.isHidden }
+                // Private-space apps stay in All Apps' "Private space" section and Search only,
+                // never in Home's intents (Android's guidance for launchers; D71).
+                val visible = catalog.apps.filterNot { it.isHidden || it.profile == ProfileType.PRIVATE }
                 val byIntent = visible.groupBy { it.intent }
                 val intents =
                     ReachIntent.entries.map { intent ->

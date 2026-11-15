@@ -72,4 +72,11 @@
     <string name="ds_palette_forest">Forest</string>
     <string name="ds_palette_dusk">Dusk</string>
     <string name="ds_palette_high_contrast">High Contrast</string>
+    <!-- The six intent words (Home rows, detail title, chips, menus). Short: they render at 46–60sp. -->
+    <string name="ds_intent_talk">Talk</string>
+    <string name="ds_intent_listen">Listen</string>
+    <string name="ds_intent_go">Go</string>
+    <string name="ds_intent_make">Make</string>
+    <string name="ds_intent_play">Play</string>
+    <string name="ds_intent_tools">Tools</string>
 </resources>

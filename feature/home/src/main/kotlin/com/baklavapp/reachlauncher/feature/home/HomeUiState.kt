@@ -170,13 +170,47 @@ data class IntentDetailUi(
  * @property nextEvent the context line under the clock; null hides it (no event, or no
  *   calendar permission).
  * @property onboarding the single card to show, or null for none (all granted, or dismissed).
+ * @property gestures the screen-action gestures (double-tap to lock, two-finger shade).
  */
 @Immutable
 data class HomeSystemUi(
     val media: MediaState? = null,
     val nextEvent: CalendarEvent? = null,
     val onboarding: OnboardingCard? = null,
+    val gestures: HomeGesturesUi = HomeGesturesUi(),
 )
+
+/**
+ * What Home's screen-action gestures may do (spec §6.3, §7.4; docs/DECISIONS.md D66).
+ *
+ * @property doubleTapToLock the user switched on "Double-tap to lock" (Appearance sheet).
+ *   Only then does Home listen for double-taps at all, so a single tap on empty space is
+ *   never delayed while it waits for a possible second one.
+ * @property canLock the accessibility service is on: locking will work. Adds the "Lock
+ *   screen" TalkBack action.
+ * @property canOpenShade the service is on: adds the "Open notifications" TalkBack action.
+ *   (Not the hidden-API fallback: it can fail silently, and an action is only offered when
+ *   it will work.)
+ * @property twoFingerSwipe Home listens for the two-finger swipe: the service is on, or the
+ *   best-effort hidden-API fallback is allowed. Otherwise two-finger touches pass through
+ *   untouched (D71).
+ */
+@Immutable
+data class HomeGesturesUi(
+    val doubleTapToLock: Boolean = false,
+    val canLock: Boolean = false,
+    val canOpenShade: Boolean = false,
+    val twoFingerSwipe: Boolean = false,
+)
+
+/** A screen action that can be unavailable (accessibility service off). */
+enum class ScreenAction {
+    /** Lock the screen (double-tap on empty Home). */
+    LOCK,
+
+    /** Open the notification shade (two-finger swipe down on Home). */
+    NOTIFICATIONS,
+}
 
 /**
  * Onboarding and permission cards (spec §4, §7), in the order they are offered — one at a
@@ -235,5 +269,14 @@ sealed interface HomeEvent {
     /** An app or shortcut couldn't be opened (uninstalled, disabled, locked profile). */
     data class LaunchFailed(
         val label: String,
+    ) : HomeEvent
+
+    /**
+     * A screen-action gesture couldn't run because the accessibility service is off: show a
+     * short hint pointing to the Appearance sheet, where the user can turn it on (never a
+     * dialog, and nothing destructive happens instead).
+     */
+    data class ScreenActionUnavailable(
+        val action: ScreenAction,
     ) : HomeEvent
 }

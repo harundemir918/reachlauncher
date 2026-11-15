@@ -29,4 +29,12 @@
     <string name="appearance_thumb_side">thumb side</string>
     <string name="appearance_thumb_left">Left</string>
     <string name="appearance_thumb_right">Right</string>
+    <!-- Gestures section (spec §7.4): Home's screen-action gestures and the optional accessibility service. -->
+    <string name="appearance_gestures">gestures</string>
+    <string name="appearance_double_tap_lock">Double-tap to lock</string>
+    <string name="appearance_double_tap_lock_on">Double-tap empty space on Home to lock the screen</string>
+    <string name="appearance_double_tap_lock_needs_service">Needs Reach’s accessibility service, which is off</string>
+    <!-- Shown under the switch while the service is off: what the service is used for. -->
+    <string name="appearance_service_why">Reach’s accessibility service is used only to lock the screen and to open notifications with a two-finger swipe down on Home. It reads nothing on your screen.</string>
+    <string name="appearance_service_turn_on">Turn on in Accessibility settings</string>
 </resources>

@@ -1,10 +1,13 @@
 package com.baklavapp.reachlauncher.feature.appearance
 
 import app.cash.turbine.test
+import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
+import com.baklavapp.reachlauncher.core.data.fake.FakeScreenActionsSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.PaletteId
+import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.model.ThemeMode
 import com.baklavapp.reachlauncher.core.model.ThumbSide
 import com.google.common.truth.Truth.assertThat
@@ -43,7 +46,7 @@ class AppearanceViewModelTest {
                 FakeSettingsRepository(
                     AppearanceSettings(ThemeMode.DARK, PaletteId.DUSK, showWallpaper = true, thumbSide = ThumbSide.RIGHT),
                 )
-            AppearanceViewModel(repo).uiState.test {
+            AppearanceViewModel(repo, FakeScreenActionsSource(), FakeAppLauncher()).uiState.test {
                 assertThat(expectMostRecentItem())
                     .isEqualTo(AppearanceUiState(true, ThemeMode.DARK, PaletteId.DUSK, showWallpaper = true, thumbSide = ThumbSide.RIGHT))
             }
@@ -53,7 +56,7 @@ class AppearanceViewModelTest {
     fun `every control writes through and the state follows live`() =
         runTest {
             val repo = FakeSettingsRepository()
-            val vm = AppearanceViewModel(repo)
+            val vm = AppearanceViewModel(repo, FakeScreenActionsSource(), FakeAppLauncher())
             vm.uiState.test {
                 assertThat(expectMostRecentItem().themeMode).isEqualTo(ThemeMode.AUTO)
 
@@ -80,11 +83,35 @@ class AppearanceViewModelTest {
                 object : SettingsRepository by FakeSettingsRepository() {
                     override suspend fun setPalette(palette: PaletteId): Unit = throw IllegalStateException("disk full")
                 }
-            val vm = AppearanceViewModel(failing)
+            val vm = AppearanceViewModel(failing, FakeScreenActionsSource(), FakeAppLauncher())
             vm.uiState.test {
                 assertThat(expectMostRecentItem().palette).isEqualTo(PaletteId.DEFAULT)
                 vm.onPaletteSelected(PaletteId.FOREST)
                 expectNoEvents()
             }
+        }
+
+    @Test
+    fun `double-tap to lock is stored and the service button opens accessibility settings`() =
+        runTest {
+            val repo = FakeSettingsRepository()
+            val service = FakeScreenActionsSource()
+            val launcher = FakeAppLauncher()
+            val vm = AppearanceViewModel(repo, service, launcher)
+            vm.uiState.test {
+                assertThat(expectMostRecentItem().accessibilityServiceOn).isFalse()
+
+                vm.onDoubleTapToLockChanged(true)
+                assertThat(awaitItem().doubleTapToLock).isTrue()
+                // Storing the choice never jumps to Settings by itself.
+                assertThat(launcher.openedScreens).isEmpty()
+
+                vm.onOpenAccessibilitySettings()
+                assertThat(launcher.openedScreens).containsExactly(SystemScreen.ACCESSIBILITY_SERVICE)
+
+                service.enabled.value = true
+                assertThat(awaitItem().accessibilityServiceOn).isTrue()
+            }
+            assertThat(repo.state.value.doubleTapToLock).isTrue()
         }
 }

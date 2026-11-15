@@ -7,9 +7,12 @@ import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
+import com.baklavapp.reachlauncher.core.data.source.ProfileSource
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.LaunchResult
+import com.baklavapp.reachlauncher.core.model.ProfileState
+import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.core.model.ThumbSide
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -58,6 +62,7 @@ class AllAppsViewModel
         settingsRepository: SettingsRepository,
         private val launchApp: LaunchApp,
         private val appLauncher: AppLauncher,
+        private val profileSource: ProfileSource,
         @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val locale = MutableStateFlow(Locale.getDefault())
@@ -75,7 +80,7 @@ class AllAppsViewModel
 
         /** The single source of truth for the screen. Starts empty with [AllAppsUiState.loaded] = false. */
         val uiState: StateFlow<AllAppsUiState> =
-            combine(catalogRepository.apps, letterIndex, thumbSide, ::buildUiState)
+            combine(catalogRepository.apps, letterIndex, thumbSide, profileSource.profiles.onStart { emit(emptyList()) }, ::buildUiState)
                 .flowOn(defaultDispatcher)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AllAppsUiState())
 
@@ -99,6 +104,16 @@ class AllAppsViewModel
                 LaunchResult.RESUMING_PROFILE -> Unit
                 LaunchResult.FAILED -> eventChannel.trySend(AllAppsEvent.LaunchFailed(app.label))
             }
+        }
+
+        /**
+         * The private space's Lock / Unlock button (`UserManager.requestQuietModeEnabled`, D67).
+         * Unlocking may show the system's credential screen first; either way the section
+         * updates when the profile broadcast arrives, so nothing is changed here optimistically.
+         */
+        fun togglePrivateSpace() {
+            val space = uiState.value.privateSpace ?: return
+            profileSource.setQuietMode(space.userSerial, enabled = !space.isLocked)
         }
 
         /** Menu "App info": the system's App info screen. */
@@ -145,15 +160,22 @@ class AllAppsViewModel
 
 /**
  * Turns the catalog (Collator-sorted, hidden apps included) into the screen's state: hidden
- * apps move to their own group and out of the count, the rest are bucketed by [index].
+ * apps move to their own group and out of the count, private-space apps to their own
+ * section ([PrivateSpaceUi], from [profiles]), the rest are bucketed by [index].
  * Pure, so UI tests can build realistic states without a ViewModel.
  */
 internal fun buildUiState(
     apps: List<CatalogApp>,
     index: LetterIndex,
     thumbSide: ThumbSide,
+    profiles: List<ProfileState> = emptyList(),
 ): AllAppsUiState {
-    val (hidden, visible) = apps.partition { it.isHidden }
+    // Private-space apps never join the letter groups: they get their own section (D67).
+    val (privateApps, others) = apps.partition { it.profile == ProfileType.PRIVATE }
+    val (hiddenOthers, visible) = others.partition { it.isHidden }
+    // A hidden private app stays un-hideable from the Hidden group (only while unlocked: the
+    // catalog never emits a locked private space's apps).
+    val hidden = hiddenOthers + privateApps.filter { it.isHidden }
     val groups = index.group(visible) { it.label }.map { (letter, list) -> LetterGroup(letter, list) }
     val groupByLetter = groups.withIndex().associate { (i, group) -> group.letter to i }
     return AllAppsUiState(
@@ -163,5 +185,6 @@ internal fun buildUiState(
         hidden = hidden,
         rail = index.letters.map { RailLetter(it, groupByLetter[it]) },
         thumbSide = thumbSide,
+        privateSpace = PrivateSpaceUi.of(profiles, privateApps.filterNot { it.isHidden }),
     )
 }

@@ -13,12 +13,11 @@
     <string name="allapps_rail">Harf dizini</string>
     <string name="allapps_rail_jump">%1$s harfine git</string>
 
-    <string name="allapps_intent_talk">Konuş</string>
-    <string name="allapps_intent_listen">Dinle</string>
-    <string name="allapps_intent_go">Git</string>
-    <string name="allapps_intent_make">Üret</string>
-    <string name="allapps_intent_play">Oyna</string>
-    <string name="allapps_intent_tools">Araçlar</string>
 
     <string name="allapps_launch_failed">%1$s açılamadı</string>
+    <string name="allapps_private_space">özel alan</string>
+    <string name="allapps_private_locked">Kilitli. Kilidini açana kadar uygulamaları gizli kalır.</string>
+    <string name="allapps_private_unlocked">Kilidi açık. Bu uygulamaları yeniden gizlemek için kilitle.</string>
+    <string name="allapps_private_unlock">Kilidi aç</string>
+    <string name="allapps_private_lock">Kilitle</string>
 </resources>

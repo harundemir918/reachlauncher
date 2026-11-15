@@ -12,11 +12,9 @@ the Android side with Flutter analogies — start with
 [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md), then
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> This README grows with each milestone and is completed in M5.
-
 ---
 
-## Status: M4 — Personalisation (done)
+## Status: M5 — Polish (done)
 
 | | Milestone | Scope |
 |---|---|---|
@@ -25,9 +23,23 @@ the Android side with Flutter analogies — start with
 | ● | **M2 — Speed** | Search with ranking, commands, shortcuts, contacts and web fallback; All Apps with the word wall, letter rail and long-press menu; press-slide-release; haptics; the shared `LaunchApp` use case |
 | ● | **M3 — System features** | Notification counts ("3 NEW"), media row + Now Playing card, next calendar event, usage-stats blend, onboarding/permission cards, `PRIVACY.md` |
 | ● | **M4 — Personalisation** | Appearance sheet (theme Auto/Dark/Light, 7 palettes, thumb side, wallpaper mode with blur and scrim), live DataStore persistence, no theme flash on start, long-press menu (App info / Move / Hide / Uninstall) on intent-detail apps too |
-| ☐ | M5 — Polish | Accessibility pass, optional accessibility service, work profile + private space, Turkish strings, Baseline Profile, release config |
+| ● | **M5 — Polish** | Optional accessibility service (double-tap to lock, two-finger swipe for notifications), private space with Lock/Unlock in All Apps, accessibility pass and Turkish strings, Baseline Profile module, whole-app R8 release build with signing from outside the repo |
 
-### What works now (M1 – M4)
+### What works now (M1 – M5)
+
+New in M5:
+
+- **Double-tap empty space to lock the screen** and **swipe down with two fingers to open the
+  notification shade.** Both need Reach's optional accessibility service (see
+  [Gestures and the accessibility service](#gestures-and-the-accessibility-service-m5)). Without
+  it, Reach just shows a short hint; nothing else changes.
+- **Private space** (Android 15+): All Apps ends with a "Private space" section with a
+  Lock / Unlock button. While it is locked (or Reach can't tell) its apps and their count are
+  never shown anywhere. Reach must be the default home app for Android to show it at all.
+- **TalkBack**: "Lock screen" and "Open notifications" actions on the search pill, only when they
+  would work.
+- **Release build** with R8 on the whole app and a **Baseline Profile** module; see
+  [Release build](#release-build-and-baseline-profile).
 
 New in M4: **long-press the clock** (or use TalkBack's "Appearance" action) to open the Appearance
 sheet: theme Auto/Dark/Light, seven palettes, thumb side, and **Show wallpaper**, which lets your
@@ -101,8 +113,11 @@ From M1:
 
 ### Not done yet (so you know what you're looking at)
 
-- Work-profile contacts in search are not included yet (**M5**). The accessibility
-  service (**M5**) is still a stub.
+- Work-profile contacts in search are not included (a possible later addition).
+- No Baseline Profile is checked in yet: generate one on a device
+  ([below](#release-build-and-baseline-profile)) before a Play release.
+- The private-space and accessibility-service flows need a real Android 15+ device to
+  verify end to end ([DECISIONS D67](docs/DECISIONS.md)); the emulator tests cover the logic.
 
 ---
 
@@ -116,10 +131,13 @@ Reach has **no analytics, no network access and sends no data off the device.**
   plus backup/data-extraction rules that exclude everything), so launch history and
   settings are not copied anywhere. See [DECISIONS D9](docs/DECISIONS.md#d9--no-cloud-backup-m0).
 - Permissions: `REQUEST_DELETE_PACKAGES` (normal, install-time) for the system's own
-  uninstall confirmation, plus four **optional** ones you grant from Home/Search cards:
+  uninstall confirmation, `ACCESS_HIDDEN_PROFILES` (normal; lets Reach see the private space
+  when it is the default home) and `EXPAND_STATUS_BAR` (normal; a dormant fallback), plus
+  **optional** ones you grant from Home/Search cards:
   Notification access (unread counts + media), `READ_CONTACTS` (Search), `READ_CALENDAR`
-  (next event) and Usage access (Now-row predictions). Notifications are only counted in
-  memory, never read or stored. Details and everything that is *not* requested:
+  (next event), Usage access (Now-row predictions) and the Accessibility service (lock screen
+  / notification shade; it reads nothing on screen and subscribes to no events). Notifications
+  are only counted in memory, never read or stored. Details and everything that is *not* requested:
   [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md).
 - The full plain-language policy, suitable for a Play listing: [`PRIVACY.md`](PRIVACY.md).
 
@@ -142,6 +160,30 @@ Reach has **no analytics, no network access and sends no data off the device.**
 5. **Usage access** (optional): flip it on from its card; the Now row starts using your
    hour-by-hour habits.
 6. "Not now" on any card hides it for good; you can still turn each on in Android Settings.
+
+---
+
+## Gestures and the accessibility service (M5)
+
+<a id="gestures-and-the-accessibility-service-m5"></a>
+
+Lock and the notification shade can't be done by a normal app on modern Android, so Reach offers
+an **optional** accessibility service that performs exactly those two global actions.
+
+1. Open the Appearance sheet (long-press the clock) → **Gestures**.
+2. Switch on **Double-tap to lock**, then tap **Turn on in Accessibility settings**.
+3. In Android's Accessibility settings choose **Reach screen actions** and switch it on
+   (Android shows its own warning; the service has no window access, see
+   [`PRIVACY.md`](PRIVACY.md)).
+4. Back on Home: **double-tap empty space** locks the screen; a **two-finger swipe down**
+   opens the notification shade (that one doesn't need the switch, only the service).
+
+Reach never opens Settings by itself and there is no onboarding card for it. Details:
+[`docs/GESTURES.md`](docs/GESTURES.md) §5b, [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md).
+
+**Private space** (Android 15+): make Reach the default home app, then open All Apps and scroll
+to the end. *Lock* / *Unlock* there uses Android's own credential screen. Locked, nothing about
+the space is shown.
 
 ---
 
@@ -175,16 +217,43 @@ All commands run from the repo root.
 | `./gradlew lint` | Android Lint (warnings are errors) | `flutter analyze` |
 | `./gradlew ktlintCheck` | Kotlin style check (ktlint, `ktlint_official` style) | `dart format --set-exit-if-changed .` |
 | `./gradlew ktlintFormat` | Auto-fixes style | `dart format .` |
+| `./gradlew assembleRelease` | Release APK (R8 + resource shrinking), see [Release build](#release-build-and-baseline-profile) | `flutter build apk --release` |
 | `./gradlew build test lint` | **Milestone gate** — must be green before every milestone commit | `flutter analyze && flutter test && flutter build` |
 
 `build` already includes `check`, which runs unit tests, Lint and ktlint for every
 module; the explicit `test lint` in the gate just makes the intent obvious.
+
+`:baselineprofile` is a device-only module and is not part of `build`.
 
 What the tests cover in M1: the Home state machine, unread sums, launch/failed-launch/paused
 profile paths and Home UI flows (`feature/home/src/test`); the catalog cache, privacy filter,
 Turkish collation, launch history, predictions and settings (`core/data/src/test`); intents,
 the home-role fallback and profile mapping (`core/system/src/test`); palettes, contrast and
 monograms (`core/designsystem/src/test`); storage keys and text folding (`core/model/src/test`).
+
+### Release build and Baseline Profile
+
+<a id="release-build-and-baseline-profile"></a>
+
+- **Signing.** Copy [`keystore.properties.example`](keystore.properties.example) to
+  `keystore.properties` (git-ignored, as are `*.jks` / `*.keystore`) and fill in your upload key,
+  or set `REACH_KEYSTORE_FILE`, `REACH_KEYSTORE_PASSWORD`, `REACH_KEY_ALIAS`, `REACH_KEY_PASSWORD`
+  (CI). With neither, the release is signed with the debug key: it installs for testing but Google
+  Play rejects it. Secrets are never committed.
+- **Build.** `./gradlew assembleRelease` (APK) or `./gradlew bundleRelease` (the `.aab` Play
+  wants). R8 shrinks, optimises and obfuscates the whole app and resource shrinking is on
+  ([D69](docs/DECISIONS.md)); line numbers are kept so crash traces stay readable. ≈ Dart's
+  tree shaking plus `--obfuscate`.
+- **Baseline Profile** ([D68](docs/DECISIONS.md)). A list of hot classes/methods that Android
+  pre-compiles at install, so the first launch is fast (≈ shipping AOT code instead of JIT-ing on
+  first run). Generate it on a connected **API 33+** device or emulator:
+
+  ```sh
+  ./gradlew :app:generateBaselineProfile
+  ```
+
+  The result lands in `app/src/release/generated/baselineProfiles/`; **commit it**. None is checked
+  in yet, so until then release builds only carry the libraries' own profiles.
 
 After `installDebug`, start Reach without Android Studio:
 
@@ -289,7 +358,7 @@ New in M2:
 :core:model           Pure Kotlin domain types (ReachIntent, AppKey, CatalogApp, Prediction, PaletteId, …) + TextFolding
 :core:designsystem    ReachTheme, palettes, derived tokens, colour maths, typography, fonts, components (IntentWordRow, NowTile, AppRow, …)
 :core:data            Repository + system-source interfaces, Room/DataStore implementations, catalog/prediction logic, fakes
-:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts, notification listener, media, calendar, usage stats; wallpaper colours (M4); a stub for the accessibility service (M5)
+:core:system          Android integrations: LauncherApps catalog, profiles, app launcher, default dialer/SMS, home role, app shortcuts, contacts, notification listener, media, calendar, usage stats; wallpaper colours (M4); the optional accessibility service and screen-actions hub (M5)
 :feature:home         HomeViewModel (surface state machine + fan), Home, intent detail, press-slide-release
 :feature:search       Type to launch: SearchViewModel, SearchRanker, commands, contacts prompt
 :feature:allapps      A–Z word wall, letter rail, long-press menu
@@ -303,13 +372,13 @@ data flows are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | Doc | What's in it |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module diagram, layers, data flows from system event to pixel, the Home state machine, startup, privacy, where to add a feature |
-| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v4; extended in M5) |
-| [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v3) |
-| [`docs/GESTURES.md`](docs/GESTURES.md) | Press-slide-release, the letter rail, Home swipes and the clock long-press, step by step: pointer passes, consumption vs. the gesture arena, and how the tests drive them |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D51) |
+| [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v5) |
+| [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v6) |
+| [`docs/GESTURES.md`](docs/GESTURES.md) | Press-slide-release, the letter rail, Home swipes, double-tap and two-finger swipe, and the clock long-press, step by step: pointer passes, consumption vs. the gesture arena, and how the tests drive them |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D71) |
 | [`docs/PLAN.md`](docs/PLAN.md) | Module layout, dependency rules, contracts, milestones, carried-over notes |
 | [`docs/reach-launcher-prompt.md`](docs/reach-launcher-prompt.md) | The full product and design spec (source of truth) |
-| [`PRIVACY.md`](PRIVACY.md) | Plain-language privacy policy for the Play listing (M3) |
+| [`PRIVACY.md`](PRIVACY.md) | Plain-language privacy policy for the Play listing |
 
 ---
 
@@ -319,8 +388,8 @@ data flows are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Reach's *own* launch history (no permission needed), scored by time of day and weekday
 ([DECISIONS D25](docs/DECISIONS.md)). Until you've launched a few apps *through Reach*,
 there's nothing to predict and the whole NOW block stays hidden. Launches from other
-launchers, notifications or Recents don't count. (Optional usage-access blending arrives
-later.)
+launchers, notifications or Recents don't count. (Optional usage-access blending
+adds to this.)
 
 **An app is in the "wrong" intent.** Auto-assignment uses the app's Play category
 (`ApplicationInfo.category`); many apps declare none and land in **Tools**. "Move to…"
@@ -329,7 +398,7 @@ in the long-press menu (All Apps or an intent's app list) fixes it.
 **A new app doesn't show up.** Package changes arrive through `LauncherApps` callbacks and
 a refresh on every resume. If it's still missing, check it has a launcher activity
 (`adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER <pkg>`).
-Apps of an Android 15+ **private space** are intentionally invisible to Reach until M5.
+Apps of an Android 15+ **private space** are invisible to Reach unless it is the default home app, and while the space is locked (they sit in All Apps' "Private space" section once unlocked).
 
 **Tapping a work app does nothing the first time.** Its work profile is paused: Reach asks
 Android to resume it (you may see a system prompt). Tap the app again once it's on

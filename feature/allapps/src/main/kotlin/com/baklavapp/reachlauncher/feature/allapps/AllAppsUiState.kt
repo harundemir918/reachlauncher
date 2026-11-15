@@ -2,6 +2,8 @@ package com.baklavapp.reachlauncher.feature.allapps
 
 import androidx.compose.runtime.Immutable
 import com.baklavapp.reachlauncher.core.model.CatalogApp
+import com.baklavapp.reachlauncher.core.model.ProfileState
+import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ThumbSide
 
 /*
@@ -24,6 +26,8 @@ import com.baklavapp.reachlauncher.core.model.ThumbSide
  *   `AppCatalogRepository.setHidden`). Empty → no group.
  * @property rail every letter of the locale's index (plus "#"), for the letter rail.
  * @property thumbSide the rail hugs this physical edge.
+ * @property privateSpace the private-space section, or null when Reach can't see one
+ *   (none set up, Android < 15, or Reach isn't the default home app).
  */
 @Immutable
 data class AllAppsUiState(
@@ -33,7 +37,43 @@ data class AllAppsUiState(
     val hidden: List<CatalogApp> = emptyList(),
     val rail: List<RailLetter> = emptyList(),
     val thumbSide: ThumbSide = ThumbSide.LEFT,
+    val privateSpace: PrivateSpaceUi? = null,
 )
+
+/**
+ * The private space's section in All Apps (D67).
+ *
+ * @property userSerial the profile, for `ProfileSource.setQuietMode`.
+ * @property isLocked quiet mode is on: [apps] is then always empty (the catalog never emits
+ *   a locked private space's apps; this state doesn't either, by construction).
+ * @property apps the unlocked private space's visible apps, alphabetical.
+ */
+@Immutable
+data class PrivateSpaceUi(
+    val userSerial: Long,
+    val isLocked: Boolean,
+    val apps: List<CatalogApp>,
+) {
+    companion object {
+        /**
+         * The section for [profiles] and the catalog's private-space [apps], or null without a
+         * private profile. Fails closed: apps are only listed while the profile is known *and*
+         * unlocked.
+         */
+        fun of(
+            profiles: List<ProfileState>,
+            apps: List<CatalogApp>,
+        ): PrivateSpaceUi? {
+            val profile = profiles.firstOrNull { it.type == ProfileType.PRIVATE } ?: return null
+            val locked = profile.isQuietModeEnabled
+            return PrivateSpaceUi(
+                userSerial = profile.userSerial,
+                isLocked = locked,
+                apps = if (locked) emptyList() else apps.filter { it.key.userSerial == profile.userSerial },
+            )
+        }
+    }
+}
 
 /** One word-wall group: a letter ("S", or "#") and its apps in Collator order. */
 @Immutable

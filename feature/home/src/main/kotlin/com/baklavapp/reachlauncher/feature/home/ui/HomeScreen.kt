@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,12 +45,14 @@ import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDim
 import com.baklavapp.reachlauncher.core.designsystem.component.SearchPill
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
+import com.baklavapp.reachlauncher.core.designsystem.util.intentWord
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.core.model.ThumbSide
+import com.baklavapp.reachlauncher.feature.home.HomeGesturesUi
 import com.baklavapp.reachlauncher.feature.home.HomeSystemUi
 import com.baklavapp.reachlauncher.feature.home.IntentSummary
 import com.baklavapp.reachlauncher.feature.home.NowItem
@@ -93,6 +96,8 @@ private const val NOW_ROW_SLOTS = 3
  * @param system media, next event and onboarding card (M3); the default shows none of them.
  * @param mediaCallbacks the Listen row's play/pause.
  * @param onboardingCallbacks the onboarding card's buttons.
+ * @param gestureCallbacks double-tap to lock / two-finger shade, and their TalkBack actions
+ *   (enabled per [HomeSystemUi.gestures]).
  */
 @Composable
 internal fun HomeScreen(
@@ -112,8 +117,12 @@ internal fun HomeScreen(
     system: HomeSystemUi = HomeSystemUi(),
     mediaCallbacks: MediaCallbacks = MediaCallbacks.None,
     onboardingCallbacks: OnboardingCallbacks = OnboardingCallbacks.None,
+    gestureCallbacks: ScreenGestureCallbacks = ScreenGestureCallbacks.None,
 ) {
     val swipe = rememberVerticalSwipeConnection(onSwipeUp = onAllApps, onSwipeDown = onSearch)
+    val onLock = rememberUpdatedState(gestureCallbacks.onLock)
+    val onOpenNotifications = rememberUpdatedState(gestureCallbacks.onOpenNotifications)
+    val twoFingerDistancePx = rememberTwoFingerDistancePx()
     val reading by rememberWallClock()
     val scroll = rememberScrollState()
     val reducedMotion = rememberReducedMotion()
@@ -128,7 +137,15 @@ internal fun HomeScreen(
         modifier =
             modifier
                 .fillMaxSize()
-                .nestedScroll(swipe)
+                .screenActionGestures(
+                    doubleTapEnabled = system.gestures.doubleTapToLock,
+                    // Not while a press-slide-release fan is open: a second finger (a palm, a
+                    // grip) must not steal the fan's pointer stream.
+                    twoFingerEnabled = system.gestures.twoFingerSwipe && heldIntent == null,
+                    twoFingerDistancePx = twoFingerDistancePx,
+                    onDoubleTap = onLock,
+                    onTwoFingerSwipeDown = onOpenNotifications,
+                ).nestedScroll(swipe)
                 .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
         Column(
@@ -157,7 +174,7 @@ internal fun HomeScreen(
             }
             Column {
                 IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier, heldIntent, system.media, mediaCallbacks)
-                val allAppsLabel = stringResource(R.string.home_all_apps_action)
+                val pillActions = homePillActions(system.gestures, onAllApps, gestureCallbacks)
                 if (heldIntent != null) {
                     FanHint(Modifier.padding(top = PillTopGap))
                 } else {
@@ -166,21 +183,36 @@ internal fun HomeScreen(
                         modifier =
                             Modifier
                                 .padding(top = PillTopGap)
-                                // Swipe-up has no visible tap alternative yet (spec §6.10), so TalkBack
-                                // users get "All apps" in the pill's actions menu.
-                                .semantics {
-                                    customActions =
-                                        listOf(
-                                            CustomAccessibilityAction(allAppsLabel) {
-                                                onAllApps()
-                                                true
-                                            },
-                                        )
-                                },
+                                // Home's gestures without a visible tap alternative (spec §6.10):
+                                // swipe-up, and — when they can work — double-tap to lock and the
+                                // two-finger swipe, as TalkBack actions on the pill.
+                                .semantics { customActions = pillActions },
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * TalkBack's actions on the search pill: "All apps" always; "Lock screen" and "Open
+ * notifications" only while they would work (a TalkBack action that only shows a hint would
+ * be noise). With TalkBack on, a double-tap means "activate", so these actions are the only
+ * way TalkBack users reach the screen actions.
+ */
+@Composable
+private fun homePillActions(
+    gestures: HomeGesturesUi,
+    onAllApps: () -> Unit,
+    callbacks: ScreenGestureCallbacks,
+): List<CustomAccessibilityAction> {
+    val allApps = stringResource(R.string.home_all_apps_action)
+    val lock = stringResource(R.string.home_lock_action)
+    val notifications = stringResource(R.string.home_notifications_action)
+    return buildList {
+        add(CustomAccessibilityAction(allApps) { onAllApps().let { true } })
+        if (gestures.canLock) add(CustomAccessibilityAction(lock) { callbacks.onLock().let { true } })
+        if (gestures.canOpenShade) add(CustomAccessibilityAction(notifications) { callbacks.onOpenNotifications().let { true } })
     }
 }
 

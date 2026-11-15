@@ -4,24 +4,31 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
+import com.baklavapp.reachlauncher.core.data.source.AppLauncher
+import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
 import com.baklavapp.reachlauncher.core.model.PaletteId
+import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.model.ThemeMode
 import com.baklavapp.reachlauncher.core.model.ThumbSide
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * What the Appearance sheet shows: the four choices it controls (spec §6.8).
+ * What the Appearance sheet shows: the four choices of spec §6.8 plus the opt-in for Home's
+ * screen-action gestures (§7.4, D66).
  *
  * @property loaded false until DataStore answered once; the sheet still renders the
  *   defaults meanwhile (DataStore answers within a frame or two).
+ * @property doubleTapToLock the "Double-tap to lock" switch.
+ * @property accessibilityServiceOn Reach's accessibility service is on; while it is off the
+ *   sheet offers a button to the system's Accessibility settings.
  */
 @Immutable
 data class AppearanceUiState(
@@ -30,6 +37,8 @@ data class AppearanceUiState(
     val palette: PaletteId = PaletteId.DEFAULT,
     val showWallpaper: Boolean = false,
     val thumbSide: ThumbSide = ThumbSide.LEFT,
+    val doubleTapToLock: Boolean = false,
+    val accessibilityServiceOn: Boolean = false,
 )
 
 /**
@@ -50,12 +59,25 @@ class AppearanceViewModel
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,
+        screenActionsSource: ScreenActionsSource,
+        private val appLauncher: AppLauncher,
     ) : ViewModel() {
-        /** The sheet's state, straight from the persisted settings. */
+        /**
+         * The sheet's state, straight from the persisted settings and the service state (the
+         * latter is re-read whenever Reach resumes, e.g. back from Accessibility settings).
+         */
         val uiState: StateFlow<AppearanceUiState> =
-            settingsRepository.settings
-                .map { AppearanceUiState(true, it.themeMode, it.palette, it.showWallpaper, it.thumbSide) }
-                .distinctUntilChanged()
+            combine(settingsRepository.settings, screenActionsSource.isServiceEnabled) { settings, serviceOn ->
+                AppearanceUiState(
+                    loaded = true,
+                    themeMode = settings.themeMode,
+                    palette = settings.palette,
+                    showWallpaper = settings.showWallpaper,
+                    thumbSide = settings.thumbSide,
+                    doubleTapToLock = settings.doubleTapToLock,
+                    accessibilityServiceOn = serviceOn,
+                )
+            }.distinctUntilChanged()
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AppearanceUiState())
 
         /** THEME segmented control. */
@@ -69,6 +91,18 @@ class AppearanceViewModel
 
         /** Thumb side segmented control. */
         fun onThumbSideSelected(side: ThumbSide) = write { setThumbSide(side) }
+
+        /**
+         * "Double-tap to lock" switch. Only stores the choice: if the service is off, the sheet
+         * shows the "Turn on in Accessibility settings" button next to it — Reach never jumps
+         * to a system screen on its own (spec §7: never nag).
+         */
+        fun onDoubleTapToLockChanged(enabled: Boolean) = write { setDoubleTapToLock(enabled) }
+
+        /** "Turn on" button: the system's Accessibility settings, where the user enables Reach's service. */
+        fun onOpenAccessibilitySettings() {
+            appLauncher.open(SystemScreen.ACCESSIBILITY_SERVICE)
+        }
 
         /**
          * Writes in `viewModelScope` and drops failures (except cancellation): an exception

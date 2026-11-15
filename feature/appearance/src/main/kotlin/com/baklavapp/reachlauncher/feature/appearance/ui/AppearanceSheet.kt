@@ -46,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
 import com.baklavapp.reachlauncher.core.designsystem.component.PillButton
+import com.baklavapp.reachlauncher.core.designsystem.component.PillButtonStyle
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.Palettes
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
@@ -100,6 +101,8 @@ internal class AppearanceCallbacks(
     val onPalette: (PaletteId) -> Unit,
     val onShowWallpaper: (Boolean) -> Unit,
     val onThumbSide: (ThumbSide) -> Unit,
+    val onDoubleTapToLock: (Boolean) -> Unit = {},
+    val onOpenAccessibilitySettings: () -> Unit = {},
 )
 
 /**
@@ -176,6 +179,48 @@ internal fun AppearanceSheet(
                     onSelect = callbacks.onThumbSide,
                 )
             }
+            GesturesSection(state, callbacks)
+        }
+    }
+}
+
+/**
+ * Home's screen-action gestures (spec §7.4, D66): the opt-in switch for double-tap to lock and,
+ * while Reach's accessibility service is off, one button to the system's Accessibility
+ * settings. This is the *only* place Reach offers the service — no Home card, no dialog —
+ * because it is a convenience few users need, and asking for an accessibility service
+ * unprompted would read as a red flag.
+ */
+@Composable
+private fun GesturesSection(
+    state: AppearanceUiState,
+    callbacks: AppearanceCallbacks,
+) {
+    Section(label = stringResource(R.string.appearance_gestures)) {
+        SwitchRow(
+            title = stringResource(R.string.appearance_double_tap_lock),
+            subtitle =
+                stringResource(
+                    if (state.accessibilityServiceOn) {
+                        R.string.appearance_double_tap_lock_on
+                    } else {
+                        R.string.appearance_double_tap_lock_needs_service
+                    },
+                ),
+            checked = state.doubleTapToLock,
+            onChange = callbacks.onDoubleTapToLock,
+        )
+        if (!state.accessibilityServiceOn) {
+            Text(
+                text = stringResource(R.string.appearance_service_why),
+                style = ReachTheme.typography.caption,
+                color = ReachTheme.colors.muted,
+            )
+            PillButton(
+                text = stringResource(R.string.appearance_service_turn_on),
+                onClick = callbacks.onOpenAccessibilitySettings,
+                style = PillButtonStyle.Outlined,
+            )
         }
     }
 }
@@ -328,6 +373,22 @@ private fun WallpaperSwitch(
     checked: Boolean,
     onChange: (Boolean) -> Unit,
 ) {
+    SwitchRow(
+        title = stringResource(R.string.appearance_wallpaper),
+        subtitle = stringResource(R.string.appearance_wallpaper_subtitle),
+        checked = checked,
+        onChange = onChange,
+    )
+}
+
+/** A row that is one switch for TalkBack and touch (≈ `SwitchListTile`): title, subtitle, switch. */
+@Composable
+private fun SwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
     val colors = ReachTheme.colors
     Row(
         modifier =
@@ -340,8 +401,8 @@ private fun WallpaperSwitch(
         horizontalArrangement = Arrangement.spacedBy(SwitchGap),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = stringResource(R.string.appearance_wallpaper), style = ReachTheme.typography.title, color = colors.fg)
-            Text(text = stringResource(R.string.appearance_wallpaper_subtitle), style = ReachTheme.typography.caption, color = colors.muted)
+            Text(text = title, style = ReachTheme.typography.title, color = colors.fg)
+            Text(text = subtitle, style = ReachTheme.typography.caption, color = colors.muted)
         }
         // Visual only (onCheckedChange = null): the row above owns the toggle and semantics.
         Switch(

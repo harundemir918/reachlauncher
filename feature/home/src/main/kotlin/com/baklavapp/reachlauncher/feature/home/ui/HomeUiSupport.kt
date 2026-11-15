@@ -27,23 +27,6 @@ import kotlin.math.roundToInt
  * because nothing should recompose when it changes.
  */
 
-/** String resource of an intent's word ("Talk"/"Konuş"). */
-@StringRes
-internal fun ReachIntent.wordRes(): Int =
-    when (this) {
-        ReachIntent.TALK -> R.string.home_intent_talk
-        ReachIntent.LISTEN -> R.string.home_intent_listen
-        ReachIntent.GO -> R.string.home_intent_go
-        ReachIntent.MAKE -> R.string.home_intent_make
-        ReachIntent.PLAY -> R.string.home_intent_play
-        ReachIntent.TOOLS -> R.string.home_intent_tools
-    }
-
-/** The localised word of [intent]. */
-@Composable
-@ReadOnlyComposable
-internal fun intentWord(intent: ReachIntent): String = stringResource(intent.wordRes())
-
 /** Natural-case Now-tile reason ("usually around now", "2 unread", "recent"). */
 @Composable
 @ReadOnlyComposable

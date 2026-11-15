@@ -46,6 +46,7 @@ import com.baklavapp.reachlauncher.core.designsystem.component.PillButtonStyle
 import com.baklavapp.reachlauncher.core.designsystem.component.appMenuAccessibilityActions
 import com.baklavapp.reachlauncher.core.designsystem.component.appMenuOpenLabel
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
+import com.baklavapp.reachlauncher.core.designsystem.util.intentWord
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.MediaState

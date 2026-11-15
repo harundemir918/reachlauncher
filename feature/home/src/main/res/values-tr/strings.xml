@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="home_intent_talk">Konuş</string>
-    <string name="home_intent_listen">Dinle</string>
-    <string name="home_intent_go">Git</string>
-    <string name="home_intent_make">Üret</string>
-    <string name="home_intent_play">Oyna</string>
-    <string name="home_intent_tools">Araçlar</string>
     <string name="home_intent_open_action">uygulamaları aç</string>
 
     <string name="home_clock_appearance_action">Görünüm</string>
@@ -59,4 +53,8 @@
     <string name="home_card_usage_title">Şimdi satırında daha iyi tahminler</string>
     <string name="home_card_usage_why">İsteğe bağlı. Kullanım erişimi hangi uygulamayı hangi saatte açtığını söyler. Telefonunda kalır.</string>
     <string name="home_card_usage_action">Kullanım erişimine izin ver</string>
+    <string name="home_lock_action">Ekranı kilitle</string>
+    <string name="home_notifications_action">Bildirimleri aç</string>
+    <string name="home_lock_needs_service">Çift dokunarak kilitlemek için Reach erişilebilirlik hizmeti gerekir. Görünüm’den açabilirsin.</string>
+    <string name="home_shade_needs_service">İki parmakla bildirimleri açmak için Reach erişilebilirlik hizmeti gerekir. Görünüm’den açabilirsin.</string>
 </resources>

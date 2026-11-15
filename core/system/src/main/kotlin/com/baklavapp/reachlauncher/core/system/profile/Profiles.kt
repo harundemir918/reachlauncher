@@ -36,9 +36,10 @@ class Profiles
         /**
          * Profiles the launcher may show (`LauncherApps.getProfiles`, API 26+).
          *
-         * On Android 15+ the private space is only included when Reach holds
-         * `ACCESS_HIDDEN_PROFILES` *and* the home role. That permission is added in M5; until
-         * then the private space is simply invisible to Reach, which is the safe default.
+         * On Android 15+ the private space is only included when Reach holds the normal
+         * `ACCESS_HIDDEN_PROFILES` permission (declared in `:core:system`'s manifest) *and* the
+         * home role (javadoc of `getProfiles`, verified against the API 36 sources, D67).
+         * Without the role the private space is simply invisible to Reach — the safe default.
          */
         fun visibleProfiles(): List<UserHandle> =
             try {
@@ -53,8 +54,19 @@ class Profiles
         /** The handle for a persisted [serial], or null if that profile was removed. */
         fun userFor(serial: Long): UserHandle? = userManager.getUserForSerialNumber(serial)
 
-        /** Whether [user] is in quiet mode: a paused work profile or a locked private space. */
-        fun isQuietMode(user: UserHandle): Boolean = userManager.isQuietModeEnabled(user)
+        /**
+         * Whether [user] is in quiet mode: a paused work profile or a locked private space.
+         * Fails closed: if the system refuses to answer (a hidden profile we lost access to),
+         * the profile counts as quiet, so private-space apps are dropped and work apps dimmed.
+         */
+        fun isQuietMode(user: UserHandle): Boolean =
+            try {
+                userManager.isQuietModeEnabled(user)
+            } catch (e: SecurityException) {
+                true
+            } catch (e: IllegalArgumentException) {
+                true
+            }
 
         /** Personal, work or private space; see [classifyProfile]. */
         fun typeOf(user: UserHandle): ProfileType =
@@ -71,13 +83,14 @@ class Profiles
         /**
          * `LauncherApps.getLauncherUserInfo` (API 35) is the documented way for a launcher to
          * learn a profile's type. For a private profile it requires `ACCESS_HIDDEN_PROFILES`
-         * (+ home role) and throws `SecurityException` without it.
+         * (+ home role) and throws `SecurityException` without it — reported as
+         * [PrivateLookup.DENIED], which [classifyProfile] treats as private (fail closed). A
+         * null answer ("user is inaccessible") is *not* treated as private: see [privateLookupOf].
          */
         @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
         private fun privateLookup(user: UserHandle): PrivateLookup =
             try {
-                val type = launcherApps.getLauncherUserInfo(user)?.userType
-                if (type == UserManager.USER_TYPE_PROFILE_PRIVATE) PrivateLookup.PRIVATE else PrivateLookup.NOT_PRIVATE
+                privateLookupOf(launcherApps.getLauncherUserInfo(user)?.userType)
             } catch (e: SecurityException) {
                 PrivateLookup.DENIED
             }
@@ -135,9 +148,28 @@ enum class PrivateLookup {
     PRIVATE,
     NOT_PRIVATE,
 
-    /** The system refused to tell us — only happens for hidden (private) profiles. */
+    /** The system refused to tell us (`SecurityException`, only thrown for hidden profiles). */
     DENIED,
 }
+
+/**
+ * Maps `LauncherUserInfo.getUserType()` to a [PrivateLookup].
+ *
+ * A null [userType] (no `LauncherUserInfo`) counts as "not private" on purpose (D67): the
+ * profile came from `LauncherApps.getProfiles()`, which only lists a private space to a caller
+ * that may also read its info, so a null there is a transient work-profile state (e.g. being
+ * removed). Treating it as private would hide a paused work profile's apps and turn "tap to
+ * resume" into a failure. The private space itself stays fail-closed through the
+ * `SecurityException` path ([PrivateLookup.DENIED]) and the quiet-mode filter.
+ */
+fun privateLookupOf(userType: String?): PrivateLookup =
+    if (userType == USER_TYPE_PROFILE_PRIVATE) PrivateLookup.PRIVATE else PrivateLookup.NOT_PRIVATE
+
+/**
+ * `UserManager.USER_TYPE_PROFILE_PRIVATE` (API 35) as a plain constant, so [privateLookupOf]
+ * stays callable (and testable) below API 35.
+ */
+internal const val USER_TYPE_PROFILE_PRIVATE = "android.os.usertype.profile.PRIVATE"
 
 /**
  * Pure mapping from what the system told us to a [ProfileType].

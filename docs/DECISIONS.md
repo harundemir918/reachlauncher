@@ -606,3 +606,124 @@ wallpaper through, so contrast measured against the opaque `bg` overstated it.
 - **Robustness.** The first-frame settings read falls back to defaults on any exception
   (a crash in a launcher's `onCreate` is a crash loop); the wallpaper source's fallback
   re-read runs on the IO dispatcher instead of the main thread.
+
+## D66 — Optional accessibility service: lock and notification shade (M5)
+**Decision.** `ReachAccessibilityService` (`:core:system/screen`) is used for exactly two
+global actions: `GLOBAL_ACTION_LOCK_SCREEN` (double-tap on empty Home) and
+`GLOBAL_ACTION_NOTIFICATIONS` (two-finger swipe down on Home). Its config subscribes to **no**
+event types (default mask 0), limits events to Reach's package, sets
+`canRetrieveWindowContent="false"`, no `can*` capabilities and `isAccessibilityTool="false"`.
+Device-admin `lockNow()` is never used (it forces PIN/password instead of biometrics).
+- **Hub, not injection into the service's callers.** The system creates/binds the service;
+  it registers a `GlobalActionPerformer` in the singleton `ScreenActionsHub` on connect and
+  clears it on unbind/destroy, so the source never holds the service.
+- **Enabled = listed && connected.** `AccessibilityScreenActionsSource.isServiceEnabled`
+  combines `AccessibilityManager.getEnabledAccessibilityServiceList` (re-read on every resume
+  via `AccessRechecks`, D53) with the hub's live connection: each alone is briefly wrong right
+  after the user toggles the service.
+- **Opt-in lives in the Appearance sheet only** (new "Gestures" section: a "Double-tap to
+  lock" switch, and while the service is off one line of why + "Turn on in Accessibility
+  settings"). No Home card: it is a convenience few users need, and an unprompted request for
+  an accessibility service reads as a red flag. Turning the switch on only stores the choice;
+  Reach never opens Settings by itself.
+- **Without the service nothing destructive happens.** Double-tap (only listened for while
+  the switch is on, so ordinary taps are never delayed) and the two-finger swipe show a 3 s
+  inline hint pointing to Appearance (`HomeEvent.ScreenActionUnavailable`).
+- **Hidden-API shade fallback.** `StatusBarManager.expandNotificationsPanel()` via reflection,
+  with the normal `EXPAND_STATUS_BAR` permission, only when `hiddenApiShadeFallback` is true
+  (default off, no UI: a dormant feature flag). Any failure (method gone, non-SDK access
+  blocked, SecurityException) returns false → the hint.
+- **Gesture conflicts.** Double-tap sits on Home's outer box, after its children, so taps on
+  words/tiles/pill/clock are consumed by them; two fingers are watched in the *Initial* pass
+  and consumed only once a second finger is down, so every one-finger gesture (pull-down,
+  swipe-up, press-slide-release, clock long-press) is untouched and two fingers can't also
+  open Search. The pure rule `isTwoFingerSwipeDown` (both fingers ≥ 48dp down, within 45° of
+  vertical) is unit-tested.
+- **TalkBack.** With TalkBack on, double-tap means "activate", so the search pill carries
+  "Lock screen" / "Open notifications" custom actions — only while they would work.
+
+## D67 — Work profile and private space, verified (M5)
+**Verified against the local SDK** (`platforms/android-35/36/37.0/android.jar` via `javap`,
+`android-37.0/android-stubs-src.jar`, javadoc in `sources/android-36`):
+- `LauncherApps.getProfiles()` / `getLauncherUserInfo(UserHandle)` (API 35;
+  `LauncherUserInfo.getUserType()`, `getUserSerialNumber()`): the private profile
+  (`UserManager.USER_TYPE_PROFILE_PRIVATE` = `"android.os.usertype.profile.PRIVATE"`) is only
+  returned to a caller with *"normal `ACCESS_HIDDEN_PROFILES` permission and the
+  `RoleManager.ROLE_HOME` role"* (javadoc wording); system apps may use
+  `ACCESS_HIDDEN_PROFILES_FULL` instead. So a third-party launcher can get it, but only while
+  it is the default home app. Reach now declares `ACCESS_HIDDEN_PROFILES` (`:core:system`).
+- `UserManager.requestQuietModeEnabled(enable, user)`: allowed for "the foreground default
+  launcher" (or `MANAGE_USERS`/`MODIFY_QUIET_MODE`); returns false when the user's credential
+  must be confirmed first (the system shows that screen). Throws `SecurityException` /
+  `IllegalArgumentException` → we return false.
+- `Intent.ACTION_PROFILE_AVAILABLE/UNAVAILABLE` (API 35) are sent for *every* profile type
+  (managed profiles additionally get the `MANAGED_PROFILE_*` ones), registered receivers
+  only — which is what `Profiles.profileChangeActions()` already registers.
+- `LauncherApps.getPrivateSpaceSettingsIntent()` exists from **API 36** only (not 35); not
+  used yet (a "Private space settings" entry would need a new `SystemScreen`).
+
+**Changes.** Work apps already carried the "WORK" tag (`AppRow`, All Apps, Search). Private
+space: All Apps gets its own **"Private space" section** at the end of the wall (never mixed
+into letter groups, as Android recommends), with a Lock/Unlock pill
+(`ProfileSource.setQuietMode`); locked, it shows no names and no count. `PrivateSpaceUi.of`
+lists apps only while the private profile is known *and* unlocked (fail closed);
+`Profiles.isQuietMode` now treats a refused answer as "quiet". A null `LauncherUserInfo`
+(javadoc: "user is inaccessible") is classified *not* private: the profile came from
+`getProfiles()`, which only lists a private space to callers that may read its info, and
+treating null as private would hide a paused work profile's apps and break tap-to-resume
+(a Robolectric test caught exactly that). Unlocked private apps still appear in their intents,
+Search and predictions (spec only requires hiding when locked).
+
+**Needs a device (Android 15+, Reach as default home, a private space set up):** that the
+private profile appears in `getProfiles()`; lock/unlock from All Apps (with the system
+credential screen); that apps vanish within a frame of locking from the system's own UI;
+that `ACCESS_HIDDEN_PROFILES` is granted at install on release images; paused work profile
+dimming and tap-to-resume.
+
+## D68 — Baseline Profile (M5)
+**Decision.** New `:baselineprofile` module (`com.android.test`, `androidx.baselineprofile`
+plugin **1.5.0**, `benchmark-macro-junit4` 1.5.0, `uiautomator` 2.4.1 — resolved from Google
+Maven and building with AGP 9.4.1; AGP unchanged). `BaselineProfileGenerator` records cold
+start → Home, an intent's detail, Search with typing, and All Apps with a scroll, finding
+elements by their TalkBack descriptions (no test tags in production code). `:app` applies the
+consumer plugin, depends on `baselineProfile(project(":baselineprofile"))` and keeps
+`profileinstaller`. Generation is manual (needs a device, API 33+ or rooted 28+):
+`./gradlew :app:generateBaselineProfile` → `app/src/release/generated/baselineProfiles/`
+(commit the result). `useConnectedDevices = true`: no Gradle-managed emulator downloads.
+Until a profile is generated the release ships only the libraries' own profiles (Compose etc.).
+
+## D69 — Release build: whole-app R8, resource shrinking, signing from outside the repo (M5)
+**Decision.** D16's `packageScope = androidx/kotlin/kotlinx` is removed: R8 now optimizes and
+obfuscates Reach's own code too, and `isShrinkResources = true`. No extra keep rules were
+needed: manifest components (activity, application, both services) are kept by AAPT's rules;
+Hilt, Room, DataStore and Compose ship consumer rules and generate code rather than reflect
+on ours; the shade fallback reflects on a framework class R8 never sees.
+`src/main/keepRules/rules.keep` keeps line numbers for readable crash traces. Signing reads
+`keystore.properties` (git-ignored; `keystore.properties.example` committed) or
+`REACH_KEYSTORE_FILE/_PASSWORD`, `REACH_KEY_ALIAS`, `REACH_KEY_PASSWORD`; without either the
+release is signed with the debug key so it installs for testing and profile generation —
+Play rejects debug-signed uploads. `.gitignore` adds `keystore.properties`, `*.jks`, `*.keystore`.
+
+## D70 — M5 cleanup: shared intent words (M5)
+The six intent words moved to `:core:designsystem` (`ds_intent_*`, `intentWord()` /
+`ReachIntent.wordRes()` in `util/IntentWords.kt`); `home_intent_*` and `allapps_intent_*`
+are gone (Turkish wording copied unchanged). The shared clip-reveal helper for
+`SystemAppLauncher` / `LauncherAppsShortcutSource` was **not** extracted: the two differ in
+how they get the Activity, and the gain is a few lines — left for later.
+
+## D71 — M5 review fixes: private apps off Home, two-finger swipe only when useful (M5)
+- **Private space stays out of Home.** D67 showed unlocked private-space apps in Home's
+  intents and the Now row. Android's guidance for launchers keeps them in their own
+  container, and Home is the screen bystanders see. They now appear only in All Apps'
+  "Private space" section and in Search (tagged), and never as predictions. Their launch
+  history is kept (so nothing is lost on lock/unlock) but is never ranked.
+- **Two-finger swipe.** The detector is installed only while it can do something (service on,
+  or the hidden-API fallback flag) and never while a press-slide-release fan is open, so a
+  stray second finger can't break the fan. Once a second finger touches, the detector keeps
+  the gesture until every finger is up, so the finger left behind can't open Search.
+- **TalkBack.** "Open notifications" is offered only when the service is on; the hidden-API
+  fallback can fail silently, and actions are offered only when they will work.
+- **Kept on purpose.** `EXPAND_STATUS_BAR` stays for the spec's best-effort fallback (§7.4),
+  which is off by default; drop it if Play review asks. The release build still falls back
+  to unsigned/debug signing without `keystore.properties` (local builds must work); the
+  Play upload is a manual, signed step.

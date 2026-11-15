@@ -1,10 +1,9 @@
 # Reach — architecture
 
-**v4 (M4).** Describes the code as it is at the end of milestone M4 ("Personalisation":
-the Appearance sheet, wallpaper colours and wallpaper mode, the shared app menu; only the
-accessibility service (M5) is still a stub). Things that don't exist yet are marked with the milestone that
-brings them. The product spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the
-reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D65); the Flutter →
+**v5 (M5).** Describes the code as it is at the end of milestone M5 ("Polish": the optional
+accessibility service behind a `ScreenActionsHub`, private space, the `:baselineprofile` module,
+whole-app R8). No `Unavailable…` stub is left: every system source has a real implementation. The product spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the
+reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D71); the Flutter →
 Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md); custom touch
 handling is explained in [`GESTURES.md`](GESTURES.md).
 
@@ -26,6 +25,7 @@ graph TD
     data[":core:data<br/>contracts, Room, DataStore, domain logic, fakes"]
     system[":core:system<br/>Android system integrations"]
     model[":core:model<br/>pure Kotlin domain types"]
+    bp[":baselineprofile<br/>device-only profile generator"]
 
     app --> home
     app --> system
@@ -51,6 +51,7 @@ graph TD
     system --> model
     data --> model
     ds --> model
+    bp -.->|targetProjectPath| app
 ```
 
 The edges are exactly the `project(":…")` dependencies in each module's `build.gradle.kts`.
@@ -64,7 +65,8 @@ readability.
 | `:core:model` | **pure Kotlin/JVM** (no Android) | `AppKey`, `PackageUser`, `CatalogApp`, `InstalledApp`, `ProfileState`, `ReachIntent`, `LaunchEvent`, `Prediction`, `AppearanceSettings`, `LaunchOrigin`, `SystemScreen`, `ExternalAction`, `TextFolding`… |
 | `:core:designsystem` | Android library + Compose | `ReachTheme`, palettes, `PaletteNames.kt` (localised palette names, shared by Search's commands and the Appearance sheet), derived tokens, `ColorMath`, typography + fonts, `ReachColors.wallpaperMode` with the derived `root` / `backdrop` tokens, `resolveDark()`, components (`AppActionsMenu` — the long-press menu shared by All Apps and intent detail, D64 —, `IntentWordRow`, `NowTile`, `AppRow`, `SearchPill`, `Monogram`, `reachClickable`…), `util/Motion.kt` (`rememberReducedMotion`, `rememberHapticTick`) |
 | `:core:data` | Android library | **Contracts** (`repository/Repositories.kt`, `source/SystemSources.kt`), their **implementations** for data (`repository/impl`, `db`, `domain` — incl. the shared `LaunchApp` use case —, `time`), Hilt modules (`di`), and **fakes** (`fake`, in `src/main` — D4) |
-| `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, **`LauncherAppsShortcutSource`** and **`ContactsProviderSource`** (M2), **M3:** `ReachNotificationListenerService` + `NotificationListenerHub` / `NotificationListenerCountSource` / `NotificationAccess`, `MediaSessionsSource`, `CalendarProviderSource`, `UsageStatsManagerSource`, `AccessRechecks`; two `Unavailable…` stubs left: wallpaper colours and screen actions), `ActivityTracker`, `SystemModule` |
+| `:core:system` | Android library | Implementations of the system-source contracts (`LauncherAppsInstalledAppsSource`, `UserManagerProfileSource`, `SystemAppLauncher`, `TelephonyDefaultAppsSource`, `RoleHomeRoleSource`, **`LauncherAppsShortcutSource`** and **`ContactsProviderSource`** (M2), **M3:** `ReachNotificationListenerService` + `NotificationListenerHub` / `NotificationListenerCountSource` / `NotificationAccess`, `MediaSessionsSource`, `CalendarProviderSource`, `UsageStatsManagerSource`, `AccessRechecks`; **M5:** `screen/` — `ReachAccessibilityService` (the system-created service), `ScreenActionsHub` (singleton the service registers a lock/shade performer in) and `AccessibilityScreenActionsSource` (the real `ScreenActionsSource`; D66)), `ActivityTracker`, `SystemModule` |
+| `:baselineprofile` | Android test module (`com.android.test`) | `BaselineProfileGenerator`: UiAutomator drives the installed release `:app` (cold start, intent detail, Search, All Apps) to record a Baseline Profile (D68). Not part of `build`; needs a device |
 | `:feature:home` | Android library + Compose | `HomeViewModel` (the surface state machine + the fan's state), `HomeRoute` (hosts Search / All Apps as slots, D51), Home and intent-detail screens, `ui/SystemCards.kt` (Now Playing card, calendar line, onboarding cards), `MediaProgress.kt`, press-slide-release (`ui/PressSlideRelease.kt`, `ui/FanOverlay.kt`, `ui/HomeWithFan.kt`), Home swipes (`ui/HomeGestures.kt`), the Appearance placeholder sheet (`ui/PlaceholderSurfaces.kt`, until M4) |
 | `:feature:search` | Android library + Compose | `SearchRoute` (public), `SearchViewModel`, `SearchRanker` + `CommandKeywords` (pure), `SearchResult` / `SearchUiState`, `ui/SearchScreen.kt` |
 | `:feature:allapps` | Android library + Compose | `AllAppsRoute` (public), `AllAppsViewModel`, `LetterIndex` (ICU), `ui/AllAppsScreen.kt` (word wall), `ui/LetterRail.kt`, long-press menu from `:core:designsystem` (D64) |
@@ -77,9 +79,9 @@ readability.
    `:core:data/…/source/SystemSources.kt` (D3). Consequences:
    - `HomeViewModelTest` is a plain JVM test with fakes (`HomeTestFixtures.kt` builds the
      ViewModel from `FakeAppCatalogRepository`, `FakeAppLauncher`, …).
-   - Every system integration is optional: as of M4, only one source (screen
-     actions) is still an `Unavailable…` stub (wallpaper colours became `WallpaperManagerColorSource`), and every access-gated source degrades to
-     "none" without its permission — Home and Search work anyway.
+   - Every system integration is optional: as of M5 there are no stubs left, and every
+     access-gated source degrades to "none" without its permission (or, for screen actions,
+     without the accessibility service) — Home and Search work anyway.
 2. **Contracts live in `:core:data`, not in `:core:system`.** `:core:system` depends on
    `:core:data` to implement them (dependency inversion). Flutter analogy: the
    `*_platform_interface` package of a federated plugin.
@@ -664,8 +666,12 @@ Spec §4: "Home must render immediately when Home is pressed."
   Since M4, `ReachWindow` sets the window background to the resolved palette bg (or transparent
   in wallpaper mode) before the first frame, so the static `themes.xml` colour is only the
   fallback until `onCreate` runs.
-- **Not yet:** a Baseline Profile (M5). `androidx.profileinstaller` is already a dependency
-  of `:app`.
+- **Baseline Profile (M5, D68).** `:baselineprofile` generates it
+  (`./gradlew :app:generateBaselineProfile`, device with API 33+); `:app` consumes it and
+  `androidx.profileinstaller` installs it. None is committed yet, so until then the release has
+  only the libraries' profiles.
+- **Release build (D69).** R8 full mode on all of Reach's code plus resource shrinking; signing
+  comes from a git-ignored `keystore.properties` or environment variables.
 
 ---
 
@@ -689,8 +695,16 @@ Spec §4: "Home must render immediately when Home is pressed."
      profile, so private apps are hidden then too (D35). Predictions, Search and All Apps build on `AppCatalogRepository.apps`
      and inherit this. Shortcuts of a locked private space are never read
      (`profileShortcuts`, D47), and `SearchRanker` drops shortcuts whose app isn't visible.
-  Until M5 adds `ACCESS_HIDDEN_PROFILES`, Android 15+ doesn't show the private space to
-  Reach at all, which is the safe default.
+  Since M5 Reach declares `ACCESS_HIDDEN_PROFILES`, so on Android 15+ (as default home) the
+  private space *is* visible to it; these layers are what keep it hidden when locked. A refused
+  quiet-mode answer in `Profiles.isQuietMode` counts as locked, and All Apps' "Private space"
+  section (`PrivateSpaceUi.of`) lists names only while the profile is known and unlocked (D67).
+  Even unlocked, private apps never reach Home: `HomeViewModel` leaves them out of the intents
+  and `PredictionRepositoryImpl` never ranks them, so they appear only in All Apps' section and
+  in Search (D71).
+- **Accessibility service reads nothing.** `reach_accessibility_service.xml` subscribes to no
+  event types, `canRetrieveWindowContent="false"`, limited to Reach's package (D66). It is exported
+  only with `BIND_ACCESSIBILITY_SERVICE`, so only the system can bind it.
 - **Own launches by default.** Predictions use Reach's own launch history (no permission).
   Usage stats (`UsageStatsManagerSource`, special access) are an optional blend; nothing is
   stored.
@@ -709,6 +723,21 @@ Spec §4: "Home must render immediately when Home is pressed."
   protected by `BIND_NOTIFICATION_LISTENER_SERVICE`.
 
 ---
+
+### 6a. Screen actions: how the service reaches the ViewModel (M5, D66)
+
+Android creates and binds an accessibility service itself, so Hilt can't hand it to anyone (the
+same situation as `ReachNotificationListenerService`, §3b). The service therefore registers a
+`GlobalActionPerformer` lambda in the singleton `ScreenActionsHub` when it connects and clears it
+when it unbinds; `AccessibilityScreenActionsSource` (the real `ScreenActionsSource`) calls the
+hub. `isServiceEnabled` = "listed in `AccessibilityManager`" **and** "hub connected", because
+each alone is briefly wrong right after the user flips the switch (re-read on resume via
+`AccessRechecks`). Flow: double-tap or two-finger swipe (`HomeGestures.kt`) →
+`HomeViewModel` → source → hub → `performGlobalAction`. When it's off, the ViewModel emits
+`HomeEvent.ScreenActionUnavailable` and Home shows a 3 s hint. The opt-in switch and the button
+that opens Accessibility settings are in `:feature:appearance`. Flutter analogy: a
+`MethodChannel` handler registered by the platform side after it starts, with the Dart side
+asking "is anyone listening?".
 
 ## 7. Where to add a new feature
 

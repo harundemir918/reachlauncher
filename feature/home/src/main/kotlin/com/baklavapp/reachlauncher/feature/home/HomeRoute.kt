@@ -54,6 +54,7 @@ import com.baklavapp.reachlauncher.feature.home.ui.HomeWithFan
 import com.baklavapp.reachlauncher.feature.home.ui.IntentDetailScreen
 import com.baklavapp.reachlauncher.feature.home.ui.MediaCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.OnboardingCallbacks
+import com.baklavapp.reachlauncher.feature.home.ui.ScreenGestureCallbacks
 import com.baklavapp.reachlauncher.feature.search.SearchRoute
 import kotlinx.coroutines.delay
 
@@ -120,7 +121,7 @@ fun HomeRoute(
     // pressed in the background already shows Home, even while the data state catches up.
     val surface by viewModel.surface.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var failure by remember { mutableStateOf<LaunchFailure?>(null) }
+    var message by remember { mutableStateOf<InlineMessage?>(null) }
     var scrollToTopRequests by remember { mutableIntStateOf(0) }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -140,18 +141,22 @@ fun HomeRoute(
                     }
 
                     is HomeEvent.LaunchFailed -> {
-                        failure = LaunchFailure(event.label)
+                        message = InlineMessage.LaunchFailed(event.label)
+                    }
+
+                    is HomeEvent.ScreenActionUnavailable -> {
+                        message = InlineMessage.Unavailable(event.action)
                     }
                 }
             }
         }
     }
-    // Keyed on the LaunchFailure *instance*: a second failure for the same app is a new
+    // Keyed on the InlineMessage *instance*: a second failure for the same app is a new
     // object, so the 3 s timer restarts instead of hiding the new message early.
-    LaunchedEffect(failure) {
-        if (failure != null) {
+    LaunchedEffect(message) {
+        if (message != null) {
             delay(MESSAGE_DURATION_MILLIS)
-            failure = null
+            message = null
         }
     }
     BackHandler(enabled = true) { viewModel.onBack() }
@@ -165,17 +170,25 @@ fun HomeRoute(
             scrollToTopRequests,
             SurfaceSlots(searchContent, allAppsContent, appearanceContent),
         )
-        failure?.let { LaunchFailedMessage(it.label, Modifier.align(Alignment.BottomCenter)) }
+        message?.let { InlineMessageView(it, Modifier.align(Alignment.BottomCenter)) }
     }
 }
 
 /**
- * One shown launch-failure message. Deliberately *not* a data class: two failures for the
- * same label must be unequal so `LaunchedEffect(failure)` restarts its timer.
+ * One shown inline message. Deliberately *not* data classes: two failures for the same label
+ * must be unequal so `LaunchedEffect(message)` restarts its timer.
  */
-private class LaunchFailure(
-    val label: String,
-)
+private sealed class InlineMessage {
+    /** "Couldn't open Maps". */
+    class LaunchFailed(
+        val label: String,
+    ) : InlineMessage()
+
+    /** A screen-action gesture needs the accessibility service (D66). */
+    class Unavailable(
+        val action: ScreenAction,
+    ) : InlineMessage()
+}
 
 /** What one frame of [HomeSurfaces] shows: the active surface plus the data snapshot. */
 @Immutable
@@ -220,6 +233,8 @@ private fun HomeSurfaces(
         remember(viewModel) {
             FanCallbacks(viewModel::onFanOpen, viewModel::onFanHighlight, viewModel::onFanRelease, viewModel::onFanCancel)
         }
+    val gestureCallbacks =
+        remember(viewModel) { ScreenGestureCallbacks(viewModel::onLockScreenRequested, viewModel::onNotificationsRequested) }
     val appMenuCallbacks =
         remember(viewModel) {
             AppMenuCallbacks(viewModel::openAppInfo, viewModel::moveToIntent, viewModel::hideApp, viewModel::uninstall)
@@ -256,6 +271,7 @@ private fun HomeSurfaces(
                     system = system,
                     mediaCallbacks = mediaCallbacks,
                     onboardingCallbacks = onboardingCallbacks,
+                    gestureCallbacks = gestureCallbacks,
                 )
             }
 
@@ -332,14 +348,27 @@ private fun AnimatedContentTransitionScope<HomeFrame>.surfaceTransition(
 }
 
 /**
- * Reach-styled inline message ("Couldn't open Maps"), announced politely by TalkBack.
- * Not a Material Snackbar: Reach never shows stock Material chrome (spec §3).
+ * Reach-styled inline message ("Couldn't open Maps", or a screen-action hint), announced
+ * politely by TalkBack. Not a Material Snackbar: Reach never shows stock Material chrome (spec §3).
  */
 @Composable
-private fun LaunchFailedMessage(
-    label: String,
+private fun InlineMessageView(
+    message: InlineMessage,
     modifier: Modifier = Modifier,
 ) {
+    val text =
+        when (message) {
+            is InlineMessage.LaunchFailed -> {
+                stringResource(R.string.home_launch_failed, message.label)
+            }
+
+            is InlineMessage.Unavailable -> {
+                when (message.action) {
+                    ScreenAction.LOCK -> stringResource(R.string.home_lock_needs_service)
+                    ScreenAction.NOTIFICATIONS -> stringResource(R.string.home_shade_needs_service)
+                }
+            }
+        }
     val colors = ReachTheme.colors
     val shape = RoundedCornerShape(ReachComponentDimens.pillCorner)
     Box(
@@ -352,6 +381,6 @@ private fun LaunchFailedMessage(
                 .padding(MessagePadding)
                 .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
-        Text(text = stringResource(R.string.home_launch_failed, label), style = ReachTheme.typography.body, color = colors.fg)
+        Text(text = text, style = ReachTheme.typography.body, color = colors.fg)
     }
 }

@@ -18,4 +18,10 @@
     <string name="appearance_thumb_side">başparmak tarafı</string>
     <string name="appearance_thumb_left">Sol</string>
     <string name="appearance_thumb_right">Sağ</string>
+    <string name="appearance_gestures">hareketler</string>
+    <string name="appearance_double_tap_lock">Kilitlemek için çift dokun</string>
+    <string name="appearance_double_tap_lock_on">Ekranı kilitlemek için Ana ekranda boş bir alana çift dokun</string>
+    <string name="appearance_double_tap_lock_needs_service">Reach erişilebilirlik hizmeti gerekir; şu an kapalı</string>
+    <string name="appearance_service_why">Reach erişilebilirlik hizmeti yalnızca ekranı kilitlemek ve Ana ekranda iki parmakla aşağı kaydırarak bildirimleri açmak için kullanılır. Ekranındaki hiçbir şeyi okumaz.</string>
+    <string name="appearance_service_turn_on">Erişilebilirlik ayarlarından aç</string>
 </resources>

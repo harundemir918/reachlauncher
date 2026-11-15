@@ -22,8 +22,8 @@ import com.baklavapp.reachlauncher.core.system.notifications.NotificationListene
 import com.baklavapp.reachlauncher.core.system.profile.UserManagerProfileSource
 import com.baklavapp.reachlauncher.core.system.roles.RoleHomeRoleSource
 import com.baklavapp.reachlauncher.core.system.roles.TelephonyDefaultAppsSource
+import com.baklavapp.reachlauncher.core.system.screen.AccessibilityScreenActionsSource
 import com.baklavapp.reachlauncher.core.system.shortcuts.LauncherAppsShortcutSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableScreenActionsSource
 import com.baklavapp.reachlauncher.core.system.usage.UsageStatsManagerSource
 import com.baklavapp.reachlauncher.core.system.wallpaper.WallpaperManagerColorSource
 import dagger.Binds
@@ -102,8 +102,8 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindWallpaperColorSource(impl: WallpaperManagerColorSource): WallpaperColorSource
 
-    /** M5 placeholder. */
+    /** Lock screen / notification shade through the optional accessibility service (M5). */
     @Binds
     @Singleton
-    abstract fun bindScreenActionsSource(impl: UnavailableScreenActionsSource): ScreenActionsSource
+    abstract fun bindScreenActionsSource(impl: AccessibilityScreenActionsSource): ScreenActionsSource
 }

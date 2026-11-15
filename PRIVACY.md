@@ -26,8 +26,11 @@ reads on your phone and what it does with it.
 | **Calendar** (optional, *Calendar* permission) | To show the next event of today or tomorrow under the clock. | The next event only, in memory. Not stored. | Android Settings > Apps > Reach > Permissions > Calendar. |
 | **Usage access** (optional, special access) | To learn which apps you open at which hour of the day, so the "Now" row guesses better. | Counts are computed on the device from Android's own usage log and are not stored by Reach or sent anywhere. | Settings > Apps > Special app access > Usage access > Reach > off. |
 
-Reach also stores your own settings (theme, hidden apps, which tips you dismissed) in a
-small private file on the device.
+| **Private space** (Android 15+, only if you use one) | To show a "Private space" section in All Apps with Lock / Unlock. | Nothing is stored. Reach shows the space's apps **only while Android says it is unlocked**; locked, or if Reach can't tell, they are never shown (not in Home, Search, All Apps or suggestions). | Lock the space, or make another app your home screen. |
+| **Accessibility service** (optional, *Reach screen actions*) | To lock the screen on a double-tap and to open the notification shade with a two-finger swipe down. | It **reads nothing**. It cannot see your screen, windows or what you type, subscribes to no accessibility events, and can only press "lock screen" and "open notifications" when you ask on Home. No data is collected or stored. | Settings > Accessibility > Reach screen actions > off. |
+
+Reach also stores your own settings (theme, hidden apps, which tips you dismissed, the
+"Double-tap to lock" choice) in a small private file on the device.
 
 ## Permissions
 
@@ -37,6 +40,9 @@ small private file on the device.
 | `READ_CONTACTS` | Optional | Contacts in Search |
 | `READ_CALENDAR` | Optional | Next event line |
 | Usage access (`PACKAGE_USAGE_STATS`, special) | Optional | Better Now-row suggestions |
+| Accessibility service (`BIND_ACCESSIBILITY_SERVICE`) | Optional | Lock screen and notification shade gestures. You switch it on yourself in Android's Accessibility settings; Reach never turns it on. |
+| `ACCESS_HIDDEN_PROFILES` | Install-time | Lets Reach, when it is your home screen, see that a private space exists so it can offer Lock / Unlock. It does not unlock it or read anything inside. |
+| `EXPAND_STATUS_BAR` | Install-time | Only a fallback for opening the notification shade; it cannot read notifications. |
 | `REQUEST_DELETE_PACKAGES` | Install-time | Lets Reach show Android's own "Uninstall this app?" question. Android always asks you; Reach cannot uninstall anything by itself. |
 
 Reach has **no** `INTERNET`, `QUERY_ALL_PACKAGES`, location, camera, microphone, SMS or
@@ -50,6 +56,8 @@ Every optional permission can be denied or switched off and Reach still works fu
 - **No contacts:** Search shows apps, shortcuts and commands, but no contacts.
 - **No calendar:** the line under the clock is not shown.
 - **No usage access:** the "Now" row uses only Reach's own launch history.
+- **No accessibility service:** double-tap and two-finger swipe show a short hint instead;
+  everything else is the same.
 
 Reach asks for each of these once, on a small card that you can dismiss with "Not now".
 A dismissed or denied card is not shown again.

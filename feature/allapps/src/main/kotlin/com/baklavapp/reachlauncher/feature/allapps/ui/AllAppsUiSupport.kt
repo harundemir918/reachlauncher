@@ -26,22 +26,6 @@ import kotlin.math.roundToInt
  * `localToGlobal(Offset.zero)` in an `onTap` to know where the tapped widget is.
  */
 
-@StringRes
-private fun ReachIntent.wordRes(): Int =
-    when (this) {
-        ReachIntent.TALK -> R.string.allapps_intent_talk
-        ReachIntent.LISTEN -> R.string.allapps_intent_listen
-        ReachIntent.GO -> R.string.allapps_intent_go
-        ReachIntent.MAKE -> R.string.allapps_intent_make
-        ReachIntent.PLAY -> R.string.allapps_intent_play
-        ReachIntent.TOOLS -> R.string.allapps_intent_tools
-    }
-
-/** The localised word of [intent] ("Talk"/"Konuş"). */
-@Composable
-@ReadOnlyComposable
-internal fun intentWord(intent: ReachIntent): String = stringResource(intent.wordRes())
-
 /**
  * Remembers where one tappable name sits in the window, for the launch animation.
  * Deliberately not Compose state: it changes on every scroll frame and nothing reads it

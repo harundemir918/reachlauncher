@@ -50,6 +50,7 @@ internal fun HomeWithFan(
     system: HomeSystemUi = HomeSystemUi(),
     mediaCallbacks: MediaCallbacks = MediaCallbacks.None,
     onboardingCallbacks: OnboardingCallbacks = OnboardingCallbacks.None,
+    gestureCallbacks: ScreenGestureCallbacks = ScreenGestureCallbacks.None,
 ) {
     val gesture =
         rememberPressSlideReleaseState(
@@ -80,6 +81,7 @@ internal fun HomeWithFan(
             system = system,
             mediaCallbacks = mediaCallbacks,
             onboardingCallbacks = onboardingCallbacks,
+            gestureCallbacks = gestureCallbacks,
         )
         FanOverlay(fan = openFan, state = gesture, thumbSide = state.thumbSide, modifier = Modifier.fillMaxSize())
     }

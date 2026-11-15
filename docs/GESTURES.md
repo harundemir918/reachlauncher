@@ -1,9 +1,10 @@
 # Reach — gestures, step by step
 
-**v2 (M4).** How Reach's custom touch handling works, written for a Flutter developer:
+**v3 (M5).** How Reach's custom touch handling works, written for a Flutter developer:
 press-slide-release on Home (spec §6.5), the All Apps letter rail (§6.7), Home's pull-down /
-swipe-up (§6.3) and the clock's long-press. Everything here describes code that exists at
-the end of M4 (M4 added the intent-detail app-row long-press, §5a); the reasons are in [`DECISIONS.md`](DECISIONS.md) (D29, D30, D41, D48–D50, D64).
+swipe-up (§6.3), the clock's long-press, and (M5) double-tap to lock and the two-finger swipe
+for notifications. Everything here describes code that exists at the end of M5 (M4 added the
+intent-detail app-row long-press, §5a; M5 added §5b); the reasons are in [`DECISIONS.md`](DECISIONS.md) (D29, D30, D41, D48–D50, D64, D66).
 The general Flutter → Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md).
 
 Paths are abbreviated: `feature/home/…/ui/` = `feature/home/src/main/kotlin/com/baklavapp/reachlauncher/feature/home/ui/`.
@@ -15,6 +16,8 @@ Code excerpts are trimmed ("simplified from …"); the real files have more comm
 | Letter rail scrub | `feature/allapps/…/ui/LetterRail.kt` | hand-written `pointerInput` + `awaitEachGesture` |
 | Pull down → Search, swipe up → All Apps | `feature/home/…/ui/HomeGestures.kt` | `NestedScrollConnection` on Home's scroll |
 | Clock long-press → Appearance | `feature/home/…/ui/HomeClock.kt` | stock `detectTapGestures(onLongPress = …)` |
+| Double-tap empty space → lock (M5) | `feature/home/…/ui/HomeGestures.kt` (`screenActionGestures`) | stock `detectTapGestures(onDoubleTap = …)`, only while the setting is on |
+| Two-finger swipe down → notification shade (M5) | `feature/home/…/ui/HomeGestures.kt` (`detectTwoFingerSwipeDown`) | hand-written `pointerInput` in the `Initial` pass |
 | Long-press a name in All Apps → menu | `feature/allapps/…/ui/AllAppsScreen.kt` | stock `combinedClickable` (via `reachClickable(onLongClick = …)`) |
 | Long-press an app row in intent detail → the same menu (M4) | `feature/home/…/ui/IntentDetailScreen.kt` | same `reachClickable(onLongClick = …)`; menu is `AppActionsMenu` from `:core:designsystem` |
 
@@ -459,6 +462,61 @@ row (≈ Flutter's `Semantics(customSemanticsActions: …)`), plus "App options"
 itself, so nobody has to find the long-press. The `AppActionsMenu` claims system Back while open.
 Clock long-press → Appearance (§5) was already wired in M2 and still is; M4 only replaced the sheet
 it opens (the real `AppearanceRoute`).
+
+### 5b. Double-tap to lock and two-finger swipe for notifications (M5, D66)
+
+Both end in the optional accessibility service (`GLOBAL_ACTION_LOCK_SCREEN`,
+`GLOBAL_ACTION_NOTIFICATIONS`); without it Home shows a 3 s hint pointing to Appearance. Both are
+attached by one modifier, `Modifier.screenActionGestures(…)`, on Home's **outermost box**.
+
+**Double-tap = empty space only, and only if you asked for it.**
+```kotlin
+// simplified from HomeGestures.kt
+twoFinger.pointerInput(Unit) { detectTapGestures(onDoubleTap = { onDoubleTap.value() }) }
+```
+The box is the *parent* of the words, tiles, pill and clock, and `detectTapGestures` works in
+`Main` (leaf → root), so a tap on any of those is consumed by the child first and never arrives:
+only taps on bare space count. The detector is installed **only while "Double-tap to lock" is
+on** (`doubleTapEnabled` keys the `pointerInput`). Why: to know a tap is a *single* tap the
+detector must wait out the double-tap timeout; with the setting off, empty-space taps are never
+held back. (Flutter: a `GestureDetector(onDoubleTap:)` has the same cost, since it makes the arena
+wait for a possible second tap.)
+
+**Two-finger swipe = watch in `Initial`, claim only once a second finger is down.**
+```kotlin
+// simplified from HomeGestures.kt
+awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+do {
+    val event = awaitPointerEvent(PointerEventPass.Initial)
+    val pressed = event.changes.filter { it.pressed }
+    if (pressed.size >= 2) {                       // from here the gesture is ours
+        claimed = true
+        // remember where each finger started; fire once when both moved far enough
+        if (!fired && isTwoFingerSwipeDown(deltas, minDistancePx)) { fired = true; onSwipe() }
+    }                                              // one finger, never claimed: touch nothing
+    if (claimed) event.changes.forEach { it.consume() } // …until every finger is up
+} while (event.changes.any { it.pressed })
+```
+The detector is only installed while it can do something (service on, or the hidden fallback
+flag) and never while a press-slide-release fan is open, so a palm or grip touching with a
+second finger can't steal the fan's pointers (D71).
+**The pointer-pass rule.** With one finger the detector only *looks* (reading in `Initial`
+consumes nothing), so pull-down → Search, swipe-up → All Apps, press-slide-release and the
+clock's long-press behave exactly as before. As soon as a second finger lands it consumes every
+change in `Initial`, i.e. before the Home scroll's `Main`-pass drag handling sees them, so the
+scroll can't turn two fingers moving down into "open Search" (the nested-scroll swipe of §4) and
+words can't start a fan. Rule: *observe early, claim late*.
+
+**Thresholds** (`isTwoFingerSwipeDown`, pure and unit-tested in `TwoFingerSwipeRuleTest`): both
+of the first two fingers moved down at least **48dp** from where they touched down, and each more
+down than sideways (|dx| ≤ dy, within 45° of vertical). It fires once per gesture.
+
+**TalkBack.** With TalkBack on, a double-tap means "activate", so neither gesture is usable.
+The search pill therefore carries custom actions "Lock screen" and "Open notifications"
+(≈ `Semantics(customSemanticsActions: …)`), added only when the service is on (not for the hidden fallback, which can
+fail silently), so TalkBack never offers an action that would just show a hint
+(`HomeScreen.kt`, next to "All apps"). Tests: `HomeViewModelScreenActionsTest`,
+`TwoFingerSwipeRuleTest`.
 
 ---
 

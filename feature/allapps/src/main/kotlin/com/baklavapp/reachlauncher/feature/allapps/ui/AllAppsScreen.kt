@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import com.baklavapp.reachlauncher.core.designsystem.component.AppActionsMenu
 import com.baklavapp.reachlauncher.core.designsystem.component.AppMenuActions
 import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
+import com.baklavapp.reachlauncher.core.designsystem.component.PillButton
+import com.baklavapp.reachlauncher.core.designsystem.component.PillButtonStyle
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.component.SearchPill
 import com.baklavapp.reachlauncher.core.designsystem.component.appMenuAccessibilityActions
@@ -57,6 +59,7 @@ import com.baklavapp.reachlauncher.core.designsystem.component.reachClickable
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachColors
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
+import com.baklavapp.reachlauncher.core.designsystem.util.intentWord
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -67,6 +70,7 @@ import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.core.model.ThumbSide
 import com.baklavapp.reachlauncher.feature.allapps.AllAppsUiState
 import com.baklavapp.reachlauncher.feature.allapps.LetterGroup
+import com.baklavapp.reachlauncher.feature.allapps.PrivateSpaceUi
 import com.baklavapp.reachlauncher.feature.allapps.R
 import com.baklavapp.reachlauncher.feature.allapps.RailLetter
 import kotlinx.coroutines.launch
@@ -133,6 +137,7 @@ private data class MenuRequest(
  * @param onMoveToIntent the menu's intent chips; the user's choice beats auto-assignment.
  * @param onSetHidden the menu's Hide (true) / Unhide (false).
  * @param onOpenSearch the "Type to launch" pill.
+ * @param onTogglePrivateSpace the private-space section's Lock / Unlock button.
  * @param listState the word wall's scroll state; hoisted so tests can read the position.
  */
 @Composable
@@ -145,6 +150,7 @@ fun AllAppsScreen(
     onUninstall: (CatalogApp) -> Unit,
     onOpenSearch: () -> Unit,
     modifier: Modifier = Modifier,
+    onTogglePrivateSpace: () -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
     val reducedMotion = rememberReducedMotion()
@@ -210,6 +216,9 @@ fun AllAppsScreen(
                             hiddenGroup = false,
                             callbacks = nameCallbacks,
                         )
+                    }
+                    state.privateSpace?.let { space ->
+                        item(key = "private") { PrivateSpaceSection(space, onTogglePrivateSpace, nameCallbacks) }
                     }
                     if (state.hidden.isNotEmpty()) {
                         item(key = "hidden") {
@@ -351,21 +360,64 @@ private fun WordWallGroup(
             color = if (focus == GroupFocus.Active) colors.accentInk else colors.muted,
             modifier = Modifier.semantics { heading() },
         )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(NameSpacing),
-            verticalArrangement = Arrangement.spacedBy(NameRowGap),
-        ) {
-            apps.forEach { app ->
-                key(app.key) {
-                    val color =
-                        when {
-                            focus == GroupFocus.Dimmed -> colors.groupDim
-                            app.isProfilePaused -> colors.muted
-                            else -> colors.fg
-                        }
-                    WordWallName(app, color, hiddenGroup, callbacks)
-                }
+        NameFlow(apps, focus, hiddenGroup, callbacks)
+    }
+}
+
+/** The names of one group, flowing and wrapping like words in a paragraph. */
+@Composable
+private fun NameFlow(
+    apps: List<CatalogApp>,
+    focus: GroupFocus,
+    hiddenGroup: Boolean,
+    callbacks: NameCallbacks,
+) {
+    val colors = ReachTheme.colors
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(NameSpacing),
+        verticalArrangement = Arrangement.spacedBy(NameRowGap),
+    ) {
+        apps.forEach { app ->
+            key(app.key) {
+                val color =
+                    when {
+                        focus == GroupFocus.Dimmed -> colors.groupDim
+                        app.isProfilePaused -> colors.muted
+                        else -> colors.fg
+                    }
+                WordWallName(app, color, hiddenGroup, callbacks)
             }
+        }
+    }
+}
+
+/**
+ * The private space (Android 15+, D67): its own section at the end of the wall, as Android
+ * recommends for launchers, never mixed into the letter groups. Locked, it shows only the
+ * heading, one line and "Unlock" — no names, not even a count. Unlocking may first show the
+ * system's own authentication screen; the section fills in when the system reports the
+ * profile available.
+ */
+@Composable
+private fun PrivateSpaceSection(
+    space: PrivateSpaceUi,
+    onToggle: () -> Unit,
+    callbacks: NameCallbacks,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(LabelGap)) {
+        MonoLabel(text = stringResource(R.string.allapps_private_space), modifier = Modifier.semantics { heading() })
+        Text(
+            text = stringResource(if (space.isLocked) R.string.allapps_private_locked else R.string.allapps_private_unlocked),
+            style = ReachTheme.typography.caption,
+            color = ReachTheme.colors.muted,
+        )
+        PillButton(
+            text = stringResource(if (space.isLocked) R.string.allapps_private_unlock else R.string.allapps_private_lock),
+            onClick = onToggle,
+            style = PillButtonStyle.Outlined,
+        )
+        if (!space.isLocked && space.apps.isNotEmpty()) {
+            NameFlow(space.apps, GroupFocus.Normal, hiddenGroup = false, callbacks = callbacks)
         }
     }
 }

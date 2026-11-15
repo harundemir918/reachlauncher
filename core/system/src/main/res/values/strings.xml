@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings of :core:system. Prefix "system_" keeps them from colliding after resource merging.
+-->
+<resources>
+    <!-- Name of the accessibility service in Settings › Accessibility. -->
+    <string name="system_a11y_service_label">Reach screen actions</string>
+    <!-- One-line summary under the name in Settings › Accessibility. -->
+    <string name="system_a11y_service_summary">Double-tap Home to lock, two-finger swipe down for notifications</string>
+    <!-- Shown on the service's Settings page before the user switches it on: what it does and does not do. -->
+    <string name="system_a11y_service_description">Reach uses this service only to lock the screen when you double-tap empty space on Home, and to open the notification shade when you swipe down with two fingers on Home. It does not read the screen, your typing or any other app, and nothing is collected or sent anywhere. You can switch it off at any time.</string>
+</resources>

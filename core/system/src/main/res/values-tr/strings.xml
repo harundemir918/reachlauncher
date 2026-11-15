@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="system_a11y_service_label">Reach ekran eylemleri</string>
+    <string name="system_a11y_service_summary">Kilitlemek için Ana ekrana çift dokun, bildirimler için iki parmakla aşağı kaydır</string>
+    <string name="system_a11y_service_description">Reach bu hizmeti yalnızca Ana ekranda boş bir alana çift dokunduğunda ekranı kilitlemek ve Ana ekranda iki parmakla aşağı kaydırdığında bildirim panelini açmak için kullanır. Ekranı, yazdıklarını ya da başka bir uygulamayı okumaz; hiçbir şey toplanmaz veya bir yere gönderilmez. İstediğin zaman kapatabilirsin.</string>
+</resources>

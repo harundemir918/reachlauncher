@@ -1,13 +1,13 @@
 # Flutter → Compose (and Android) for Reach
 
-**v5 (M4) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
+**v6 (M5) — extended each milestone.** v1 (M0) introduced the concepts; v2 replaced the
 illustrative examples with real code from the M1 launcher (events, lifecycle effects,
 `callbackFlow`, nested scroll, semantics, UI tests); v3 adds what M2 brought: custom
 gestures (`pointerInput` / `awaitEachGesture`, in depth in [GESTURES.md](GESTURES.md)),
 `LazyColumn` + `FlowRow` in All Apps, the search text field and focus, runtime permission
 requests, debounced flows, composable slots, the shared `LaunchApp` use case and haptics; v4 adds what M3 brought: Android `Service`s
 (the notification listener), broadcast receivers, special accesses versus runtime
-permissions, and re-checking on resume (see [the M3 sections](#system-features-m3-services-receivers-special-access-and-resume)); v5 adds what M4 brought: hand-built segmented controls, swatches and switch rows with proper semantics, `flatMapLatest` to start/stop a listener, a bounded `runBlocking` before the first frame, and window-level wallpaper/blur (see [the M4 section](#personalisation-m4-appearance-controls-and-the-window)).
+permissions, and re-checking on resume (see [the M3 sections](#system-features-m3-services-receivers-special-access-and-resume)); v5 adds what M4 brought: hand-built segmented controls, swatches and switch rows with proper semantics, `flatMapLatest` to start/stop a listener, a bounded `runBlocking` before the first frame, and window-level wallpaper/blur (see [the M4 section](#personalisation-m4-appearance-controls-and-the-window)); v6 adds what M5 brought: multi-touch `pointerInput` and the pointer passes, Baseline Profiles versus Flutter's AOT, and R8 versus Dart's tree shaking and obfuscation (see [the M5 section](#polish-m5-multi-touch-baseline-profiles-and-r8)).
 
 ## How to read this
 
@@ -1560,4 +1560,52 @@ M3 additions: the system-feature code lives in `core/system/…/notifications/`,
 `feature/home/…/ui/SystemCards.kt`, `HomeViewModel.kt` (`onboarding`, `system`) and
 `MediaProgress.kt`.
 
-Coming in later versions of this file: the accessibility service (M5).
+M5 additions: the accessibility service in `core/system/…/screen/` (`ReachAccessibilityService`,
+`ScreenActionsHub`, `AccessibilityScreenActionsSource`), the screen-action gestures in
+`feature/home/…/ui/HomeGestures.kt`, the generator in `baselineprofile/src/main/…`, and release
+config in `app/build.gradle.kts` / `app/src/main/keepRules/rules.keep`.
+
+---
+
+## Polish (M5): multi-touch, Baseline Profiles and R8
+
+### Multi-touch `pointerInput` and the three passes ↔ `Listener` + the gesture arena
+
+A Flutter `ScaleGestureRecognizer` / `Listener` gives you every pointer, and the **arena** decides
+who wins. Compose gives every detector every pointer and has no referee, so for the
+two-finger swipe (`HomeGestures.kt`) the order of delivery is what matters:
+
+- Read with `awaitPointerEvent(PointerEventPass.Initial)` and you see events **before** your
+  children and ancestors (the Home scroll and the words react later, in `Main`).
+- `event.changes` is a list: one `PointerInputChange` per finger, each with a stable `id`.
+  `pressed.size >= 2` is "multi-touch"; remember each id's start position in a map.
+- **Observe early, claim late:** with one finger, read but don't consume (everything else keeps
+  working); once a second finger is down, `consume()` every change in `Initial` so the scroll
+  can't also act. Consuming is the "win" Compose offers instead of `GestureDisposition.accepted`.
+
+Full walk-through: [GESTURES.md §5b](GESTURES.md).
+
+### Baseline Profiles ↔ Flutter's AOT (and shader warm-up)
+
+Release Flutter ships Dart **ahead-of-time compiled**; first-frame jank is mostly shader
+compilation (Skia warm-up, mostly solved by Impeller). Android apps are different: the code ships as
+bytecode, and ART interprets and JIT-compiles it as you use it, so the *first* launches after an
+install are slow (and Compose is a lot of code). A **Baseline Profile** is a list of the classes
+and methods a typical run needs; the installer (`profileinstaller`, or Play) AOT-compiles exactly
+those. In Reach the `:baselineprofile` module drives the real release app with UiAutomator
+(≈ an `integration_test` that launches the app and taps through it) and writes the list to
+`app/src/release/generated/baselineProfiles/`. It needs a device, so it's run by hand and committed.
+
+### R8 ↔ Dart tree shaking and `--obfuscate`
+
+Dart's release compiler tree-shakes unused code and, with `--obfuscate --split-debug-info`, renames
+symbols. **R8** does both for Android bytecode: it removes unreachable classes/methods (shrinking),
+rewrites code (optimising) and renames (obfuscating), and **`isShrinkResources`** drops unused
+resources, which Dart has no counterpart for (assets are listed explicitly in `pubspec.yaml`).
+Reflection is the hazard: code found only by name (`Class.forName`, JSON/serialisation
+libraries) must be protected with *keep rules*. Reach needs almost none: Hilt, Room and
+Compose generate code at compile time instead of reflecting, and the manifest's components are
+kept automatically; `rules.keep` only keeps line numbers, so a stack trace is readable
+(≈ the symbols file you pass to `flutter symbolize`). Signing keys stay out of the repo
+(`keystore.properties`, git-ignored), the same as a Flutter `key.properties`.
+

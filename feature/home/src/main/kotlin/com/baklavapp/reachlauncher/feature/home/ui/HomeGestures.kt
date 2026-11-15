@@ -1,15 +1,25 @@
 package com.baklavapp.reachlauncher.feature.home.ui
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 
 /*
  * Home's vertical swipes: pull down → Search, swipe up → All Apps (spec §6.3).
@@ -101,5 +111,107 @@ internal fun rememberVerticalSwipeConnection(
         with(density) {
             VerticalSwipeConnection(SwipeDistance.toPx(), FlingVelocity.toPx(), FlingMinDistance.toPx(), up, down)
         }
+    }
+}
+
+/*
+ * Screen-action gestures (spec §6.3, §7.4; docs/DECISIONS.md D66): double-tap on empty Home to
+ * lock, two-finger swipe down on Home to open the notification shade. Both run through the
+ * optional accessibility service; without it the ViewModel shows a hint instead.
+ *
+ * How they stay out of the way of Home's other gestures (docs/GESTURES.md):
+ * - **Double-tap** is detected on Home's outermost box, *after* its children: a tap on a
+ *   word, tile, pill or the clock is consumed by that control, so only taps on empty space
+ *   reach the detector. It is only installed while "Double-tap to lock" is on, so normally a
+ *   tap on empty space is never held back waiting for a second one.
+ * - **Two fingers** are watched in the *Initial* pass (before the scroll and the words see
+ *   the event). One finger is never touched, so pull-down → Search, swipe-up → All Apps,
+ *   press-slide-release and the clock's long-press work exactly as before. As soon as a
+ *   second finger is down, the gesture belongs to this detector: its moves are consumed, so
+ *   the scroll cannot also turn them into "open Search".
+ */
+
+/** How far both fingers must travel down for the two-finger swipe. */
+private val TwoFingerDistance = 48.dp
+
+/** The ViewModel's screen-action entry points, bundled to keep signatures short. */
+@Immutable
+internal data class ScreenGestureCallbacks(
+    val onLock: () -> Unit,
+    val onOpenNotifications: () -> Unit,
+) {
+    companion object {
+        /** No-op callbacks, for previews and tests that don't care. */
+        val None = ScreenGestureCallbacks({}, {})
+    }
+}
+
+/**
+ * The two-finger rule, pure so it is unit-tested: at least two fingers, and each of the first
+ * two moved down by [minDistancePx] or more, more down than sideways (within 45° of
+ * vertical). [deltas] are the fingers' offsets from where they touched down.
+ */
+internal fun isTwoFingerSwipeDown(
+    deltas: List<Offset>,
+    minDistancePx: Float,
+): Boolean = deltas.size >= 2 && deltas.take(2).all { it.y >= minDistancePx && abs(it.x) <= it.y }
+
+/**
+ * Attaches the screen-action gestures. [doubleTapEnabled] and [twoFingerEnabled] install or
+ * remove each detector, so a gesture that can't do anything never holds back a touch. The callbacks are `State`s so the detectors,
+ * which outlive recompositions, always call the latest lambdas.
+ */
+internal fun Modifier.screenActionGestures(
+    doubleTapEnabled: Boolean,
+    twoFingerEnabled: Boolean,
+    twoFingerDistancePx: Float,
+    onDoubleTap: State<() -> Unit>,
+    onTwoFingerSwipeDown: State<() -> Unit>,
+): Modifier {
+    val twoFinger =
+        if (twoFingerEnabled) {
+            pointerInput(twoFingerDistancePx) { detectTwoFingerSwipeDown(twoFingerDistancePx) { onTwoFingerSwipeDown.value() } }
+        } else {
+            this
+        }
+    return if (doubleTapEnabled) {
+        twoFinger.pointerInput(Unit) { detectTapGestures(onDoubleTap = { onDoubleTap.value() }) }
+    } else {
+        twoFinger
+    }
+}
+
+/** Pixels for [TwoFingerDistance] at the current density. */
+@Composable
+internal fun rememberTwoFingerDistancePx(): Float {
+    val density = LocalDensity.current
+    return remember(density) { with(density) { TwoFingerDistance.toPx() } }
+}
+
+private suspend fun PointerInputScope.detectTwoFingerSwipeDown(
+    minDistancePx: Float,
+    onSwipe: () -> Unit,
+) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val starts = HashMap<PointerId, Offset>()
+        var fired = false
+        // Once a second finger has touched, the whole gesture is ours until every finger is
+        // up: the finger left behind after the other lifts must not reach the scroll and
+        // turn the end of a shade swipe into "open Search".
+        var claimed = false
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val pressed = event.changes.filter { it.pressed }
+            if (pressed.size >= 2) {
+                claimed = true
+                pressed.forEach { starts.getOrPut(it.id) { it.position } }
+                if (!fired && isTwoFingerSwipeDown(pressed.map { it.position - starts.getValue(it.id) }, minDistancePx)) {
+                    fired = true
+                    onSwipe()
+                }
+            }
+            if (claimed) event.changes.forEach { it.consume() }
+        } while (event.changes.any { it.pressed })
     }
 }

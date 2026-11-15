@@ -265,8 +265,17 @@ class FakeScreenActionsSource : ScreenActionsSource {
         return enabled.value
     }
 
+    /** Whether the hidden-API fallback would work on this "device" (only tried when allowed). */
+    var hiddenApiWorks = false
+
+    /** The `allowHiddenApi` argument of the last [openNotificationShade] call, or null. */
+    var lastAllowHiddenApi: Boolean? = null
+        private set
+
     override fun openNotificationShade(allowHiddenApi: Boolean): Boolean {
-        if (enabled.value) shadeCount++
-        return enabled.value
+        lastAllowHiddenApi = allowHiddenApi
+        val opened = enabled.value || (allowHiddenApi && hiddenApiWorks)
+        if (opened) shadeCount++
+        return opened
     }
 }

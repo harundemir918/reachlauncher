@@ -1,12 +1,14 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
+# Reach's own R8 keep rules (AGP passes every file in src/main/keepRules to R8). D69.
 #
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Most of what must survive needs no rule here:
+# - Manifest components (MainActivity, ReachApplication, ReachNotificationListenerService,
+#   ReachAccessibilityService) are kept by the rules AAPT generates from the merged manifest.
+# - Hilt, Room, DataStore, Compose, coroutines and AndroidX ship consumer keep rules in their
+#   AARs; Hilt and Room generate code instead of using reflection on our classes.
+# - The hidden-API notification-shade fallback reflects on a *framework* class
+#   (StatusBarManager), which R8 never sees or renames, so it needs no rule either.
+#
+# Kept: line numbers in stack traces (crash reports from testers stay readable after
+# obfuscation; the mapping file is in app/build/outputs/mapping/release/).
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

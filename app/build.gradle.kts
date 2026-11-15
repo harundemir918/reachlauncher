@@ -1,10 +1,33 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.androidx.baselineprofile)
 }
+
+/*
+ * Release signing (M5, docs/DECISIONS.md D69). Keys are never committed: they come from
+ * `keystore.properties` at the repo root (git-ignored; see keystore.properties.example) or,
+ * on CI, from the REACH_KEYSTORE_* environment variables. Without either, the release build
+ * is signed with the local debug key so it still installs for testing (and for Baseline
+ * Profile generation) — Google Play refuses debug-signed uploads, so it can't ship by mistake.
+ */
+val keystoreProperties =
+    Properties().apply {
+        val file = rootProject.file("keystore.properties")
+        if (file.isFile) file.inputStream().use { load(it) }
+    }
+
+fun signingValue(
+    property: String,
+    environment: String,
+): String? = keystoreProperties.getProperty(property) ?: providers.environmentVariable(environment).orNull
+
+val releaseStoreFile = signingValue("storeFile", "REACH_KEYSTORE_FILE")
 
 android {
     namespace = "com.baklavapp.reachlauncher"
@@ -22,12 +45,29 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile)
+                storePassword = signingValue("storePassword", "REACH_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "REACH_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "REACH_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // R8 over the whole app (D69, replacing D16's library-only packageScope): shrinks,
+            // optimizes and obfuscates Reach's own code too. Hilt, Room, DataStore and Compose
+            // ship their own consumer keep rules; manifest components (activity, services) are
+            // kept by AAPT's generated rules; our extra rules are in src/main/keepRules/.
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
+            // Drops resources nothing references (after R8 removed the code that used them).
+            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -66,7 +106,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    // Installs the Baseline Profile (src/release/generated/baselineProfiles) at install time
+    // on devices whose app store doesn't, e.g. sideloads (D68).
     implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

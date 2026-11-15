@@ -1,12 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The six intent words (Home rows, detail title, chips). Short: they render at 46–60sp. -->
-    <string name="home_intent_talk">Talk</string>
-    <string name="home_intent_listen">Listen</string>
-    <string name="home_intent_go">Go</string>
-    <string name="home_intent_make">Make</string>
-    <string name="home_intent_play">Play</string>
-    <string name="home_intent_tools">Tools</string>
     <!-- TalkBack verb on an intent word: "double-tap to open apps". -->
     <string name="home_intent_open_action">open apps</string>
 
@@ -68,4 +61,10 @@
     <string name="home_card_usage_title">Better guesses in the Now row</string>
     <string name="home_card_usage_why">Optional. Usage access tells Reach which apps you open at what hour. It stays on your phone.</string>
     <string name="home_card_usage_action">Allow usage access</string>
+    <!-- Screen actions (spec §7.4): TalkBack actions on the search pill, shown only while they work. -->
+    <string name="home_lock_action">Lock screen</string>
+    <string name="home_notifications_action">Open notifications</string>
+    <!-- Short inline hints when a screen-action gesture needs the optional accessibility service. -->
+    <string name="home_lock_needs_service">Double-tap to lock needs Reach’s accessibility service. Turn it on in Appearance.</string>
+    <string name="home_shade_needs_service">Opening notifications with two fingers needs Reach’s accessibility service. Turn it on in Appearance.</string>
 </resources>

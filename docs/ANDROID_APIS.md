@@ -1,11 +1,11 @@
 # Android APIs and permissions used by Reach
 
-**v4 (M4).** Every Android API and permission the code uses *today*: what it does, why
+**v5 (M5).** Every Android API and permission the code uses *today*: what it does, why
 Reach needs it, how the user grants it (if at all), what happens without it, and Play
 policy notes. M2 added contacts, app shortcuts, ICU letter buckets, gesture-zone handling and
 haptics; M3 added the notification listener, media sessions, calendar, usage access and the
-resume re-check. M4 added wallpaper colours, the wallpaper window flag and background blur; M5 will add the
-accessibility service (see [the last section](#coming-in-m5)).
+resume re-check. M4 added wallpaper colours, the wallpaper window flag and background blur; M5 added the
+optional accessibility service ([disclosure](#accessibility-service-and-the-play-accessibilityservice-api-disclosure-m5-d66)), the private space ([section](#private-space-android-15-m5-d67)) and two normal permissions.
 
 Where it helps, an API is tagged with the Android version (API level) that introduced it.
 Reach's `minSdk` is **28** (Android 9); anything newer is behind a `Build.VERSION.SDK_INT`
@@ -28,9 +28,12 @@ APIs in the feature modules / `:app`), behind the interfaces in `:core:data` (se
 | `READ_CALENDAR` | **runtime / "dangerous"**, optional | `core/system/src/main/AndroidManifest.xml` | The "next event" line under the clock (D56). See [Calendar](#calendar-calendarcontract-m3). | No line; nothing else changes. |
 | `PACKAGE_USAGE_STATS` | **special access** (user flips a switch in Settings; `tools:ignore="ProtectedPermissions"`), optional | `core/system/src/main/AndroidManifest.xml` | Hour-of-day launch counts for the Now row (D57). See [Usage access](#usage-access-usagestatsmanager-m3). | Predictions use Reach's own launch history only. |
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | **service permission** (held only by the system); the *user* grants "Notification access" in Settings, optional | `<service>` in `core/system/src/main/AndroidManifest.xml` | Unread counts and media controls. See [Notification listener](#notification-listener-m3) and [Media sessions](#media-sessions-m3). | No badges, no media row. |
+| `ACCESS_HIDDEN_PROFILES` | **normal** (granted at install) | `core/system/src/main/AndroidManifest.xml` | Android 15+: together with the home role, lets `LauncherApps.getProfiles()` return the **private space** so Reach can offer Lock / Unlock (D67). See [Private space](#private-space-android-15-m5-d67). | Android hides the private space from Reach entirely. |
+| `EXPAND_STATUS_BAR` | **normal** | `core/system/src/main/AndroidManifest.xml` | Only for the dormant fallback `StatusBarManager.expandNotificationsPanel()` (reflection, flag `hiddenApiShadeFallback`, default off, no UI; D66). Cannot read notifications. | Nothing changes: the fallback is off. |
+| `BIND_ACCESSIBILITY_SERVICE` | **service permission** (held only by the system); the *user* switches the service on in Settings › Accessibility, optional | `<service>` in `core/system/src/main/AndroidManifest.xml` | `ReachAccessibilityService`: lock screen and open notifications, nothing else. See [the disclosure](#accessibility-service-and-the-play-accessibilityservice-api-disclosure-m5-d66). | Double-tap / two-finger swipe show a hint. |
 | *Shortcut host access* (not a manifest permission) | granted by **being the default home app** | — | `LauncherApps.getShortcuts` / `startShortcut` for app shortcuts in Search and intent detail. See [App shortcuts](#app-shortcuts-launcherapps-m2). | No shortcut rows or pills. |
 
-Those are the **only** permissions Reach declares as of M4 (M4 added none: wallpaper colours need no permission) (the last four are all optional). The merged manifest additionally
+Those are the **only** permissions Reach declares as of M5 (M5 added `ACCESS_HIDDEN_PROFILES`, `EXPAND_STATUS_BAR` and the accessibility service; the contacts, calendar, usage, notification-listener and accessibility ones are optional). The merged manifest additionally
 contains `com.baklavapp.reachlauncher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, a
 *signature* permission that AndroidX Core defines for Reach itself so
 `ContextCompat.registerReceiver(…, RECEIVER_NOT_EXPORTED)` can emulate non-exported runtime
@@ -42,11 +45,10 @@ receivers on Android versions before 13. It grants nothing to other apps.
 |---|---|
 | `INTERNET` | Reach has no network features in v1 and sends no data off the device (spec §7). Without this permission the app cannot open a socket at all — that's a stronger guarantee than "we don't call the network". None of the libraries adds it (checked in the merged debug manifest). |
 | `QUERY_ALL_PACKAGES` | Restricted by Google Play (needs a Console declaration and a qualifying use case). A launcher only needs apps that *have a launcher activity*, which the `<queries>` entry for `MAIN/LAUNCHER` makes visible (D8, [package visibility](#package-visibility-queries)). |
-| `ACCESS_HIDDEN_PROFILES` | Android 15+: needed (together with the home role) to see the **private space**. Until it's added and verified in **M5** (D13, D24), Android hides the private space from Reach entirely — the privacy-safe default. |
 | `MODIFY_QUIET_MODE` | Not needed: `UserManager.requestQuietModeEnabled` is allowed for the foreground default launcher. |
 | `VIBRATE` | Not needed: haptics go through `View.performHapticFeedback` (Compose `LocalHapticFeedback`), which needs no permission ([Haptics](#haptics-m2)). |
 | `CALL_PHONE`, `SEND_SMS` | Not needed: a contact's Call / Message only *pre-fill* the dialer / messaging app (`ACTION_DIAL`, `ACTION_SENDTO`); the user presses call/send there. |
-| Accessibility service | Not yet: still a stub until M5 (see [Coming in M5](#coming-in-m5)). |
+| `ACCESS_HIDDEN_PROFILES_FULL`, `MODIFY_QUIET_MODE`, device admin (`lockNow`) | System-only or needlessly broad. Locking uses the accessibility global action instead of `DevicePolicyManager.lockNow()`, which would force PIN/password over biometrics (D66). |
 
 Library components in the merged manifest (none needs a permission from the user):
 `androidx.startup.InitializationProvider` (not exported), Room's
@@ -129,6 +131,23 @@ events", "… on Android 9 are the managed-profile ones only").
 
 ---
 
+### Private space (Android 15+, M5, D67)
+
+Verified against the SDK stubs (`javap` on android-35/36/37):
+
+| API | Use |
+|---|---|
+| `LauncherApps.getProfiles()` | The private profile is returned only to a caller with `ACCESS_HIDDEN_PROFILES` **and** the home role. |
+| `LauncherApps.getLauncherUserInfo(UserHandle)` (API 35) → `getUserType()` | `UserManager.USER_TYPE_PROFILE_PRIVATE` identifies it. A null result is *not* treated as private (it would break paused work profiles); a `SecurityException` is. |
+| `UserManager.requestQuietModeEnabled(enable, user)` | Lock / Unlock. Allowed for the foreground default launcher; returns false when the system must first ask for the credential, throws `SecurityException` / `IllegalArgumentException` (both → false). |
+| `Intent.ACTION_PROFILE_AVAILABLE` / `_UNAVAILABLE` (API 35) | Registered receiver in `Profiles.profileChangeActions()`, so the section updates when the space locks. |
+| `LauncherApps.getPrivateSpaceSettingsIntent()` | API **36** only; not used yet. |
+
+In the UI: All Apps ends with a "Private space" section (never mixed into letters) with a
+Lock / Unlock pill. Apps are listed only while the profile is known **and** unlocked;
+`Profiles.isQuietMode` treats a refused answer as locked. Needs a device with Android 15+, Reach
+as default home and a private space to verify end to end.
+
 ## Launching
 
 `core/system/…/launch/SystemAppLauncher.kt`, `core/system/…/ActivityTracker.kt`.
@@ -208,8 +227,8 @@ provider) also yields an empty list.
 current query only**: nothing is stored (no Room table, no DataStore key), and with no
 `INTERNET` permission nothing can leave the device. The Play listing's Data safety form and
 `PRIVACY.md` (**M3**) will still need to state that contacts are accessed and processed on the
-device only, never collected or shared. Work-profile contacts (`ENTERPRISE_CONTENT_FILTER_URI`) are not read yet
-(**M5**).
+device only, never collected or shared. Work-profile contacts (`ENTERPRISE_CONTENT_FILTER_URI`) are still not read
+(left out in M5; they depend on the admin's cross-profile contacts policy).
 
 ---
 
@@ -256,7 +275,7 @@ none in any manifest) and follows the user's system touch-feedback setting.
 Default apps → Home app*. **Without it:** Reach still runs as a normal app (via its LAUNCHER
 entry) and can launch apps; pressing Home opens the other launcher. Features that need the
 role: app shortcuts (`hasShortcutHostPermission`, [M2](#app-shortcuts-launcherapps-m2)),
-resuming a paused work profile, the private space (M5).
+resuming a paused work profile, and seeing the private space (M5).
 **M2 status:** the role state is read on every resume, and `AppLauncher.open(SystemScreen.HOME_ROLE)`
 is implemented and tested (`SystemAppLauncherTest`, `HomeRoleSourceTest`), but no UI shows
 the onboarding card yet — that's **M3**. Until then, set the default via Settings or adb
@@ -566,15 +585,42 @@ No permission is needed for any of this: Reach reads the wallpaper's *colours*, 
 Below Android 12 the wallpaper is shown unblurred under the scrim. Accent contrast rules
 (`WallpaperAccent`): `accentInk` ≥ 4.5:1 on bg, and `onAccent` is the more contrasting of bg/fg.
 
-## Coming in M5
+## Accessibility service and the Play AccessibilityService API disclosure (M5, D66)
 
-Notification counts, media sessions, the default-home card, calendar, usage stats and wallpaper
-colours are done. **Only this remains stubbed**, bound to an `Unavailable…` class in
-`core/system/…/di/SystemModule.kt` (`core/system/…/unavailable/UnavailableSources.kt`):
+**What it is.** `ReachAccessibilityService` (`core/system/…/screen/`), declared in
+`core/system/src/main/AndroidManifest.xml` with `BIND_ACCESSIBILITY_SERVICE` and configured in
+`core/system/src/main/res/xml/reach_accessibility_service.xml`. It is **off** until the user
+switches on "Reach screen actions" in Settings › Accessibility (offered only from the
+Appearance sheet's Gestures section). It performs two global actions and nothing else:
 
-- **Accessibility service** — opt-in, `GLOBAL_ACTION_LOCK_SCREEN` / `GLOBAL_ACTION_NOTIFICATIONS`, with the Play accessibility-API disclosure text (M5).
+| Gesture on Home | Global action | Without the service |
+|---|---|---|
+| Double-tap empty space (only if "Double-tap to lock" is on) | `GLOBAL_ACTION_LOCK_SCREEN` (API 28) | Short hint pointing to Appearance |
+| Two-finger swipe down | `GLOBAL_ACTION_NOTIFICATIONS` | Hidden `StatusBarManager.expandNotificationsPanel()` if the default-off flag allows it, else the hint |
 
-Also planned (not behind a stub): **work-profile contacts** via
-`ContactsContract.Contacts.ENTERPRISE_CONTENT_FILTER_URI`, subject to the admin's
-cross-profile contacts policy (M5), and the **private space** via `ACCESS_HIDDEN_PROFILES`
-with the exact Android 15+ behaviour verified in M5 (D13).
+**Minimal declaration.** No `accessibilityEventTypes` (event mask 0: no events), `packageNames`
+= Reach only, `canRetrieveWindowContent="false"`, no gesture/key/screenshot/magnification
+capabilities, `isAccessibilityTool="false"` (it is a convenience feature, not an assistive
+tool, so Play's prominent-disclosure rules apply and are met below).
+
+**Play Console declaration (AccessibilityService API) — text to paste:**
+
+> Reach is a home-screen (launcher) app. Its optional accessibility service, "Reach screen
+> actions", is used for exactly two user-initiated actions on Reach's home screen: locking the
+> screen when the user double-taps an empty area (AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN),
+> and opening the notification shade when the user swipes down with two fingers
+> (AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS). The service subscribes to no
+> accessibility events, cannot retrieve window content, and does not read, collect, store or
+> share any data — Reach has no internet permission. It is off by default; the user turns it
+> on from Reach's Appearance settings, which explain its purpose before linking to the
+> system's Accessibility settings, and can turn it off at any time. Reach works fully without
+> it. The service is not an accessibility tool (isAccessibilityTool="false").
+
+**In-app prominent disclosure** (shown *before* the user is sent to Settings, Appearance ›
+Gestures, `appearance_service_why`): "Reach's accessibility service is used only to lock the
+screen and to open notifications with a two-finger swipe down on Home. It reads nothing on
+your screen." The system's own Settings page shows `system_a11y_service_description`, which
+repeats what it does and does not do. Both exist in English and Turkish.
+
+**Video for the Play review** (required for the declaration): record enabling the service from
+Appearance › Gestures → Settings, then a double-tap lock and a two-finger shade on Home.

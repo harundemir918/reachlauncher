@@ -109,6 +109,7 @@ internal fun AllAppsRoute(
             onSetHidden = viewModel::setHidden,
             onUninstall = viewModel::uninstall,
             onOpenSearch = onOpenSearch,
+            onTogglePrivateSpace = viewModel::togglePrivateSpace,
         )
         failure?.let { LaunchFailedMessage(it.label, Modifier.align(Alignment.BottomCenter)) }
     }

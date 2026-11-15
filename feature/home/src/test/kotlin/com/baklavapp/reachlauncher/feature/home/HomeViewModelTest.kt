@@ -233,6 +233,23 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `unlocked private-space apps never reach Home's intents (D71)`() =
+        runTest {
+            val notes = app("Notes", ReachIntent.MAKE)
+            val vault = app("Vault", ReachIntent.MAKE, packageName = "com.example.vault", userSerial = 11, profile = ProfileType.PRIVATE)
+            val f = HomeFixture(listOf(notes, vault))
+            subscribe(f)
+            val make = f.state.intents.single { it.intent == ReachIntent.MAKE }
+            assertThat(make.appCount).isEqualTo(1)
+            assertThat(
+                f.state.details
+                    .getValue(ReachIntent.MAKE)
+                    .apps
+                    .map { it.app },
+            ).containsExactly(notes)
+        }
+
+    @Test
     fun `a stale paused flag doesn't block a real launch`() =
         runTest {
             // The profile was resumed a moment ago; the catalog hasn't caught up yet.

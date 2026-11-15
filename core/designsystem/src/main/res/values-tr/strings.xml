@@ -52,4 +52,10 @@
     <string name="ds_palette_forest">Orman</string>
     <string name="ds_palette_dusk">Alacakaranlık</string>
     <string name="ds_palette_high_contrast">Yüksek Kontrast</string>
+    <string name="ds_intent_talk">Konuş</string>
+    <string name="ds_intent_listen">Dinle</string>
+    <string name="ds_intent_go">Git</string>
+    <string name="ds_intent_make">Üret</string>
+    <string name="ds_intent_play">Oyna</string>
+    <string name="ds_intent_tools">Araçlar</string>
 </resources>

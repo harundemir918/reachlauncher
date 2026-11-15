@@ -43,6 +43,23 @@
         tools:ignore="ProtectedPermissions" />
 
     <!--
+        Normal (install-time) permission, Android 15+ (M5, D67). Together with the HOME role it
+        lets LauncherApps.getProfiles() / getLauncherUserInfo() include the private space, so
+        Reach can show its apps while it is unlocked and offer lock/unlock in All Apps. Without
+        the home role it has no effect (the private space stays invisible to Reach). Older
+        releases ignore an unknown permission.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
+
+    <!--
+        Normal (install-time) permission (M5, D66). Only used by the best-effort, default-off
+        fallback that opens the notification shade through the hidden
+        StatusBarManager.expandNotificationsPanel() when the accessibility service is off.
+        It can only pull the shade down; it reads nothing.
+    -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
+    <!--
         Package visibility (Android 11+): the hand-off targets Reach may start or, later,
         check for ("is there a web-search app?"). Starting an activity works without
         these, but resolving one (to hide a row that would do nothing) needs them.
@@ -86,6 +103,28 @@
             <meta-data
                 android:name="android.service.notification.default_filter_types"
                 android:value="conversations|alerting|silent" />
+        </service>
+
+        <!--
+            Optional accessibility service (ReachAccessibilityService, spec §7.4, D66): only
+            GLOBAL_ACTION_LOCK_SCREEN (double-tap empty Home) and GLOBAL_ACTION_NOTIFICATIONS
+            (two-finger swipe down on Home). Exported because the system binds it from outside
+            Reach's process; BIND_ACCESSIBILITY_SERVICE means only the system can bind it.
+            Nothing happens until the user switches it on in Settings › Accessibility. The
+            config (res/xml/reach_accessibility_service.xml) subscribes to no events and cannot
+            read window content.
+        -->
+        <service
+            android:name=".screen.ReachAccessibilityService"
+            android:exported="true"
+            android:label="@string/system_a11y_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/reach_accessibility_service" />
         </service>
     </application>
 

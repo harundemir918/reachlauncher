@@ -25,14 +25,13 @@
 
     <!-- The long-press menu's strings live in :core:designsystem (ds_app_menu_*), shared with intent detail. -->
 
-    <!-- The six intent words, for the Move-to chips. Same words as on Home. -->
-    <string name="allapps_intent_talk">Talk</string>
-    <string name="allapps_intent_listen">Listen</string>
-    <string name="allapps_intent_go">Go</string>
-    <string name="allapps_intent_make">Make</string>
-    <string name="allapps_intent_play">Play</string>
-    <string name="allapps_intent_tools">Tools</string>
 
     <!-- Short inline message when an app can't be opened. -->
     <string name="allapps_launch_failed">Couldn\'t open %1$s</string>
+    <!-- Private space section (Android 15+). Heading shown upper-cased in mono. -->
+    <string name="allapps_private_space">private space</string>
+    <string name="allapps_private_locked">Locked. Its apps stay hidden until you unlock it.</string>
+    <string name="allapps_private_unlocked">Unlocked. Lock it to hide these apps again.</string>
+    <string name="allapps_private_unlock">Unlock</string>
+    <string name="allapps_private_lock">Lock</string>
 </resources>

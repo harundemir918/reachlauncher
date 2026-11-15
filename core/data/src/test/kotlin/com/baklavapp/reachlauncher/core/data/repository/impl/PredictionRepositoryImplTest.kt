@@ -130,4 +130,18 @@ class PredictionRepositoryImplTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    fun `unlocked private-space apps are never predicted (D71)`() =
+        runTest {
+            val coffee = app("coffee")
+            val vault = app("vault").copy(profile = ProfileType.PRIVATE)
+            catalog.state.value = listOf(coffee, vault)
+            launch(coffee, hour = 9, count = 1)
+            launch(vault, hour = 9, count = 3)
+            repository().predictions(3).test {
+                assertThat(expectMostRecentItem().map { it.app }).containsExactly(coffee)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

@@ -10,6 +10,7 @@ import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.time.hourTicks
 import com.baklavapp.reachlauncher.core.model.Prediction
+import com.baklavapp.reachlauncher.core.model.ProfileType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -70,7 +71,10 @@ class PredictionRepositoryImpl
                         notifications.countsByApp,
                         usage,
                     ) { apps, events, unread, usageByHour ->
-                        PredictionEngine.rank(apps, events, unread, usageByHour, now)
+                        // Private-space apps never appear as predictions, even while unlocked:
+                        // the Now row sits on Home, in view of anyone near the phone (D71).
+                        val candidates = apps.filterNot { it.profile == ProfileType.PRIVATE }
+                        PredictionEngine.rank(candidates, events, unread, usageByHour, now)
                     }
                 }.distinctUntilChanged()
                 .flowOn(defaultDispatcher)

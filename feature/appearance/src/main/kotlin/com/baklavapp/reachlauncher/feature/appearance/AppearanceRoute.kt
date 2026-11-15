@@ -21,8 +21,8 @@ import com.baklavapp.reachlauncher.feature.appearance.ui.AppearanceSheet
  */
 
 /**
- * The Appearance sheet (spec §6.8): theme, palette, wallpaper mode and thumb side, applied
- * live with no Save button.
+ * The Appearance sheet (spec §6.8): theme, palette, wallpaper mode, thumb side and the
+ * screen-action gestures, applied live with no Save button.
  *
  * @param onClose the "Done" pill or a tap on the dimmed area: Home should go back to Home.
  */
@@ -40,6 +40,8 @@ fun AppearanceRoute(
                 onPalette = viewModel::onPaletteSelected,
                 onShowWallpaper = viewModel::onShowWallpaperChanged,
                 onThumbSide = viewModel::onThumbSideSelected,
+                onDoubleTapToLock = viewModel::onDoubleTapToLockChanged,
+                onOpenAccessibilitySettings = viewModel::onOpenAccessibilitySettings,
             )
         }
     AppearanceSheet(state = state, callbacks = callbacks, onClose = onClose, modifier = modifier)
