@@ -1,17 +1,12 @@
 package com.baklavapp.reachlauncher.core.system.unavailable
 
 import com.baklavapp.reachlauncher.core.data.source.CalendarSource
-import com.baklavapp.reachlauncher.core.data.source.ContactsSource
 import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
-import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
-import com.baklavapp.reachlauncher.core.model.Contact
-import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import kotlinx.coroutines.flow.Flow
@@ -49,19 +44,6 @@ class UnavailableMediaSessionSource
         override fun skipToPrevious() = Unit
     }
 
-/** No shortcut host permission. Replaced in M2 by a `LauncherApps.getShortcuts` source. */
-class UnavailableShortcutSource
-    @Inject
-    constructor() : ShortcutSource {
-        override val hasHostPermission: Flow<Boolean> = flowOf(false)
-        override val shortcuts: Flow<List<AppShortcut>> = flowOf(emptyList())
-
-        override fun launch(
-            shortcut: AppShortcut,
-            origin: LaunchOrigin?,
-        ): Boolean = false
-    }
-
 /** Usage access off. Replaced in M3 by a `UsageStatsManager`-backed source. */
 class UnavailableUsageStatsSource
     @Inject
@@ -76,18 +58,6 @@ class UnavailableCalendarSource
     @Inject
     constructor() : CalendarSource {
         override val nextEvent: Flow<CalendarEvent?> = flowOf(null)
-    }
-
-/** No contacts permission. Replaced in M2 (search) by a `ContactsContract`-backed source. */
-class UnavailableContactsSource
-    @Inject
-    constructor() : ContactsSource {
-        override fun isPermissionGranted(): Boolean = false
-
-        override suspend fun search(
-            query: String,
-            limit: Int,
-        ): List<Contact> = emptyList()
     }
 
 /** Wallpaper colour unknown. Replaced in M4 (wallpaper mode) by a `WallpaperManager` source. */

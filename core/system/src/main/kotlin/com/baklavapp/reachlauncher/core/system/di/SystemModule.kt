@@ -14,16 +14,16 @@ import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.system.apps.LauncherAppsInstalledAppsSource
+import com.baklavapp.reachlauncher.core.system.contacts.ContactsProviderSource
 import com.baklavapp.reachlauncher.core.system.launch.SystemAppLauncher
 import com.baklavapp.reachlauncher.core.system.profile.UserManagerProfileSource
 import com.baklavapp.reachlauncher.core.system.roles.RoleHomeRoleSource
 import com.baklavapp.reachlauncher.core.system.roles.TelephonyDefaultAppsSource
+import com.baklavapp.reachlauncher.core.system.shortcuts.LauncherAppsShortcutSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableCalendarSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableContactsSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableMediaSessionSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableNotificationCountSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableScreenActionsSource
-import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableShortcutSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableUsageStatsSource
 import com.baklavapp.reachlauncher.core.system.unavailable.UnavailableWallpaperColorSource
 import dagger.Binds
@@ -77,10 +77,10 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindMediaSessionSource(impl: UnavailableMediaSessionSource): MediaSessionSource
 
-    /** M2 placeholder. */
+    /** `LauncherApps.getShortcuts`, readable while Reach is the default home app. */
     @Binds
     @Singleton
-    abstract fun bindShortcutSource(impl: UnavailableShortcutSource): ShortcutSource
+    abstract fun bindShortcutSource(impl: LauncherAppsShortcutSource): ShortcutSource
 
     /** M3 placeholder. */
     @Binds
@@ -92,10 +92,10 @@ abstract class SystemModule {
     @Singleton
     abstract fun bindCalendarSource(impl: UnavailableCalendarSource): CalendarSource
 
-    /** M2 placeholder. */
+    /** Contacts Provider name search, only with `READ_CONTACTS`. */
     @Binds
     @Singleton
-    abstract fun bindContactsSource(impl: UnavailableContactsSource): ContactsSource
+    abstract fun bindContactsSource(impl: ContactsProviderSource): ContactsSource
 
     /** M4 placeholder. */
     @Binds

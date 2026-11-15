@@ -14,6 +14,15 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <!--
+        Runtime ("dangerous") permission, optional. Lets type-to-launch search find contacts
+        by name (ContactsProviderSource) and offer call / message / contact card for them.
+        Only requested when the user taps "Include contacts" in Search; denying it just
+        leaves contacts out of the results. Contacts are read on demand, never stored or
+        sent anywhere (Reach has no network access).
+    -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!--
         Package visibility (Android 11+): the hand-off targets Reach may start or, later,
         check for ("is there a web-search app?"). Starting an activity works without
         these, but resolving one (to hide a row that would do nothing) needs them.

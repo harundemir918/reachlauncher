@@ -35,4 +35,12 @@
     <string name="ds_next_track">Sonraki parça</string>
     <string name="ds_media_playing">çalıyor · %1$s</string>
     <string name="ds_media_paused">duraklatıldı · %1$s</string>
+
+    <string name="ds_palette_lime">Limon</string>
+    <string name="ds_palette_paper_ink">Kâğıt ve Mürekkep</string>
+    <string name="ds_palette_night_tide">Gece Gelgiti</string>
+    <string name="ds_palette_terracotta">Terakota</string>
+    <string name="ds_palette_forest">Orman</string>
+    <string name="ds_palette_dusk">Alacakaranlık</string>
+    <string name="ds_palette_high_contrast">Yüksek Kontrast</string>
 </resources>
