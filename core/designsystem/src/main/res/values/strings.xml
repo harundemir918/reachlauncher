@@ -51,4 +51,13 @@
     <!-- Status under the track title on the Listen row: "PLAYING · SPOTIFY". %1$s is the app name. -->
     <string name="ds_media_playing">playing · %1$s</string>
     <string name="ds_media_paused">paused · %1$s</string>
+
+    <!-- Palette names (PaletteNames.kt): Appearance swatches and Search's "Switch to …" command. -->
+    <string name="ds_palette_lime">Lime</string>
+    <string name="ds_palette_paper_ink">Paper &amp; Ink</string>
+    <string name="ds_palette_night_tide">Night Tide</string>
+    <string name="ds_palette_terracotta">Terracotta</string>
+    <string name="ds_palette_forest">Forest</string>
+    <string name="ds_palette_dusk">Dusk</string>
+    <string name="ds_palette_high_contrast">High Contrast</string>
 </resources>

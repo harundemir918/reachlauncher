@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_title">yazıp aç</string>
+    <string name="search_input_label">uygulama, kişi veya eylem</string>
+    <string name="search_input_hint">Bir ad yazın</string>
+    <string name="search_close">Aramayı kapat</string>
+
+    <string name="search_section_suggested">önerilen</string>
+    <string name="search_section_matches">en iyi eşleşmeler</string>
+    <plurals name="search_results_count">
+        <item quantity="one">%d sonuç</item>
+        <item quantity="other">%d sonuç</item>
+    </plurals>
+    <string name="search_empty_suggestions">Bir uygulama bulmak için yazmaya başlayın.</string>
+    <string name="search_enter_hint">enter ↵</string>
+
+    <string name="search_kind_shortcut">kısayol · %1$s</string>
+    <string name="search_kind_contact">kişi</string>
+    <string name="search_kind_action">eylem</string>
+    <string name="search_kind_web">web</string>
+
+    <string name="search_command_palette">%1$s paletine geç</string>
+    <string name="search_command_dark">Koyu temaya geç</string>
+    <string name="search_command_light">Açık temaya geç</string>
+    <string name="search_command_appearance">Görünüm ayarları</string>
+    <string name="search_web">Web\'de “%1$s” ara</string>
+
+    <string name="search_contact_call">Ara</string>
+    <string name="search_contact_message">Mesaj</string>
+    <string name="search_contact_view">Kişi kartı</string>
+
+    <string name="search_contacts_prompt">Kişileri dahil et</string>
+    <string name="search_contacts_rationale">Kişileri de adıyla bulun. Kişiler yalnızca bu telefonda okunur, hiçbir yere gönderilmez.</string>
+
+    <string name="search_launch_failed">%1$s açılamadı</string>
+    <string name="search_action_unavailable">Bu telefonda bunu yapabilecek bir uygulama yok</string>
+
+    <string name="search_a11y_top_result">ilk sonuç, açmak için Enter\'a basın</string>
+    <string name="search_a11y_shortcut">%1$s, %2$s kısayolu</string>
+    <string name="search_a11y_contact">%1$s, kişi</string>
+    <string name="search_a11y_contact_options">arama ve mesaj seçeneklerini göster</string>
+    <string name="search_a11y_contact_call">%1$s kişisini ara</string>
+    <string name="search_a11y_contact_message">%1$s kişisine mesaj gönder</string>
+    <string name="search_a11y_contact_view">%1$s kişi kartını aç</string>
+</resources>

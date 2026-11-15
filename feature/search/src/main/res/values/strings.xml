@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings of :feature:search. Mono labels are natural case here and upper-cased at display
+    time with the current locale (MonoLabel), so Turkish "i" becomes "İ".
+    Prefix "search_" keeps them apart from other modules' strings after merging.
+-->
+<resources>
+    <!-- Header mono label (spec §6.6). -->
+    <string name="search_title">type to launch</string>
+    <!-- Mono label right above the input. -->
+    <string name="search_input_label">app, contact or action</string>
+    <!-- Placeholder inside the empty input. -->
+    <string name="search_input_hint">Type a name</string>
+    <!-- TalkBack label of the round close button. -->
+    <string name="search_close">Close search</string>
+
+    <string name="search_section_suggested">suggested</string>
+    <string name="search_section_matches">best matches</string>
+    <!-- Spoken result count, announced politely while typing. -->
+    <plurals name="search_results_count">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
+    <string name="search_empty_suggestions">Start typing to find an app.</string>
+    <!-- Hint on the highlighted top row; shown upper-case ("ENTER ↵"). -->
+    <string name="search_enter_hint">enter ↵</string>
+
+    <!-- Mono tags under a result label. %1$s is the app name: "SHORTCUT · WHATSAPP". -->
+    <string name="search_kind_shortcut">shortcut · %1$s</string>
+    <string name="search_kind_contact">contact</string>
+    <string name="search_kind_action">action</string>
+    <string name="search_kind_web">web</string>
+
+    <!-- Commands. %1$s is a palette name: "Switch to Forest". -->
+    <string name="search_command_palette">Switch to %1$s</string>
+    <string name="search_command_dark">Switch to dark theme</string>
+    <string name="search_command_light">Switch to light theme</string>
+    <string name="search_command_appearance">Appearance settings</string>
+    <!-- Last-resort row. %1$s is the typed query. -->
+    <string name="search_web">Search the web for “%1$s”</string>
+
+    <!-- Contact chooser pills. -->
+    <string name="search_contact_call">Call</string>
+    <string name="search_contact_message">Message</string>
+    <string name="search_contact_view">Contact card</string>
+
+    <!-- The one contacts-permission row and its one-line rationale (spec §7). -->
+    <string name="search_contacts_prompt">Include contacts</string>
+    <string name="search_contacts_rationale">Find people by name too. Contacts are read on this phone only and never leave it.</string>
+
+    <!-- Short messages. %1$s is an app or shortcut name. -->
+    <string name="search_launch_failed">Couldn\'t open %1$s</string>
+    <string name="search_action_unavailable">No app on this phone can do that</string>
+
+    <!-- TalkBack descriptions. -->
+    <string name="search_a11y_top_result">top result, press Enter to open</string>
+    <!-- %1$s shortcut label, %2$s app name: "New message, WhatsApp shortcut". -->
+    <string name="search_a11y_shortcut">%1$s, %2$s shortcut</string>
+    <string name="search_a11y_contact">%1$s, contact</string>
+    <!-- "Double tap to show call and message options". -->
+    <string name="search_a11y_contact_options">show call and message options</string>
+    <string name="search_a11y_contact_call">Call %1$s</string>
+    <string name="search_a11y_contact_message">Message %1$s</string>
+    <string name="search_a11y_contact_view">Open the contact card of %1$s</string>
+</resources>
