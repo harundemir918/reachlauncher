@@ -33,64 +33,15 @@ import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.feature.home.R
 
 /*
- * Temporary surfaces so the state machine is complete in M1. Each is one composable with
- * the same shape the real screen will need (a "close" callback), so swapping in
- * `:feature:search`, `:feature:allapps` and `:feature:appearance` is a one-line change in
- * `HomeRoute`.
+ * Temporary Appearance sheet until `:feature:appearance` lands in M4 (Search and All Apps
+ * were replaced by their real screens in M2). Same shape the real sheet will need (a
+ * "close" callback), so swapping it in is a one-line change in `HomeRoute`.
  *
  * Flutter analogy: the `Placeholder()` widget, dressed in Reach's theme.
  */
 
-private val ScreenTopPadding = 12.dp
-private val TitleGap = 16.dp
 private val SheetPadding = 24.dp
 private val SheetGap = 18.dp
-
-/** Search placeholder (real screen: `:feature:search`, M2). Pads for the keyboard (IME). */
-@Composable
-internal fun SearchPlaceholder(
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PlaceholderScreen(stringResource(R.string.home_search_title), stringResource(R.string.home_search_placeholder), onClose, modifier)
-}
-
-/** All Apps placeholder (real screen: `:feature:allapps`, M2). */
-@Composable
-internal fun AllAppsPlaceholder(
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    PlaceholderScreen(stringResource(R.string.home_all_apps_title), stringResource(R.string.home_all_apps_placeholder), onClose, modifier)
-}
-
-@Composable
-private fun PlaceholderScreen(
-    title: String,
-    message: String,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                // safeDrawing includes the IME inset, which the real search screen needs.
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .verticalScroll(rememberScrollState())
-                .padding(start = ReachTheme.dimens.gutter, end = ReachTheme.dimens.gutter, top = ScreenTopPadding),
-        verticalArrangement = Arrangement.spacedBy(TitleGap),
-    ) {
-        BackHeader(label = title, onBack = onClose)
-        Text(
-            text = title,
-            style = ReachTheme.typography.intentTitle,
-            color = ReachTheme.colors.fg,
-            modifier = Modifier.semantics { heading() },
-        )
-        Text(text = message, style = ReachTheme.typography.body, color = ReachTheme.colors.muted)
-    }
-}
 
 /**
  * Appearance placeholder: a bottom sheet over Home (real sheet: `:feature:appearance`, M4).

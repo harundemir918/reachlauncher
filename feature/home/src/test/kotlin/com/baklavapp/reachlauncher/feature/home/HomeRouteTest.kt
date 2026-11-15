@@ -1,6 +1,7 @@
 package com.baklavapp.reachlauncher.feature.home
 
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
@@ -54,13 +55,25 @@ class HomeRouteTest {
 
     private val words = listOf("Talk", "Listen", "Go", "Make", "Play", "Tools")
 
+    private companion object {
+        const val SEARCH_STUB = "search surface"
+        const val ALL_APPS_STUB = "all apps surface"
+    }
+
     private fun setContent(
         fixture: HomeFixture,
         fontScale: Float? = null,
     ) {
         composeRule.setContent {
             WithFontScale(fontScale) {
-                ReachTheme { HomeRoute(fixture.viewModel) }
+                ReachTheme {
+                    // Stand-ins for the real Search/All Apps routes, which need Hilt.
+                    HomeRoute(
+                        fixture.viewModel,
+                        searchContent = { Text(SEARCH_STUB) },
+                        allAppsContent = { Text(ALL_APPS_STUB) },
+                    )
+                }
             }
         }
     }
@@ -98,10 +111,10 @@ class HomeRouteTest {
     }
 
     @Test
-    fun tappingThePillOpensSearchPlaceholder() {
+    fun tappingThePillOpensSearch() {
         setContent(HomeFixture(sampleApps))
         composeRule.onNodeWithContentDescription("Type to launch").performClick()
-        composeRule.onNodeWithText("Type to launch arrives in M2.").assertIsDisplayed()
+        composeRule.onNodeWithText(SEARCH_STUB).assertIsDisplayed()
     }
 
     @Test
@@ -114,7 +127,7 @@ class HomeRouteTest {
         fixture.viewModel.onBack()
         composeRule.onRoot().performTouchInput { swipeUp() }
         assertThat(fixture.surface).isEqualTo(HomeSurface.AllApps)
-        composeRule.onNodeWithText("The A–Z list arrives in M2.").assertIsDisplayed()
+        composeRule.onNodeWithText(ALL_APPS_STUB).assertIsDisplayed()
     }
 
     @Test

@@ -33,10 +33,6 @@
     <string name="home_detail_empty">No apps here yet.</string>
 
     <!-- Temporary surfaces until their real screens land. -->
-    <string name="home_search_title">Search</string>
-    <string name="home_search_placeholder">Type to launch arrives in M2.</string>
-    <string name="home_all_apps_title">All apps</string>
-    <string name="home_all_apps_placeholder">The A–Z list arrives in M2.</string>
     <string name="home_appearance_title">Appearance</string>
     <string name="home_appearance_placeholder">Theme, palette and thumb side arrive in M4.</string>
     <string name="home_done">Done</string>

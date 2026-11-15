@@ -25,10 +25,6 @@
     <string name="home_detail_shortcuts">uygulama kısayolları</string>
     <string name="home_detail_empty">Burada henüz uygulama yok.</string>
 
-    <string name="home_search_title">Ara</string>
-    <string name="home_search_placeholder">Yazarak açma M2\'de geliyor.</string>
-    <string name="home_all_apps_title">Tüm uygulamalar</string>
-    <string name="home_all_apps_placeholder">A–Z listesi M2\'de geliyor.</string>
     <string name="home_appearance_title">Görünüm</string>
     <string name="home_appearance_placeholder">Tema, palet ve başparmak tarafı M4\'te geliyor.</string>
     <string name="home_done">Tamam</string>

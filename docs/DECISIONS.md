@@ -412,3 +412,41 @@ spaces, returns nothing for locked/paused profiles (the system throws
 label. There is no broadcast when Reach becomes default home, so the permission change is
 noticed on the next collection or callback. Turkish palette names ("Kâğıt ve Mürekkep"…)
 await the owner's review.
+
+## D48 — Press-slide-release hold time (M2)
+**Decision.** The fan opens after 300 ms (§6.5) — unless the system long-press timeout is
+> 500 ms. Platform defaults are 400 ms (500 ms before API 31), so anything longer means the
+user chose a longer "Touch & hold delay"; then that delay is used, so the fan never steals
+their taps (same rule as D30). The hold is abandoned on moving past touch slop, lifting, a
+second finger, or another detector consuming the event; until it fires nothing is consumed,
+so a tap still opens the intent detail.
+
+## D49 — Fan gesture: consumption and cancel detection (M2)
+**Decision.** The detector is attached via `wordModifier`, which `IntentWordRow` applies
+*before* its click, so it is the click's parent and a child of Home's scroll. Once armed it
+reads events in `PointerEventPass.Initial` and consumes every change, so the word's click,
+Home's scroll and the nested-scroll swipes (D29) all stand down. A system cancel arrives as a
+synthetic "up" whose changes are already consumed; a real lift arrives unconsumed in Initial
+— only a real lift over a pill launches. Hit-testing uses forgiving horizontal bands (pill
+height ± half the gap, fan width ± 24dp, because thumbs drift); the held word is the cancel
+zone. TalkBack's double-tap-and-hold can open the fan, but lifting without sliding cancels
+and removes it (tested). Possible later refinement: disable the gesture while touch
+exploration is on.
+
+## D50 — Fan contents and layout (M2)
+**Decision.** The fan shows the intent's visible apps in detail order (launch count, then
+alphabetical), capped at 6, most-used nearest the finger, staggered 16dp away from the thumb
+edge per step (mirrored for the right thumb). All pills are ≥ 52dp (the mockup uses 48dp +
+52dp highlighted; a single height keeps hit bands stable). Pills stay inside
+`safeDrawing ∪ systemGestures` + 8dp, and only those that fit above the word are placed
+(fewer at 200 % font). The halo is a 6dp accent ring at 32 % alpha in both themes (the light
+mockup's near-black glow contradicts §6.5's "accent halo"). Fan *state* lives in
+`HomeViewModel.fan`; geometry and hit-testing live in the UI. Release goes through `LaunchApp`.
+
+## D51 — Sub-surfaces are slots of `HomeRoute` (M2)
+**Decision.** `HomeRoute(viewModel, searchContent, allAppsContent)` takes Search and All Apps
+as composable slots defaulting to `SearchRoute` / `AllAppsRoute`, with a small
+`SurfaceCallbacks` (close, open Appearance, open Search). Feature modules never see
+`HomeViewModel`, and Home's Robolectric tests render stand-ins because the real routes need
+Hilt (`hiltViewModel()`). Home's `BackHandler` closes both surfaces; only All Apps' open
+long-press menu claims Back for itself.

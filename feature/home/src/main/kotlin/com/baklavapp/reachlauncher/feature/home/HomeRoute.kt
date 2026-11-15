@@ -45,12 +45,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
-import com.baklavapp.reachlauncher.feature.home.ui.AllAppsPlaceholder
+import com.baklavapp.reachlauncher.feature.allapps.AllAppsRoute
 import com.baklavapp.reachlauncher.feature.home.ui.AppearancePlaceholderSheet
 import com.baklavapp.reachlauncher.feature.home.ui.FanCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.HomeWithFan
 import com.baklavapp.reachlauncher.feature.home.ui.IntentDetailScreen
-import com.baklavapp.reachlauncher.feature.home.ui.SearchPlaceholder
+import com.baklavapp.reachlauncher.feature.search.SearchRoute
 import kotlinx.coroutines.delay
 
 /*
@@ -67,6 +67,21 @@ import kotlinx.coroutines.delay
  * - `AnimatedContent` ≈ `AnimatedSwitcher`: cross-fades between surfaces.
  */
 
+/**
+ * What a sub-surface (Search, All Apps) may ask Home to do. Passed to the surface slots of
+ * [HomeRoute] so the feature modules never see `HomeViewModel`.
+ *
+ * @property onClose back to Home — after a launch, or the surface's own close button.
+ * @property onOpenAppearance Search's "Appearance settings" command.
+ * @property onOpenSearch All Apps' "Type to launch" pill.
+ */
+@Immutable
+class SurfaceCallbacks(
+    val onClose: () -> Unit,
+    val onOpenAppearance: () -> Unit,
+    val onOpenSearch: () -> Unit,
+)
+
 private val MessageBottomPadding = 96.dp
 private val MessagePadding = 14.dp
 private const val MESSAGE_DURATION_MILLIS = 3_000L
@@ -80,11 +95,18 @@ private const val SLIDE_FRACTION = 12
  *
  * Back is always consumed: in sub-surfaces it steps back one level, on Home it does
  * nothing — the default (finishing the Activity) would tear down the launcher (spec §4).
+ *
+ * @param searchContent the Search surface; defaults to `:feature:search`'s [SearchRoute].
+ * @param allAppsContent the All Apps surface; defaults to `:feature:allapps`'s [AllAppsRoute].
+ *   Both are slots (≈ passing a `Widget` builder in Flutter) so tests can render Home without
+ *   Hilt: the real routes create their ViewModels with `hiltViewModel()`.
  */
 @Composable
 fun HomeRoute(
     viewModel: HomeViewModel,
     modifier: Modifier = Modifier,
+    searchContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { SearchRoute(it.onClose, it.onOpenAppearance) },
+    allAppsContent: @Composable (callbacks: SurfaceCallbacks) -> Unit = { AllAppsRoute(it.onClose, it.onOpenSearch) },
 ) {
     // Two separate subscriptions on purpose: the surface is always current (it has no
     // upstream to restart after WhileSubscribed's timeout), so the first frame after Home is
@@ -128,7 +150,7 @@ fun HomeRoute(
     BackHandler(enabled = true) { viewModel.onBack() }
 
     Box(modifier = modifier.fillMaxSize().background(ReachTheme.colors.bg)) {
-        HomeSurfaces(HomeFrame(surface, state), viewModel, scrollToTopRequests)
+        HomeSurfaces(HomeFrame(surface, state), viewModel, scrollToTopRequests, searchContent, allAppsContent)
         failure?.let { LaunchFailedMessage(it.label, Modifier.align(Alignment.BottomCenter)) }
     }
 }
@@ -153,8 +175,18 @@ private fun HomeSurfaces(
     frame: HomeFrame,
     viewModel: HomeViewModel,
     scrollToTopRequests: Int,
+    searchContent: @Composable (SurfaceCallbacks) -> Unit,
+    allAppsContent: @Composable (SurfaceCallbacks) -> Unit,
 ) {
     val reducedMotion = rememberReducedMotion()
+    val surfaceCallbacks =
+        remember(viewModel) {
+            SurfaceCallbacks(
+                onClose = viewModel::onBack,
+                onOpenAppearance = viewModel::onAppearanceRequested,
+                onOpenSearch = viewModel::onSearchRequested,
+            )
+        }
     val fan by viewModel.fan.collectAsStateWithLifecycle()
     val fanCallbacks =
         remember(viewModel) {
@@ -198,11 +230,11 @@ private fun HomeSurfaces(
             }
 
             HomeSurface.Search -> {
-                SearchPlaceholder(onClose = viewModel::onBack)
+                searchContent(surfaceCallbacks)
             }
 
             HomeSurface.AllApps -> {
-                AllAppsPlaceholder(onClose = viewModel::onBack)
+                allAppsContent(surfaceCallbacks)
             }
         }
     }

@@ -115,6 +115,9 @@ Each milestone ends with: `./gradlew build test lint` green at the root, docs up
   `IntentDetailScreen`); avoid the one-frame theme flash for users who forced Light/Dark
   (settings arrive from DataStore a few ms after the first frame — needs a synchronous
   settings snapshot); consider a `LaunchResult` type (D32).
+- **Later (cleanup):** intent-word strings are duplicated in `:feature:home` and `:feature:allapps`;
+  move them (with the launch-origin helpers) into `:core:designsystem`. Extract a shared
+  clip-reveal helper in `:core:system` (shortcut source copies `animationFor`).
 - **M5:** verify private-space APIs/permissions (D13); revisit R8 `packageScope` (D16);
   the owner reviews all Turkish strings (agents' wording kept until then, e.g. "amaç"
   for intent, "Yazıp aç" for Type to launch; All Apps: "Hepsi", "Simge değil, isim — okuyarak
