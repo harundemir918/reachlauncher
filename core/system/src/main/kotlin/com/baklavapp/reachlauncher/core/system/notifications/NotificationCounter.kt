@@ -8,8 +8,9 @@ import com.baklavapp.reachlauncher.core.model.PackageUser
  * JVM-testable.
  *
  * @property key `StatusBarNotification.key`, unique per notification across users.
- * @property isOngoing `FLAG_ONGOING_EVENT` (music, navigation, downloads) or a foreground
- *   service's notification — "something running", not "something unread".
+ * @property isOngoing `FLAG_ONGOING_EVENT` (music, navigation, downloads), a foreground
+ *   service's notification or a media player's (even paused) — "something running", not
+ *   "something unread".
  * @property isGroupSummary `FLAG_GROUP_SUMMARY`: the bundle header of a group ("3 new
  *   messages") that sits on top of the real per-message notifications; counting it too
  *   would add one per bundle.

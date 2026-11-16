@@ -83,6 +83,9 @@ private val ClockMinFontSize = 40.sp
 /** The clock on short screens (see `HomeScreen`'s compact layout). */
 private val CompactClockFontSize = 84.sp
 
+/** The clock when even the compact layout overflows (see `HomeScreen`). */
+private val TightClockFontSize = 72.sp
+
 /** One reading of the wall clock plus the user's 12/24-hour preference. */
 @Immutable
 internal data class ClockReading(
@@ -169,6 +172,7 @@ internal fun HomeClock(
     onOpenAppearance: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    tight: Boolean = false,
 ) {
     val locale = LocalLocale.current.platformLocale
     val shown = remember(reading.is24Hour, locale) { DateTimeFormatter.ofPattern(if (reading.is24Hour) "HH:mm" else "h:mm", locale) }
@@ -186,7 +190,12 @@ internal fun HomeClock(
             }
         }
     val base = ReachTheme.typography.clock.copy(color = ReachTheme.colors.fg)
-    val style = if (compact) base.copy(fontSize = CompactClockFontSize) else base
+    val style =
+        when {
+            tight -> base.copy(fontSize = TightClockFontSize)
+            compact -> base.copy(fontSize = CompactClockFontSize)
+            else -> base
+        }
     CompositionLocalProvider(LocalViewConfiguration provides configuration) {
         BasicText(
             text = reading.now.format(shown),

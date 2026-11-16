@@ -1,6 +1,7 @@
 package com.baklavapp.reachlauncher.core.system.notifications
 
 import android.app.Application
+import android.app.Notification
 import androidx.test.core.app.ApplicationProvider
 import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.google.common.truth.Truth.assertThat
@@ -61,5 +62,21 @@ class NotificationListenerHubTest {
         val hub = NotificationListenerHub(app)
         hub.onConnected(listOf(entry("own", app = PackageUser(app.packageName, 0)), entry("a")))
         assertThat(hub.counts.value).containsExactly(chat, 1)
+    }
+
+    @Test
+    fun `media player notifications are never unread, even paused`() {
+        val session = android.media.session.MediaSession(app, "test")
+        val player =
+            Notification
+                .Builder(app, "c")
+                .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken))
+                .build()
+        val transport = Notification.Builder(app, "c").setCategory(Notification.CATEGORY_TRANSPORT).build()
+        val message = Notification.Builder(app, "c").setCategory(Notification.CATEGORY_MESSAGE).build()
+        assertThat(isPlayerNotification(player)).isTrue()
+        assertThat(isPlayerNotification(transport)).isTrue()
+        assertThat(isPlayerNotification(message)).isFalse()
+        session.release()
     }
 }

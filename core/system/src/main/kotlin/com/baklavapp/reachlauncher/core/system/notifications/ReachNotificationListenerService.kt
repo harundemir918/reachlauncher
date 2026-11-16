@@ -71,8 +71,24 @@ class ReachNotificationListenerService : NotificationListenerService() {
         return NotificationEntry(
             key = sbn.key,
             app = PackageUser(sbn.packageName, profiles.serialOf(sbn.user)),
-            isOngoing = sbn.isOngoing || (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0,
+            isOngoing =
+                sbn.isOngoing ||
+                    (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0 ||
+                    isPlayerNotification(sbn.notification),
             isGroupSummary = (flags and Notification.FLAG_GROUP_SUMMARY) != 0,
         )
     }
 }
+
+/**
+ * A media player's notification (it carries a media session, or is filed as transport
+ * controls). It counts like an ongoing one: it is "something playing", never "something
+ * unread". Found on a real device: a paused YouTube Music player is no longer ongoing and
+ * showed up as "1 NEW" on Listen and "1 unread" in the Now row.
+ */
+internal fun isPlayerNotification(notification: Notification?): Boolean =
+    notification != null &&
+        (
+            notification.extras?.containsKey(Notification.EXTRA_MEDIA_SESSION) == true ||
+                notification.category == Notification.CATEGORY_TRANSPORT
+        )

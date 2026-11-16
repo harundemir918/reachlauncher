@@ -35,6 +35,7 @@
 
     <!-- Now Playing card in Listen (spec §6.4). Mono label, shown upper-cased. -->
     <string name="home_now_playing">şimdi çalıyor · %1$s</string>
+    <string name="home_now_paused">duraklatıldı · %1$s</string>
     <!-- Progress bar value for TalkBack: "3:45 içinde 1:23". -->
     <string name="home_media_progress">%2$s içinde %1$s</string>
 

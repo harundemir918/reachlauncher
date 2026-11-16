@@ -42,6 +42,7 @@
 
     <!-- Now Playing card in Listen (spec §6.4). Mono label, shown upper-cased: "NOW PLAYING · SPOTIFY". -->
     <string name="home_now_playing">now playing · %1$s</string>
+    <string name="home_now_paused">paused · %1$s</string>
     <!-- Progress bar value for TalkBack: "1:23 of 3:45". -->
     <string name="home_media_progress">%1$s of %2$s</string>
 

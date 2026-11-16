@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -105,6 +106,9 @@ internal data class OnboardingCallbacks(
     }
 }
 
+/** Lines the calendar context line may take before it is ellipsized. */
+private const val CONTEXT_LINE_MAX_LINES = 2
+
 /**
  * Home's context line (spec §6.3 item 3): "10:30 · Standup", "Tomorrow 09:00 · Dentist",
  * "Today · Birthday". Muted, 15sp-ish body text; wraps at large font sizes.
@@ -145,6 +149,10 @@ internal fun HomeContextLine(
         text = text,
         style = ReachTheme.typography.body,
         color = ReachTheme.colors.muted,
+        // A long event title wrapped to five lines on a real device and pushed the words down;
+        // two lines are plenty for "13:00 · title" (TalkBack still reads all of it).
+        maxLines = CONTEXT_LINE_MAX_LINES,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier.semantics { contentDescription = description },
     )
 }
@@ -272,7 +280,8 @@ internal fun NowPlayingCard(
         verticalArrangement = Arrangement.spacedBy(CardGap),
     ) {
         MonoLabel(
-            text = stringResource(R.string.home_now_playing, media.sourceLabel),
+            // "Paused · YouTube Music" while paused, like the Home row (it said "now playing").
+            text = stringResource(if (media.isPlaying) R.string.home_now_playing else R.string.home_now_paused, media.sourceLabel),
             modifier = Modifier.semantics { heading() },
         )
         Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {

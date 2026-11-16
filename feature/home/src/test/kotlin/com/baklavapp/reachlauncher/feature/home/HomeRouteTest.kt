@@ -305,7 +305,8 @@ class HomeRouteTest {
     fun homePressedOnHomeScrollsBackToTheTop() {
         val fixture = HomeFixture(sampleApps)
         setContent(fixture, fontScale = 2f)
-        composeRule.onNodeWithContentDescription("Type to launch").performScrollTo()
+        // The pill is pinned below the scroll (D74); the last word is at the end of it.
+        composeRule.onNodeWithContentDescription("Tools", substring = true).performScrollTo()
         assertThat(homeScrollOffset()).isGreaterThan(0f)
 
         composeRule.runOnIdle { fixture.viewModel.onHomePressed() }
@@ -339,7 +340,8 @@ class HomeRouteTest {
     /** Current scroll offset of Home's vertical scroll, read from its semantics. */
     private fun homeScrollOffset(): Float =
         composeRule
-            .onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            // The first vertical scroller is Home's content; the pinned pill has its own (D74).
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))[0]
             .fetchSemanticsNode()
             .config[SemanticsProperties.VerticalScrollAxisRange]
             .value()

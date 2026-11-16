@@ -24,7 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -38,6 +41,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.baklavapp.reachlauncher.core.designsystem.component.InlineMediaControl
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentRowTrailing
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentWordRow
@@ -91,6 +95,7 @@ private val CompactHeight = 780.dp
 private val CompactTopPadding = 4.dp
 private val CompactNowTopGap = 14.dp
 private val CompactPillTopGap = 10.dp
+private val TightIntentWordFontSize = 40.sp
 
 /**
  * Above this font scale the three Now tiles stack as full-width rows: a third of the width
@@ -173,59 +178,107 @@ internal fun HomeScreen(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
         val compact = maxHeight < CompactHeight
-        Column(
-            modifier =
-                Modifier
-                    // No overscroll stretch: pulling past the edge means "open Search", not "bounce".
-                    .verticalScroll(scroll, overscrollEffect = null)
-                    .heightIn(min = maxHeight)
-                    .padding(
-                        start = ReachTheme.dimens.gutter,
-                        end = ReachTheme.dimens.gutter,
-                        top = if (compact) CompactTopPadding else TopPadding,
-                        bottom = BottomPadding,
-                    ),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // While the fan is open, everything above the words steps back (like the
-            // inactive words do): a tall fan reaches up over the Now tiles and the clock,
-            // and full-strength text behind the pills made both hard to read.
-            Column(modifier = Modifier.alpha(if (heldIntent != null) FAN_BACKDROP_ALPHA else 1f)) {
-                Column(verticalArrangement = Arrangement.spacedBy(DateClockGap)) {
-                    HomeDateLine(reading)
-                    HomeClock(reading, onOpenAppearance = onAppearance, compact = compact)
-                    // Context line (spec §6.3 item 3): hidden without an event or calendar permission.
-                    system.nextEvent?.let { HomeContextLine(it, reading) }
-                }
-                system.onboarding?.let { card ->
-                    // key(card): the next card is a fresh composable (fresh permission launcher).
-                    key(card) { OnboardingCardView(card, onboardingCallbacks, Modifier.padding(top = CardTopGap)) }
-                }
-                if (catalogLoaded && now.isNotEmpty()) {
-                    NowRow(now, onLaunch, Modifier.padding(top = if (compact) CompactNowTopGap else NowTopGap))
+        // "Tight": the compact layout still overflows (a calendar line plus the media row on a
+        // 360×800dp phone pushed "Tools" under the pill). Then the clock and the words shrink a
+        // little. Decided after measuring — only when the content really doesn't fit — and
+        // re-evaluated whenever what Home shows changes. Not at large font scales, where Home
+        // is meant to scroll.
+        val canTighten = compact && LocalDensity.current.fontScale <= STACK_NOW_FONT_SCALE
+        var tight by remember(canTighten, system.media != null, system.nextEvent, system.onboarding, now.size, catalogLoaded) {
+            mutableStateOf(false)
+        }
+        LaunchedEffect(scroll.maxValue, canTighten) { if (canTighten && scroll.maxValue > 0) tight = true }
+        Column(modifier = Modifier.fillMaxSize()) {
+            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    modifier =
+                        Modifier
+                            // No overscroll stretch: pulling past the edge means "open Search", not "bounce".
+                            .verticalScroll(scroll, overscrollEffect = null)
+                            .heightIn(min = maxHeight)
+                            .padding(
+                                start = ReachTheme.dimens.gutter,
+                                end = ReachTheme.dimens.gutter,
+                                top = if (compact) CompactTopPadding else TopPadding,
+                            ),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    // While the fan is open, everything above the words steps back (like the
+                    // inactive words do): a tall fan reaches up over the Now tiles and the clock,
+                    // and full-strength text behind the pills made both hard to read.
+                    Column(modifier = Modifier.alpha(if (heldIntent != null) FAN_BACKDROP_ALPHA else 1f)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(DateClockGap)) {
+                            HomeDateLine(reading)
+                            HomeClock(reading, onOpenAppearance = onAppearance, compact = compact, tight = tight)
+                            // Context line (spec §6.3 item 3): hidden without an event or calendar permission.
+                            system.nextEvent?.let { HomeContextLine(it, reading) }
+                        }
+                        system.onboarding?.let { card ->
+                            // key(card): the next card is a fresh composable (fresh permission launcher).
+                            key(card) { OnboardingCardView(card, onboardingCallbacks, Modifier.padding(top = CardTopGap)) }
+                        }
+                        if (catalogLoaded && now.isNotEmpty()) {
+                            NowRow(now, onLaunch, Modifier.padding(top = if (compact) CompactNowTopGap else NowTopGap))
+                        }
+                    }
+                    TightWords(tight) {
+                        IntentWords(
+                            intents,
+                            catalogLoaded,
+                            thumbSide,
+                            onIntentSelected,
+                            wordModifier,
+                            heldIntent,
+                            system.media,
+                            mediaCallbacks,
+                        )
+                    }
                 }
             }
-            Column {
-                IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier, heldIntent, system.media, mediaCallbacks)
-                val pillActions = homePillActions(system.gestures, onAllApps, gestureCallbacks)
-                val pillTopGap = if (compact) CompactPillTopGap else PillTopGap
+            // The pill is pinned below the scrolling content, so it stays in thumb reach when a
+            // calendar line, a media row or an onboarding card makes Home taller than the screen
+            // (on a real 360×800dp phone it ended up below the fold). Its own zero-range
+            // verticalScroll passes every drag on it up to the same swipe connection, so
+            // swiping up from the pill still opens All Apps and pulling down still opens Search.
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState(), overscrollEffect = null)
+                        .padding(
+                            start = ReachTheme.dimens.gutter,
+                            end = ReachTheme.dimens.gutter,
+                            top = if (compact) CompactPillTopGap else PillTopGap,
+                            bottom = BottomPadding,
+                        ),
+            ) {
                 if (heldIntent != null) {
-                    FanHint(Modifier.padding(top = pillTopGap))
+                    FanHint()
                 } else {
+                    val pillActions = homePillActions(system.gestures, onAllApps, gestureCallbacks)
                     SearchPill(
                         onClick = onSearch,
-                        modifier =
-                            Modifier
-                                .padding(top = pillTopGap)
-                                // Home's gestures without a visible tap alternative (spec §6.10):
-                                // swipe-up, and — when they can work — double-tap to lock and the
-                                // two-finger swipe, as TalkBack actions on the pill.
-                                .semantics { customActions = pillActions },
+                        // Home's gestures without a visible tap alternative (spec §6.10):
+                        // swipe-up, and — when they can work — double-tap to lock and the
+                        // two-finger swipe, as TalkBack actions on the pill.
+                        modifier = Modifier.semantics { customActions = pillActions },
                     )
                 }
             }
         }
     }
+}
+
+/** Gives [content] slightly smaller intent words while [tight] (see `HomeScreen`). */
+@Composable
+private fun TightWords(
+    tight: Boolean,
+    content: @Composable () -> Unit,
+) {
+    if (!tight) return content()
+    val typography = ReachTheme.typography
+    val smaller = remember(typography) { typography.copy(intentWord = typography.intentWord.copy(fontSize = TightIntentWordFontSize)) }
+    ReachTheme(colors = ReachTheme.colors, typography = smaller, content = content)
 }
 
 /**

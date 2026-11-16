@@ -772,3 +772,18 @@ wins. Deviation from spec §6.1, which lists the category table only.
   vertically above 1.3× font scale (the smallest auto-size step still clipped "Otomatik");
   the selected intent chip is scrolled into view (the six chips are wider than a 360dp
   screen, so "Tools" opened out of sight); Samsung Calendar joins Google Calendar in Make.
+
+## D74 — Home with a calendar event and a media player (real device)
+Tested with a long calendar title and a paused YouTube Music session on a 360×800dp phone.
+- **The search pill is pinned** below Home's scrolling content (like the intent chips, D72):
+  a context line plus the media row pushed it below the fold. A zero-range `verticalScroll`
+  around the pill passes drags on it to the same swipe connection, so swiping up from the
+  pill still opens All Apps.
+- **"Tight" mode.** When even the compact layout overflows, the clock (72sp) and the intent
+  words (40sp) shrink. It is decided after measuring (`scroll.maxValue > 0`), re-evaluated when
+  what Home shows changes, and never applied at large font scales, where Home scrolls.
+- **The context line** is at most two lines (a long title took five); TalkBack reads it all.
+- **Media player notifications never count as unread.** A paused player is no longer
+  ongoing, so it showed "1 NEW" on Listen and "1 unread" in the Now row.
+  `isPlayerNotification` (media session extra or `CATEGORY_TRANSPORT`) now counts as ongoing.
+- **The Now Playing card** says "Paused · <app>" while paused instead of "Now playing".
