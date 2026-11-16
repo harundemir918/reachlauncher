@@ -24,6 +24,7 @@ the Android side with Flutter analogies — start with
 | ● | **M3 — System features** | Notification counts ("3 NEW"), media row + Now Playing card, next calendar event, usage-stats blend, onboarding/permission cards, `PRIVACY.md` |
 | ● | **M4 — Personalisation** | Appearance sheet (theme Auto/Dark/Light, 7 palettes, thumb side, wallpaper mode with blur and scrim), live DataStore persistence, no theme flash on start, long-press menu (App info / Move / Hide / Uninstall) on intent-detail apps too |
 | ● | **M5 — Polish** | Optional accessibility service (double-tap to lock, two-finger swipe for notifications), private space with Lock/Unlock in All Apps, accessibility pass and Turkish strings, Baseline Profile module, whole-app R8 release build with signing from outside the repo |
+| ● | **After M5** | Fixes from real-device testing (D72–D74); Spanish translation and a language choice in Appearance — System / English / Español / Türkçe, also in Android 13+'s per-app language settings (D75) |
 
 ### What works now (M1 – M5)
 

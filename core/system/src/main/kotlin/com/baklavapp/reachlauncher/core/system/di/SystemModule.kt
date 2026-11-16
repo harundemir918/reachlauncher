@@ -1,5 +1,6 @@
 package com.baklavapp.reachlauncher.core.system.di
 
+import com.baklavapp.reachlauncher.core.data.source.AppLanguageSource
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.data.source.CalendarSource
 import com.baklavapp.reachlauncher.core.data.source.ContactsSource
@@ -16,6 +17,7 @@ import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.system.apps.LauncherAppsInstalledAppsSource
 import com.baklavapp.reachlauncher.core.system.calendar.CalendarProviderSource
 import com.baklavapp.reachlauncher.core.system.contacts.ContactsProviderSource
+import com.baklavapp.reachlauncher.core.system.language.SystemAppLanguageSource
 import com.baklavapp.reachlauncher.core.system.launch.SystemAppLauncher
 import com.baklavapp.reachlauncher.core.system.media.MediaSessionsSource
 import com.baklavapp.reachlauncher.core.system.notifications.NotificationListenerCountSource
@@ -106,4 +108,9 @@ abstract class SystemModule {
     @Binds
     @Singleton
     abstract fun bindScreenActionsSource(impl: AccessibilityScreenActionsSource): ScreenActionsSource
+
+    /** Reach's display language: per-app locales on Android 13+, a stored choice before. */
+    @Binds
+    @Singleton
+    abstract fun bindAppLanguageSource(impl: SystemAppLanguageSource): AppLanguageSource
 }

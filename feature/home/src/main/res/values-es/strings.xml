@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish strings of :feature:home. See values/strings.xml for the context of each one. -->
+<resources>
+    <string name="home_intent_open_action">abrir apps</string>
+
+    <string name="home_clock_appearance_action">Apariencia</string>
+
+    <string name="home_now_label">ahora</string>
+    <string name="home_now_reason_usual">sueles usarla ahora</string>
+    <plurals name="home_now_reason_unread">
+        <item quantity="one">%d sin leer</item>
+        <item quantity="many">%d sin leer</item>
+        <item quantity="other">%d sin leer</item>
+    </plurals>
+    <string name="home_now_reason_recent">reciente</string>
+
+    <string name="home_all_apps_action">Todas las apps</string>
+
+    <string name="home_launch_failed">No se pudo abrir %1$s</string>
+
+    <string name="home_detail_shortcuts">accesos directos</string>
+    <string name="home_detail_empty">Aún no hay apps aquí.</string>
+
+    <string name="home_accent_from_wallpaper">acento del fondo</string>
+
+    <string name="home_fan_hint">suelta: abrir · vuelve: cancelar</string>
+
+    <string name="home_event_today_timed">%1$s · %2$s</string>
+    <string name="home_event_tomorrow_timed">Mañana %1$s · %2$s</string>
+    <string name="home_event_today_all_day">Hoy · %1$s</string>
+    <string name="home_event_tomorrow_all_day">Mañana · %1$s</string>
+    <string name="home_event_description">Próximo evento: %1$s</string>
+
+    <string name="home_now_playing">sonando ahora · %1$s</string>
+    <string name="home_now_paused">en pausa · %1$s</string>
+    <string name="home_media_progress">%1$s de %2$s</string>
+
+    <string name="home_card_not_now">Ahora no</string>
+    <string name="home_card_not_now_description">Ahora no, ocultar «%1$s»</string>
+    <string name="home_card_home_title">Haz de Reach tu pantalla de inicio</string>
+    <string name="home_card_home_why">Así el botón de inicio te trae aquí y los accesos directos funcionan.</string>
+    <string name="home_card_home_action">Usar como inicio</string>
+    <string name="home_card_notifications_title">Contadores y controles de música</string>
+    <string name="home_card_notifications_why">Con acceso a las notificaciones verás «3 NUEVAS» en las intenciones y lo que está sonando. Nada sale de tu teléfono.</string>
+    <string name="home_card_notifications_action">Permitir acceso</string>
+    <string name="home_card_calendar_title">Tu próximo evento bajo el reloj</string>
+    <string name="home_card_calendar_why">Opcional. Reach solo lee el próximo evento de hoy y de mañana.</string>
+    <string name="home_card_calendar_action">Permitir calendario</string>
+    <string name="home_card_usage_title">Mejores sugerencias en «Ahora»</string>
+    <string name="home_card_usage_why">Opcional. El acceso de uso le dice a Reach qué apps abres a cada hora. Se queda en tu teléfono.</string>
+    <string name="home_card_usage_action">Permitir acceso de uso</string>
+    <string name="home_lock_action">Bloquear pantalla</string>
+    <string name="home_notifications_action">Abrir notificaciones</string>
+    <string name="home_lock_needs_service">Tocar dos veces para bloquear necesita el servicio de accesibilidad de Reach. Actívalo en Apariencia.</string>
+    <string name="home_shade_needs_service">Abrir las notificaciones con dos dedos necesita el servicio de accesibilidad de Reach. Actívalo en Apariencia.</string>
+</resources>

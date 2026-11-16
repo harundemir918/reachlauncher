@@ -1,5 +1,6 @@
 package com.baklavapp.reachlauncher.core.data.fake
 
+import com.baklavapp.reachlauncher.core.data.source.AppLanguageSource
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.data.source.CalendarSource
 import com.baklavapp.reachlauncher.core.data.source.ContactsSource
@@ -14,6 +15,7 @@ import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.model.AppKey
+import com.baklavapp.reachlauncher.core.model.AppLanguage
 import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.Contact
@@ -277,5 +279,15 @@ class FakeScreenActionsSource : ScreenActionsSource {
         val opened = enabled.value || (allowHiddenApi && hiddenApiWorks)
         if (opened) shadeCount++
         return opened
+    }
+}
+
+/** [AppLanguageSource] backed by a [MutableStateFlow]; [setLanguage] just stores the choice. */
+class FakeAppLanguageSource : AppLanguageSource {
+    val current = MutableStateFlow(AppLanguage.SYSTEM)
+    override val language: Flow<AppLanguage> = current
+
+    override fun setLanguage(language: AppLanguage) {
+        current.value = language
     }
 }

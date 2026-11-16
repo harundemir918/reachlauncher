@@ -1,5 +1,6 @@
 package com.baklavapp.reachlauncher
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -10,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
+import com.baklavapp.reachlauncher.core.system.language.AppLocale
 import com.baklavapp.reachlauncher.feature.home.HomeTheme
 import com.baklavapp.reachlauncher.feature.home.HomeViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -41,6 +43,14 @@ class MainActivity : ComponentActivity() {
 
     private val reachWindow = ReachWindow(this)
 
+    /**
+     * Android 9–12 have no per-app language: apply Reach's chosen one (Appearance › Language)
+     * to this Activity's resources. A no-op on Android 13+, where the system does it.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Draw behind the status and navigation bars; composables apply insets themselves.
@@ -52,7 +62,8 @@ class MainActivity : ComponentActivity() {
         // defaults (Auto, Lime, opaque) and flash for one frame for anyone who chose
         // otherwise. Reading the snapshot synchronously here is a single small file read
         // that Home needs immediately anyway (it warms the same DataStore instance), and
-        // onCreate runs only when the process starts — the Activity is never recreated.
+        // onCreate runs only when the process starts — the Activity is not recreated (except
+        // once after a language change on Android 9–12, see SystemAppLanguageSource).
         val initial = readSettingsSnapshot()
         val initialTheme = HomeTheme(initial.themeMode, initial.palette, initial.showWallpaper)
         val initialWindow = WindowAppearance.resolve(initial.themeMode, initial.palette, initial.showWallpaper, resources.configuration)

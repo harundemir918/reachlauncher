@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish strings of :core:system. See values/strings.xml for the context of each one. -->
+<resources>
+    <string name="system_a11y_service_label">Acciones de pantalla de Reach</string>
+    <string name="system_a11y_service_summary">Toca dos veces el inicio para bloquear; desliza con dos dedos hacia abajo para ver las notificaciones</string>
+    <string name="system_a11y_service_description">Reach usa este servicio solo para bloquear la pantalla cuando tocas dos veces un espacio vacío del inicio y para abrir el panel de notificaciones cuando deslizas hacia abajo con dos dedos en el inicio. No lee la pantalla, lo que escribes ni ninguna otra app, y no recopila ni envía nada. Puedes desactivarlo cuando quieras.</string>
+</resources>

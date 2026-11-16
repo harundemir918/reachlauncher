@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish strings of :feature:search. See values/strings.xml for the context of each one. -->
+<resources>
+    <string name="search_title">escribe para abrir</string>
+    <string name="search_input_label">app, contacto o acción</string>
+    <string name="search_input_hint">Escribe un nombre</string>
+    <string name="search_close">Cerrar búsqueda</string>
+
+    <string name="search_section_suggested">sugerencias</string>
+    <string name="search_section_matches">mejores resultados</string>
+    <plurals name="search_results_count">
+        <item quantity="one">%d resultado</item>
+        <item quantity="many">%d resultados</item>
+        <item quantity="other">%d resultados</item>
+    </plurals>
+    <string name="search_empty_suggestions">Empieza a escribir para buscar una app.</string>
+    <string name="search_enter_hint">intro ↵</string>
+
+    <string name="search_kind_shortcut">acceso directo · %1$s</string>
+    <string name="search_kind_contact">contacto</string>
+    <string name="search_kind_action">acción</string>
+    <string name="search_kind_web">web</string>
+
+    <string name="search_command_palette">Cambiar a %1$s</string>
+    <string name="search_command_dark">Cambiar al tema oscuro</string>
+    <string name="search_command_light">Cambiar al tema claro</string>
+    <string name="search_command_appearance">Ajustes de apariencia</string>
+    <string name="search_web">Buscar «%1$s» en la web</string>
+
+    <string name="search_contact_call">Llamar</string>
+    <string name="search_contact_message">Mensaje</string>
+    <string name="search_contact_view">Ficha de contacto</string>
+
+    <string name="search_contacts_prompt">Incluir contactos</string>
+    <string name="search_contacts_rationale">Busca también personas por su nombre. Los contactos solo se leen en este teléfono y nunca salen de él.</string>
+
+    <string name="search_launch_failed">No se pudo abrir %1$s</string>
+    <string name="search_action_unavailable">Ninguna app de este teléfono puede hacerlo</string>
+
+    <string name="search_a11y_top_result">primer resultado, pulsa Intro para abrir</string>
+    <string name="search_a11y_shortcut">%1$s, acceso directo de %2$s</string>
+    <string name="search_a11y_contact">%1$s, contacto</string>
+    <string name="search_a11y_contact_options">mostrar opciones de llamada y mensaje</string>
+    <string name="search_a11y_contact_call">Llamar a %1$s</string>
+    <string name="search_a11y_contact_message">Enviar un mensaje a %1$s</string>
+    <string name="search_a11y_contact_view">Abrir la ficha de contacto de %1$s</string>
+</resources>

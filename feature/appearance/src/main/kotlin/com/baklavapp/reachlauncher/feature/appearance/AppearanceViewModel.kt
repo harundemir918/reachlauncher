@@ -4,8 +4,10 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
+import com.baklavapp.reachlauncher.core.data.source.AppLanguageSource
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
+import com.baklavapp.reachlauncher.core.model.AppLanguage
 import com.baklavapp.reachlauncher.core.model.PaletteId
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.baklavapp.reachlauncher.core.model.ThemeMode
@@ -29,6 +31,7 @@ import javax.inject.Inject
  * @property doubleTapToLock the "Double-tap to lock" switch.
  * @property accessibilityServiceOn Reach's accessibility service is on; while it is off the
  *   sheet offers a button to the system's Accessibility settings.
+ * @property language Reach's display language ([AppLanguage.SYSTEM] = follow the phone).
  */
 @Immutable
 data class AppearanceUiState(
@@ -39,6 +42,7 @@ data class AppearanceUiState(
     val thumbSide: ThumbSide = ThumbSide.LEFT,
     val doubleTapToLock: Boolean = false,
     val accessibilityServiceOn: Boolean = false,
+    val language: AppLanguage = AppLanguage.SYSTEM,
 )
 
 /**
@@ -61,13 +65,18 @@ class AppearanceViewModel
         private val settingsRepository: SettingsRepository,
         screenActionsSource: ScreenActionsSource,
         private val appLauncher: AppLauncher,
+        private val appLanguageSource: AppLanguageSource,
     ) : ViewModel() {
         /**
          * The sheet's state, straight from the persisted settings and the service state (the
          * latter is re-read whenever Reach resumes, e.g. back from Accessibility settings).
          */
         val uiState: StateFlow<AppearanceUiState> =
-            combine(settingsRepository.settings, screenActionsSource.isServiceEnabled) { settings, serviceOn ->
+            combine(
+                settingsRepository.settings,
+                screenActionsSource.isServiceEnabled,
+                appLanguageSource.language,
+            ) { settings, serviceOn, language ->
                 AppearanceUiState(
                     loaded = true,
                     themeMode = settings.themeMode,
@@ -76,6 +85,7 @@ class AppearanceViewModel
                     thumbSide = settings.thumbSide,
                     doubleTapToLock = settings.doubleTapToLock,
                     accessibilityServiceOn = serviceOn,
+                    language = language,
                 )
             }.distinctUntilChanged()
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AppearanceUiState())
@@ -98,6 +108,15 @@ class AppearanceViewModel
          * to a system screen on its own (spec §7: never nag).
          */
         fun onDoubleTapToLockChanged(enabled: Boolean) = write { setDoubleTapToLock(enabled) }
+
+        /**
+         * LANGUAGE segmented control. Not a DataStore setting: on Android 13+ the system keeps
+         * per-app languages itself (see `AppLanguageSource`), and the sheet re-renders in the
+         * new language as soon as it is applied.
+         */
+        fun onLanguageSelected(language: AppLanguage) {
+            appLanguageSource.setLanguage(language)
+        }
 
         /** "Turn on" button: the system's Accessibility settings, where the user enables Reach's service. */
         fun onOpenAccessibilitySettings() {

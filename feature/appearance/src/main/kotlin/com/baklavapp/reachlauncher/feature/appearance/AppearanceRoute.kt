@@ -42,6 +42,7 @@ fun AppearanceRoute(
                 onThumbSide = viewModel::onThumbSideSelected,
                 onDoubleTapToLock = viewModel::onDoubleTapToLockChanged,
                 onOpenAccessibilitySettings = viewModel::onOpenAccessibilitySettings,
+                onLanguage = viewModel::onLanguageSelected,
             )
         }
     AppearanceSheet(state = state, callbacks = callbacks, onClose = onClose, modifier = modifier)

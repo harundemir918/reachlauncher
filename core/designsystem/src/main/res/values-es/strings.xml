@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish strings of :core:designsystem. See values/strings.xml for the context of each one. -->
+<resources>
+    <string name="ds_search_pill_label">Escribe para abrir</string>
+    <string name="ds_search_pill_hint">o desliza abajo</string>
+    <string name="ds_search_pill_action">buscar apps, contactos y acciones</string>
+
+    <string name="ds_badge_new">%1$s nuevas</string>
+
+    <plurals name="ds_app_count">
+        <item quantity="one">%d app</item>
+        <item quantity="many">%d apps</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+    <plurals name="ds_new_notifications">
+        <item quantity="one">%d notificación nueva</item>
+        <item quantity="many">%d notificaciones nuevas</item>
+        <item quantity="other">%d notificaciones nuevas</item>
+    </plurals>
+
+    <plurals name="ds_intent_header">
+        <item quantity="one">intención · %d app</item>
+        <item quantity="many">intención · %d apps</item>
+        <item quantity="other">intención · %d apps</item>
+    </plurals>
+
+    <string name="ds_profile_tag_work">trabajo</string>
+    <string name="ds_profile_tag_private">privado</string>
+    <string name="ds_profile_work">perfil de trabajo</string>
+    <string name="ds_profile_private">espacio privado</string>
+    <string name="ds_profile_paused">en pausa</string>
+
+    <string name="ds_back">Atrás</string>
+    <string name="ds_play">Reproducir</string>
+    <string name="ds_pause">Pausar</string>
+    <string name="ds_play_track">Reproducir %1$s</string>
+    <string name="ds_pause_track">Pausar %1$s</string>
+    <string name="ds_previous_track">Pista anterior</string>
+    <string name="ds_next_track">Pista siguiente</string>
+    <string name="ds_media_playing">sonando · %1$s</string>
+    <string name="ds_media_paused">en pausa · %1$s</string>
+
+    <string name="ds_app_menu_open">Opciones de la app</string>
+    <string name="ds_app_menu_app_info">Información de la app</string>
+    <string name="ds_app_menu_move">Mover a intención…</string>
+    <string name="ds_app_menu_hide">Ocultar</string>
+    <string name="ds_app_menu_unhide">Mostrar</string>
+    <string name="ds_app_menu_uninstall">Desinstalar</string>
+    <string name="ds_app_menu_move_label">mover a</string>
+    <string name="ds_app_menu_close">Cerrar</string>
+
+    <string name="ds_palette_lime">Lima</string>
+    <string name="ds_palette_paper_ink">Papel y tinta</string>
+    <string name="ds_palette_night_tide">Marea nocturna</string>
+    <string name="ds_palette_terracotta">Terracota</string>
+    <string name="ds_palette_forest">Bosque</string>
+    <string name="ds_palette_dusk">Anochecer</string>
+    <string name="ds_palette_high_contrast">Alto contraste</string>
+    <!-- The six intent words: short, they render at 46–60sp. -->
+    <string name="ds_intent_talk">Hablar</string>
+    <string name="ds_intent_listen">Oír</string>
+    <string name="ds_intent_go">Ir</string>
+    <string name="ds_intent_make">Crear</string>
+    <string name="ds_intent_play">Jugar</string>
+    <string name="ds_intent_tools">Útiles</string>
+</resources>

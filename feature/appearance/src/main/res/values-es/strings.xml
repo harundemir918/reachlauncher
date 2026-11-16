@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish strings of :feature:appearance. See values/strings.xml for the context of each one. -->
+<resources>
+    <string name="appearance_title">Apariencia</string>
+    <string name="appearance_done">Listo</string>
+
+    <string name="appearance_theme">tema</string>
+    <string name="appearance_theme_follows">tema · sigue a Android</string>
+    <string name="appearance_theme_auto">Auto</string>
+    <string name="appearance_theme_dark">Oscuro</string>
+    <string name="appearance_theme_light">Claro</string>
+
+    <string name="appearance_palette">paleta</string>
+    <string name="appearance_palette_wallpaper">paleta · acento del fondo</string>
+
+    <string name="appearance_wallpaper">Mostrar fondo de pantalla</string>
+    <string name="appearance_wallpaper_subtitle">Difuminado detrás de Reach, con el acento tomado de él</string>
+
+    <string name="appearance_thumb_side">lado del pulgar</string>
+    <string name="appearance_thumb_left">Izquierda</string>
+    <string name="appearance_thumb_right">Derecha</string>
+    <string name="appearance_gestures">gestos</string>
+    <string name="appearance_double_tap_lock">Tocar dos veces para bloquear</string>
+    <string name="appearance_double_tap_lock_on">Toca dos veces un espacio vacío del inicio para bloquear la pantalla</string>
+    <string name="appearance_double_tap_lock_needs_service">Necesita el servicio de accesibilidad de Reach, que está desactivado</string>
+    <string name="appearance_service_why">El servicio de accesibilidad de Reach solo se usa para bloquear la pantalla y para abrir las notificaciones deslizando dos dedos hacia abajo en el inicio. No lee nada de tu pantalla.</string>
+    <string name="appearance_service_turn_on">Activar en los ajustes de accesibilidad</string>
+
+    <string name="appearance_language">idioma</string>
+    <string name="appearance_language_system">Sistema</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The languages Reach is translated into. Android 13+ lists them in Settings › Apps › Reach ›
+    Language (per-app language), and Appearance › Language offers the same set. Add a locale
+    here when adding a values-xx folder.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="es" />
+    <locale android:name="tr" />
+</locale-config>

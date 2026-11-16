@@ -85,3 +85,41 @@ data class AppearanceSettings(
     val hiddenApiShadeFallback: Boolean = false,
     val dismissedTips: Set<String> = emptySet(),
 )
+
+/**
+ * The language Reach shows itself in, chosen in the Appearance sheet. [SYSTEM] follows the
+ * phone's language (English when the phone's language isn't one Reach has).
+ *
+ * Persisted by [tag] — a BCP 47 language tag, the format Android's per-app language API
+ * stores — never by enum name or ordinal.
+ *
+ * Flutter analogy: the `Locale?` you'd pass to `MaterialApp(locale:)`, where null means
+ * "follow the device".
+ */
+enum class AppLanguage(
+    val tag: String?,
+) {
+    SYSTEM(null),
+    ENGLISH("en"),
+    SPANISH("es"),
+    TURKISH("tr"),
+    ;
+
+    companion object {
+        /**
+         * The language for a stored or system-reported tag list ("es-ES", "tr", "en-US,fr").
+         * Only the first tag's language counts; anything unknown or empty is [SYSTEM].
+         */
+        fun fromTags(tags: String?): AppLanguage {
+            val language =
+                tags
+                    ?.substringBefore(',')
+                    ?.substringBefore('-')
+                    ?.substringBefore('_')
+                    ?.trim()
+                    ?.lowercase()
+            if (language.isNullOrEmpty()) return SYSTEM
+            return entries.firstOrNull { it.tag == language } ?: SYSTEM
+        }
+    }
+}

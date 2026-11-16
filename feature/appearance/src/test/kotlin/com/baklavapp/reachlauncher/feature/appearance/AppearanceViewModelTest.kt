@@ -1,10 +1,12 @@
 package com.baklavapp.reachlauncher.feature.appearance
 
 import app.cash.turbine.test
+import com.baklavapp.reachlauncher.core.data.fake.FakeAppLanguageSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
 import com.baklavapp.reachlauncher.core.data.fake.FakeScreenActionsSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
+import com.baklavapp.reachlauncher.core.model.AppLanguage
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.PaletteId
 import com.baklavapp.reachlauncher.core.model.SystemScreen
@@ -46,7 +48,7 @@ class AppearanceViewModelTest {
                 FakeSettingsRepository(
                     AppearanceSettings(ThemeMode.DARK, PaletteId.DUSK, showWallpaper = true, thumbSide = ThumbSide.RIGHT),
                 )
-            AppearanceViewModel(repo, FakeScreenActionsSource(), FakeAppLauncher()).uiState.test {
+            AppearanceViewModel(repo, FakeScreenActionsSource(), FakeAppLauncher(), FakeAppLanguageSource()).uiState.test {
                 assertThat(expectMostRecentItem())
                     .isEqualTo(AppearanceUiState(true, ThemeMode.DARK, PaletteId.DUSK, showWallpaper = true, thumbSide = ThumbSide.RIGHT))
             }
@@ -56,7 +58,7 @@ class AppearanceViewModelTest {
     fun `every control writes through and the state follows live`() =
         runTest {
             val repo = FakeSettingsRepository()
-            val vm = AppearanceViewModel(repo, FakeScreenActionsSource(), FakeAppLauncher())
+            val vm = AppearanceViewModel(repo, FakeScreenActionsSource(), FakeAppLauncher(), FakeAppLanguageSource())
             vm.uiState.test {
                 assertThat(expectMostRecentItem().themeMode).isEqualTo(ThemeMode.AUTO)
 
@@ -83,7 +85,7 @@ class AppearanceViewModelTest {
                 object : SettingsRepository by FakeSettingsRepository() {
                     override suspend fun setPalette(palette: PaletteId): Unit = throw IllegalStateException("disk full")
                 }
-            val vm = AppearanceViewModel(failing, FakeScreenActionsSource(), FakeAppLauncher())
+            val vm = AppearanceViewModel(failing, FakeScreenActionsSource(), FakeAppLauncher(), FakeAppLanguageSource())
             vm.uiState.test {
                 assertThat(expectMostRecentItem().palette).isEqualTo(PaletteId.DEFAULT)
                 vm.onPaletteSelected(PaletteId.FOREST)
@@ -97,7 +99,7 @@ class AppearanceViewModelTest {
             val repo = FakeSettingsRepository()
             val service = FakeScreenActionsSource()
             val launcher = FakeAppLauncher()
-            val vm = AppearanceViewModel(repo, service, launcher)
+            val vm = AppearanceViewModel(repo, service, launcher, FakeAppLanguageSource())
             vm.uiState.test {
                 assertThat(expectMostRecentItem().accessibilityServiceOn).isFalse()
 
@@ -113,5 +115,19 @@ class AppearanceViewModelTest {
                 assertThat(awaitItem().accessibilityServiceOn).isTrue()
             }
             assertThat(repo.state.value.doubleTapToLock).isTrue()
+        }
+
+    @Test
+    fun `choosing a language goes to the language source and back into the state`() =
+        runTest {
+            val language = FakeAppLanguageSource()
+            val vm = AppearanceViewModel(FakeSettingsRepository(), FakeScreenActionsSource(), FakeAppLauncher(), language)
+            vm.uiState.test {
+                assertThat(expectMostRecentItem().language).isEqualTo(AppLanguage.SYSTEM)
+                vm.onLanguageSelected(AppLanguage.SPANISH)
+                assertThat(awaitItem().language).isEqualTo(AppLanguage.SPANISH)
+                assertThat(language.current.value).isEqualTo(AppLanguage.SPANISH)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 }

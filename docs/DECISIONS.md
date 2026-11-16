@@ -787,3 +787,30 @@ Tested with a long calendar title and a paused YouTube Music session on a 360×8
   ongoing, so it showed "1 NEW" on Listen and "1 unread" in the Now row.
   `isPlayerNotification` (media session extra or `CATEGORY_TRANSPORT`) now counts as ongoing.
 - **The Now Playing card** says "Paused · <app>" while paused instead of "Now playing".
+
+## D75 — Spanish, and a language choice in Appearance
+- **Translations.** Every module has `values-es` alongside the existing `values-tr`; English
+  stays the default (`values`). Spanish plurals give `one`, `many` and `other` (CLDR). The
+  intent words are kept short for 46–60sp display type: Hablar, Oír, Ir, Crear, Jugar, Útiles.
+- **Where the choice lives.** Appearance › Language (System / English / Español / Türkçe),
+  with the other "how Reach looks" settings. Each language is written in its own language so
+  someone who can't read the current one still finds theirs. Four options stack vertically
+  above 1.3× font scale, like the theme control.
+- **How it is applied.** `AppLanguageSource` (contract in `:core:data`, model `AppLanguage` in
+  `:core:model`, implementation `SystemAppLanguageSource` in `:core:system`):
+  - Android 13+: the system's per-app language (`LocaleManager.applicationLocales`). The
+    manifest's `android:localeConfig` (`res/xml/locales_config.xml`) also lists Reach under
+    Settings › Apps › Language; a change made there is re-read on resume. `MainActivity`
+    already handles `locale` config changes, so the switch is live, without a restart.
+  - Android 9–12: no per-app language API. The choice is a small SharedPreferences value
+    (read synchronously in `attachBaseContext`, so not DataStore), applied by
+    `AppLocale.wrap`, and the Activity is recreated once.
+  - Not a DataStore setting: on 13+ the system is the source of truth.
+- **App names follow.** App labels come from the system in Reach's language; an in-app switch
+  doesn't pause Reach, so `ReachApp` re-reads the catalog when the configuration's locales
+  change.
+- **Play bundles keep every language** (`bundle.language.enableSplit = false`): with language
+  splits Play installs only the phone's language and switching would show missing strings.
+- **The search pill's hint** ("or pull down") now appears only when it fits beside the label
+  on one line (measured), instead of a font-scale rule: "Escribe para abrir" wrapped beside
+  "O DESLIZA ABAJO" on a 360dp phone.

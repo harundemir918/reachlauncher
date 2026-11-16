@@ -339,6 +339,14 @@ class HomeViewModel
         }
 
         /**
+         * Reach's language changed (Appearance › Language) while it stayed on screen: re-read the
+         * catalog so app names follow it ("Clock" → "Reloj"), as they would after a resume.
+         */
+        fun onLanguageChanged() {
+            viewModelScope.launch { bestEffort { catalogRepository.refresh() } }
+        }
+
+        /**
          * Launches [app], animating from [origin] (the tapped element in window pixels),
          * through the shared [LaunchApp] use case — the one place that records launches, so
          * Home, Search, All Apps and the fan count them the same way.

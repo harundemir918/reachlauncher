@@ -56,6 +56,7 @@ import com.baklavapp.reachlauncher.core.designsystem.theme.Palettes
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.theme.paletteDisplayName
+import com.baklavapp.reachlauncher.core.model.AppLanguage
 import com.baklavapp.reachlauncher.core.model.PaletteId
 import com.baklavapp.reachlauncher.core.model.ThemeMode
 import com.baklavapp.reachlauncher.core.model.ThumbSide
@@ -112,6 +113,7 @@ internal class AppearanceCallbacks(
     val onThumbSide: (ThumbSide) -> Unit,
     val onDoubleTapToLock: (Boolean) -> Unit = {},
     val onOpenAccessibilitySettings: () -> Unit = {},
+    val onLanguage: (AppLanguage) -> Unit = {},
 )
 
 /**
@@ -188,10 +190,28 @@ internal fun AppearanceSheet(
                     onSelect = callbacks.onThumbSide,
                 )
             }
+            // Language sits with the other "how Reach looks" choices; each option is written in
+            // its own language, so someone who can't read the current one still finds theirs.
+            Section(label = stringResource(R.string.appearance_language)) {
+                Segmented(
+                    options = AppLanguage.entries,
+                    selected = state.language,
+                    label = { stringResource(it.labelRes()) },
+                    onSelect = callbacks.onLanguage,
+                )
+            }
             GesturesSection(state, callbacks)
         }
     }
 }
+
+private fun AppLanguage.labelRes(): Int =
+    when (this) {
+        AppLanguage.SYSTEM -> R.string.appearance_language_system
+        AppLanguage.ENGLISH -> R.string.appearance_language_english
+        AppLanguage.SPANISH -> R.string.appearance_language_spanish
+        AppLanguage.TURKISH -> R.string.appearance_language_turkish
+    }
 
 /**
  * Home's screen-action gestures (spec §7.4, D66): the opt-in switch for double-tap to lock and,

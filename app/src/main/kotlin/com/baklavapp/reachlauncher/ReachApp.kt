@@ -3,8 +3,12 @@ package com.baklavapp.reachlauncher
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
@@ -43,6 +47,16 @@ fun ReachApp(
     LifecycleResumeEffect(viewModel) {
         viewModel.onResume()
         onPauseOrDispose { }
+    }
+    // App names come from the system in Reach's language. Appearance › Language applies without
+    // restarting the Activity (and without a pause/resume), so re-read them when it changes.
+    val localeTags = LocalConfiguration.current.locales.toLanguageTags()
+    var lastLocaleTags by remember { mutableStateOf(localeTags) }
+    LaunchedEffect(localeTags) {
+        if (localeTags != lastLocaleTags) {
+            lastLocaleTags = localeTags
+            viewModel.onLanguageChanged()
+        }
     }
     val isDark = resolveDark(theme.themeMode)
     val appearance = WindowAppearance(isDark, theme.palette, theme.showWallpaper)

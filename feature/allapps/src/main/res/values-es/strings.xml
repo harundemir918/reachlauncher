@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spanish strings of :feature:allapps. See values/strings.xml for the context of each one. -->
+<resources>
+    <string name="allapps_title">Todo</string>
+    <plurals name="allapps_count">
+        <item quantity="one">%d app</item>
+        <item quantity="many">%d apps</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+    <string name="allapps_subtitle">Nombres, no iconos: busca leyendo.</string>
+
+    <string name="allapps_hidden_group">ocultas</string>
+    <string name="allapps_hidden">oculta</string>
+
+    <string name="allapps_rail">Índice de letras</string>
+    <string name="allapps_rail_jump">Ir a la %1$s</string>
+
+    <string name="allapps_launch_failed">No se pudo abrir %1$s</string>
+    <string name="allapps_private_space">espacio privado</string>
+    <string name="allapps_private_locked">Bloqueado. Sus apps siguen ocultas hasta que lo desbloquees.</string>
+    <string name="allapps_private_unlocked">Desbloqueado. Bloquéalo para volver a ocultar estas apps.</string>
+    <string name="allapps_private_unlock">Desbloquear</string>
+    <string name="allapps_private_lock">Bloquear</string>
+</resources>

@@ -37,4 +37,11 @@
     <!-- Shown under the switch while the service is off: what the service is used for. -->
     <string name="appearance_service_why">Reach’s accessibility service is used only to lock the screen and to open notifications with a two-finger swipe down on Home. It reads nothing on your screen.</string>
     <string name="appearance_service_turn_on">Turn on in Accessibility settings</string>
+    <!-- Language section: which language Reach uses. "System" follows the phone's language;
+         the other options are each language's own name and are never translated. -->
+    <string name="appearance_language">language</string>
+    <string name="appearance_language_system">System</string>
+    <string name="appearance_language_english" translatable="false">English</string>
+    <string name="appearance_language_spanish" translatable="false">Español</string>
+    <string name="appearance_language_turkish" translatable="false">Türkçe</string>
 </resources>

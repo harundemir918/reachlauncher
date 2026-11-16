@@ -1,6 +1,7 @@
 package com.baklavapp.reachlauncher.core.data.source
 
 import com.baklavapp.reachlauncher.core.model.AppKey
+import com.baklavapp.reachlauncher.core.model.AppLanguage
 import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.Contact
@@ -218,4 +219,17 @@ interface ScreenActionsSource {
 
     /** `GLOBAL_ACTION_NOTIFICATIONS`, or the hidden-API fallback when [allowHiddenApi]. */
     fun openNotificationShade(allowHiddenApi: Boolean): Boolean
+}
+
+/**
+ * Reach's own display language (Appearance › Language), separate from the phone's.
+ * On Android 13+ this is the system's per-app language (also editable in Settings › Apps ›
+ * Reach › Language), so [language] is re-read whenever Reach comes back to the foreground.
+ */
+interface AppLanguageSource {
+    /** The chosen language; [AppLanguage.SYSTEM] when Reach follows the phone. */
+    val language: Flow<AppLanguage>
+
+    /** Switches Reach's language; the UI re-renders in it right away. */
+    fun setLanguage(language: AppLanguage)
 }

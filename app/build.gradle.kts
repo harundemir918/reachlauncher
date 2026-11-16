@@ -56,6 +56,15 @@ android {
         }
     }
 
+    // Reach switches language in-app (Appearance › Language). A Play bundle split by language
+    // would only install the phone's language, so switching would show missing strings; the
+    // strings are a few kilobytes, so every APK carries all of them.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+
     buildTypes {
         release {
             // R8 over the whole app (D69, replacing D16's library-only packageScope): shrinks,
