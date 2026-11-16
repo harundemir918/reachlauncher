@@ -767,3 +767,8 @@ roles and before the category: browsers, clock, calculator, store, files and set
 Tools; mail and messengers → Talk; camera, gallery and notes → Make; and so on. Only the
 automatic intent changes (it is recomputed on every catalog sync); a user's "Move to…" still
 wins. Deviation from spec §6.1, which lists the category table only.
+- **Follow-up on the phone.** Now-tile app names are one auto-sized line (at 1× on a 360dp
+  phone "Instagram" and "VakıfBank" still broke mid-word); the theme's three options stack
+  vertically above 1.3× font scale (the smallest auto-size step still clipped "Otomatik");
+  the selected intent chip is scrolled into view (the six chips are wider than a 360dp
+  screen, so "Tools" opened out of sight); Samsung Calendar joins Google Calendar in Make.

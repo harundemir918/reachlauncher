@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -325,6 +328,10 @@ private fun IntentChips(
     onIntentSelected: (ReachIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // On a 360dp phone the six chips are wider than the screen and the row scrolls; scroll the
+    // current one into view, or "Tools" (the last) opens out of sight.
+    val selectedChip = remember { BringIntoViewRequester() }
+    LaunchedEffect(current) { selectedChip.bringIntoView() }
     // selectableGroup(): TalkBack announces "tab 2 of 6" for the chips inside.
     Row(
         modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
@@ -335,6 +342,7 @@ private fun IntentChips(
                 label = intentWord(intent),
                 selected = intent == current,
                 onClick = { if (intent != current) onIntentSelected(intent) },
+                modifier = if (intent == current) Modifier.bringIntoViewRequester(selectedChip) else Modifier,
             )
         }
     }

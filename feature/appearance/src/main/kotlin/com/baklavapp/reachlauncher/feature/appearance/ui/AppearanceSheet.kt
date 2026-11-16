@@ -93,6 +93,10 @@ private val SelectedBorder = 2.dp
 private val SegmentPadding = 4.dp
 private val SegmentTextPadding = 8.dp
 private val SegmentMinFontSize = 11.sp
+private val SegmentStackCorner = 24.dp
+
+/** Above this font scale a segmented control with more than two options stacks vertically. */
+private const val STACK_SEGMENTS_FONT_SCALE = 1.3f
 private val SwitchGap = 16.dp
 private const val SCRIM_ALPHA = 0.6f
 
@@ -270,23 +274,22 @@ private fun <T> Segmented(
 ) {
     val colors = ReachTheme.colors
     val track = RoundedCornerShape(ReachComponentDimens.pillCorner)
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .border(ReachComponentDimens.hairline, colors.line2, track)
-                .padding(SegmentPadding)
-                .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(SegmentPadding),
-    ) {
+    // Three options don't fit side by side at large font sizes on a 360dp phone (even the
+    // smallest auto-size step clipped "Otomatik"), so they stack; two still fit in a row.
+    val stacked = options.size > 2 && LocalDensity.current.fontScale > STACK_SEGMENTS_FONT_SCALE
+    val container =
+        Modifier
+            .fillMaxWidth()
+            .border(ReachComponentDimens.hairline, colors.line2, if (stacked) RoundedCornerShape(SegmentStackCorner) else track)
+            .padding(SegmentPadding)
+            .selectableGroup()
+    val segments: @Composable (Modifier) -> Unit = { size ->
         options.forEach { option ->
             val isSelected = option == selected
-            val segment = RoundedCornerShape(ReachComponentDimens.pillCorner)
             Box(
                 modifier =
-                    Modifier
-                        .weight(1f)
-                        .clip(segment)
+                    size
+                        .clip(RoundedCornerShape(ReachComponentDimens.pillCorner))
                         .background(if (isSelected) colors.accent else colors.bg)
                         .selectable(
                             selected = isSelected,
@@ -298,8 +301,8 @@ private fun <T> Segmented(
                         .padding(horizontal = SegmentTextPadding),
                 contentAlignment = Alignment.Center,
             ) {
-                // One line that shrinks to fit: a third of a 360dp sheet can't hold "Otomatik"
-                // at 200% font, and wrapping split it mid-word ("Otomati/k").
+                // One line that shrinks to fit rather than wrapping inside the word
+                // ("Otomati/k").
                 val style = ReachTheme.typography.body.copy(fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 BasicText(
                     text = label(option),
@@ -310,6 +313,15 @@ private fun <T> Segmented(
                     autoSize = TextAutoSize.StepBased(minFontSize = SegmentMinFontSize, maxFontSize = style.fontSize),
                 )
             }
+        }
+    }
+    if (stacked) {
+        Column(modifier = container, verticalArrangement = Arrangement.spacedBy(SegmentPadding)) {
+            segments(Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(modifier = container, horizontalArrangement = Arrangement.spacedBy(SegmentPadding)) {
+            segments(Modifier.weight(1f))
         }
     }
 }

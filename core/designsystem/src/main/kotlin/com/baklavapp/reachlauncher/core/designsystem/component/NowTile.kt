@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.unit.sp
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachDimens
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 
@@ -29,8 +32,9 @@ import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
  * A prediction tile: surface background, 18dp corners, hairline `line` outline, a mono
  * [reasonLabel] ("usually around now", "2 from Ayşe") above the [appLabel]. Tap launches.
  *
- * Text wraps (never clips) at large font sizes; the tile grows taller, so give the Now row
- * room to grow. TalkBack reads "WhatsApp, 2 from Ayşe".
+ * The reason label wraps (between words) and the tile grows taller. The app name is one line
+ * that shrinks to fit: a third of a 360dp phone is narrower than "VakıfBank" or "Instagram"
+ * at 16sp, and wrapping broke them mid-word ("Instagra/m"). TalkBack reads "WhatsApp, 2 from Ayşe".
  *
  * @param reasonLabel natural case; displayed upper-cased with the current locale.
  */
@@ -55,9 +59,21 @@ fun NowTile(
         verticalArrangement = Arrangement.spacedBy(ReachComponentDimens.nowTileGap),
     ) {
         MonoLabel(text = reasonLabel)
-        Text(text = appLabel, style = ReachTheme.typography.appName, color = colors.fg)
+        val nameStyle = ReachTheme.typography.appName
+        BasicText(
+            text = appLabel,
+            style = nameStyle,
+            color = { colors.fg },
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = AppNameMinFontSize, maxFontSize = nameStyle.fontSize),
+        )
     }
 }
+
+/** The smallest an app name in a tile shrinks to before it is ellipsized. */
+private val AppNameMinFontSize = 12.sp
 
 @Preview(name = "Now tiles", widthDp = 390)
 @Composable

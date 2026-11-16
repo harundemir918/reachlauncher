@@ -81,6 +81,8 @@ object IntentCategorizer {
                 "com.sec.android.gallery3d",
                 "com.google.android.keep",
                 "com.samsung.android.app.notes",
+                // Google Calendar declares PRODUCTIVITY (→ Make); Samsung's declares nothing.
+                "com.samsung.android.calendar",
             ).forEach { put(it, ReachIntent.MAKE) }
             listOf(
                 "com.google.android.youtube",
