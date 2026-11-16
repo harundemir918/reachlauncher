@@ -128,7 +128,10 @@ data class ReachTypography(
                 fontFamily = family,
                 fontWeight = FontWeight(weight),
                 fontSize = size,
-                letterSpacing = tracking,
+                // As a fraction of the font size (em), not sp: the clock auto-sizes down at
+                // 200% font scale, and a fixed −10sp (−5sp × 2) made its digits overlap on a
+                // real device. In em the tracking shrinks with the glyphs. Same at 100%.
+                letterSpacing = (tracking.value / size.value).em,
                 lineHeight = lineHeight,
                 lineHeightStyle = tightLineHeight,
             )

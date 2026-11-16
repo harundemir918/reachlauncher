@@ -141,6 +141,24 @@ class PressSlideReleaseTest {
     }
 
     @Test
+    fun theFanStaysOpenWhileTheTwoFingerSwipeIsAvailable() {
+        // Regression (found on a real device): with the accessibility service on, opening
+        // the fan used to remove the two-finger detector from Home's modifier chain, which
+        // cancelled the held word's gesture — the fan closed the instant it opened.
+        val fixture = HomeFixture(sampleApps)
+        fixture.screenActions.enabled.value = true
+        setContent(fixture)
+        composeRule.waitForIdle()
+        holdWord("Talk")
+
+        fanPill("WhatsApp").assertIsDisplayed()
+        slideTo("Talk", centreOf("WhatsApp"))
+        fanPill("WhatsApp").assertIsSelected()
+        lift("Talk")
+        assertThat(fixture.launcher.launched.map { it.packageName }).containsExactly("pkg.whatsapp")
+    }
+
+    @Test
     fun slidingBackOntoTheWordCancels() {
         val fixture = HomeFixture(sampleApps)
         setContent(fixture)

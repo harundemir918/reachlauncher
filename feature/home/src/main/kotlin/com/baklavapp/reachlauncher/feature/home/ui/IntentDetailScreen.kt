@@ -61,8 +61,9 @@ import com.baklavapp.reachlauncher.feature.home.ShortcutItem
  * Now Playing card, the app list and the intent chips.
  *
  * Flutter analogy: same layout trick as Home — a `SingleChildScrollView` with a min-height
- * child and `spaceBetween`, so the app list and chips sit at the bottom (in thumb reach)
- * when they fit and scroll when they don't. Intents hold tens of apps, not thousands, so a
+ * child and `spaceBetween`, so the app list sits at the bottom (in thumb reach) when it fits
+ * and scrolls when it doesn't. The intent chips are pinned below the scroll area
+ * (≈ a `Column` of `Expanded(child: SingleChildScrollView(…))` and the chips). Intents hold tens of apps, not thousands, so a
  * plain `Column` is fine here; a `LazyColumn` (≈ `ListView.builder`) would only pay off
  * for long lists like All Apps.
  */
@@ -122,7 +123,7 @@ internal fun IntentDetailScreen(
     // Keyed on the intent: switching intents via the chips closes a menu left open.
     var menu by remember(detail.intent) { mutableStateOf<DetailMenu?>(null) }
     Box(modifier = modifier.fillMaxSize()) {
-        BoxWithConstraints(
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -130,34 +131,46 @@ internal fun IntentDetailScreen(
                     // While the menu is open, the list behind it is not reachable by TalkBack.
                     .then(if (menu != null) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
-            Column(
-                modifier =
-                    Modifier
-                        .verticalScroll(rememberScrollState())
-                        .heightIn(min = maxHeight)
-                        .padding(
-                            start = ReachTheme.dimens.gutter,
-                            end = ReachTheme.dimens.gutter,
-                            top = TopPadding,
-                            bottom = BottomPadding,
-                        ),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column {
-                    IntentDetailHeader(appCount = detail.apps.size, onBack = onBack)
-                    DetailTitle(detail.intent, Modifier.padding(top = TitleTopGap))
-                    if (detail.shortcuts.isNotEmpty()) {
-                        Shortcuts(detail.shortcuts, onLaunchShortcut, Modifier.padding(top = SectionTopGap))
+            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    modifier =
+                        Modifier
+                            .verticalScroll(rememberScrollState())
+                            .heightIn(min = maxHeight)
+                            .padding(start = ReachTheme.dimens.gutter, end = ReachTheme.dimens.gutter, top = TopPadding),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        IntentDetailHeader(appCount = detail.apps.size, onBack = onBack)
+                        DetailTitle(detail.intent, Modifier.padding(top = TitleTopGap))
+                        if (detail.shortcuts.isNotEmpty()) {
+                            Shortcuts(detail.shortcuts, onLaunchShortcut, Modifier.padding(top = SectionTopGap))
+                        }
+                        if (detail.intent == ReachIntent.LISTEN && media != null) {
+                            NowPlayingCard(media, mediaCallbacks, Modifier.padding(top = SectionTopGap))
+                        }
                     }
-                    if (detail.intent == ReachIntent.LISTEN && media != null) {
-                        NowPlayingCard(media, mediaCallbacks, Modifier.padding(top = SectionTopGap))
-                    }
-                }
-                Column(modifier = Modifier.padding(top = SectionTopGap)) {
-                    AppList(detail.apps, onLaunch, appMenu, onOpenMenu = { app, move -> menu = DetailMenu(app, move) })
-                    IntentChips(detail.intent, onIntentSelected, Modifier.padding(top = ChipsTopGap))
+                    AppList(
+                        detail.apps,
+                        onLaunch,
+                        appMenu,
+                        onOpenMenu = { app, move -> menu = DetailMenu(app, move) },
+                        modifier = Modifier.padding(top = SectionTopGap),
+                    )
                 }
             }
+            // Pinned below the scrolling list, in thumb reach however many apps the intent
+            // holds (with 60 apps they used to sit at the very end of the scroll).
+            IntentChips(
+                detail.intent,
+                onIntentSelected,
+                Modifier.padding(
+                    start = ReachTheme.dimens.gutter,
+                    end = ReachTheme.dimens.gutter,
+                    top = ChipsTopGap,
+                    bottom = BottomPadding,
+                ),
+            )
         }
         val open = menu
         if (open != null && appMenu != null) {
@@ -262,17 +275,18 @@ private fun AppList(
     onLaunch: (CatalogApp, LaunchOrigin?) -> Unit,
     appMenu: AppMenuCallbacks?,
     onOpenMenu: (CatalogApp, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (apps.isEmpty()) {
         Text(
             text = stringResource(R.string.home_detail_empty),
             style = ReachTheme.typography.body,
             color = ReachTheme.colors.muted,
-            modifier = Modifier.padding(vertical = EmptyPadding),
+            modifier = modifier.padding(vertical = EmptyPadding),
         )
         return
     }
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         apps.forEach { item ->
             key(item.app.key) {
                 val app = item.app

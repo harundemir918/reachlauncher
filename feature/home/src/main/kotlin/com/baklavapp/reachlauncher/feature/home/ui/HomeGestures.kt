@@ -164,13 +164,16 @@ internal fun isTwoFingerSwipeDown(
 internal fun Modifier.screenActionGestures(
     doubleTapEnabled: Boolean,
     twoFingerEnabled: Boolean,
+    suspended: State<Boolean>,
     twoFingerDistancePx: Float,
     onDoubleTap: State<() -> Unit>,
     onTwoFingerSwipeDown: State<() -> Unit>,
 ): Modifier {
     val twoFinger =
         if (twoFingerEnabled) {
-            pointerInput(twoFingerDistancePx) { detectTwoFingerSwipeDown(twoFingerDistancePx) { onTwoFingerSwipeDown.value() } }
+            pointerInput(twoFingerDistancePx) {
+                detectTwoFingerSwipeDown(twoFingerDistancePx, suspended) { onTwoFingerSwipeDown.value() }
+            }
         } else {
             this
         }
@@ -188,8 +191,13 @@ internal fun rememberTwoFingerDistancePx(): Float {
     return remember(density) { with(density) { TwoFingerDistance.toPx() } }
 }
 
+/**
+ * While [suspended] is true (a press-slide-release fan is open) a second finger — a palm, a
+ * grip — is ignored, so it can't steal the fan's pointer stream.
+ */
 private suspend fun PointerInputScope.detectTwoFingerSwipeDown(
     minDistancePx: Float,
+    suspended: State<Boolean>,
     onSwipe: () -> Unit,
 ) {
     awaitEachGesture {
@@ -203,7 +211,7 @@ private suspend fun PointerInputScope.detectTwoFingerSwipeDown(
         do {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val pressed = event.changes.filter { it.pressed }
-            if (pressed.size >= 2) {
+            if (pressed.size >= 2 && (claimed || !suspended.value)) {
                 claimed = true
                 pressed.forEach { starts.getOrPut(it.id) { it.position } }
                 if (!fired && isTwoFingerSwipeDown(pressed.map { it.position - starts.getValue(it.id) }, minDistancePx)) {

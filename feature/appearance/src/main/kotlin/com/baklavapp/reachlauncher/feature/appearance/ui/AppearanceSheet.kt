@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -24,6 +24,8 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -44,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
 import com.baklavapp.reachlauncher.core.designsystem.component.PillButton
 import com.baklavapp.reachlauncher.core.designsystem.component.PillButtonStyle
@@ -88,6 +92,7 @@ private val SwatchSpacing = 10.dp
 private val SelectedBorder = 2.dp
 private val SegmentPadding = 4.dp
 private val SegmentTextPadding = 8.dp
+private val SegmentMinFontSize = 11.sp
 private val SwitchGap = 16.dp
 private const val SCRIM_ALPHA = 0.6f
 
@@ -293,11 +298,16 @@ private fun <T> Segmented(
                         .padding(horizontal = SegmentTextPadding),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
+                // One line that shrinks to fit: a third of a 360dp sheet can't hold "Otomatik"
+                // at 200% font, and wrapping split it mid-word ("Otomati/k").
+                val style = ReachTheme.typography.body.copy(fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                BasicText(
                     text = label(option),
-                    color = if (isSelected) colors.onAccent else colors.fg,
-                    style = ReachTheme.typography.body.copy(fontWeight = FontWeight.SemiBold),
-                    textAlign = TextAlign.Center,
+                    style = style,
+                    color = { if (isSelected) colors.onAccent else colors.fg },
+                    maxLines = 1,
+                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(minFontSize = SegmentMinFontSize, maxFontSize = style.fontSize),
                 )
             }
         }
@@ -336,7 +346,9 @@ private fun Swatch(
     Column(
         modifier =
             Modifier
-                .width(SwatchWidth)
+                // 84dp at normal sizes (spec); wider at large font scales, so a name wraps
+                // between words ("Kâğıt ve / Mürekkep") instead of inside them ("Müre/kkep").
+                .widthIn(min = SwatchWidth, max = SwatchWidth * LocalDensity.current.fontScale.coerceAtLeast(1f))
                 // Min height, not fixed: at 200 % font a two-line name grows the card.
                 .heightIn(min = SwatchMinHeight)
                 .clip(shape)
@@ -394,7 +406,8 @@ private fun SwitchRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(ReachComponentDimens.pillCorner))
+                // No clip: a pill-shaped clip on a two-line row cut off the first letters of
+                // the title and subtitle at the rounded corners.
                 .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
                 .heightIn(min = ReachDimens.minTouchTarget),
         verticalAlignment = Alignment.CenterVertically,

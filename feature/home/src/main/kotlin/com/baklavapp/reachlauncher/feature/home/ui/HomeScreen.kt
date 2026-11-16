@@ -27,8 +27,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -81,6 +83,25 @@ private val PillTopGap = 18.dp
 private const val NOW_ROW_SLOTS = 3
 
 /**
+ * Below this viewport height Home tightens up (smaller clock, smaller gaps) so the words and
+ * the pill still fit without scrolling. A 360×800dp phone has ~726dp left
+ * after the system bars, and the full-size layout needed ~790dp: the pill sat below the fold.
+ */
+private val CompactHeight = 780.dp
+private val CompactTopPadding = 4.dp
+private val CompactNowTopGap = 14.dp
+private val CompactPillTopGap = 10.dp
+
+/**
+ * Above this font scale the three Now tiles stack as full-width rows: a third of the width
+ * can't hold a word like "Instagram" at 200%, and Compose would break it mid-word.
+ */
+internal const val STACK_NOW_FONT_SCALE = 1.3f
+
+/** Opacity of the date, clock and Now row while the press-slide-release fan is open. */
+private const val FAN_BACKDROP_ALPHA = 0.25f
+
+/**
  * Stateless Home content.
  *
  * @param catalogLoaded false until the catalog's first emission: the intent rows then show
@@ -123,6 +144,7 @@ internal fun HomeScreen(
     val onLock = rememberUpdatedState(gestureCallbacks.onLock)
     val onOpenNotifications = rememberUpdatedState(gestureCallbacks.onOpenNotifications)
     val twoFingerDistancePx = rememberTwoFingerDistancePx()
+    val fanOpen = rememberUpdatedState(heldIntent != null)
     val reading by rememberWallClock()
     val scroll = rememberScrollState()
     val reducedMotion = rememberReducedMotion()
@@ -139,28 +161,39 @@ internal fun HomeScreen(
                 .fillMaxSize()
                 .screenActionGestures(
                     doubleTapEnabled = system.gestures.doubleTapToLock,
-                    // Not while a press-slide-release fan is open: a second finger (a palm, a
-                    // grip) must not steal the fan's pointer stream.
-                    twoFingerEnabled = system.gestures.twoFingerSwipe && heldIntent == null,
+                    twoFingerEnabled = system.gestures.twoFingerSwipe,
+                    // Read inside the detector, not used to remove it: changing Home's modifier
+                    // chain while a word is held cancels that word's gesture (the fan closed
+                    // the instant it opened on a real device).
+                    suspended = fanOpen,
                     twoFingerDistancePx = twoFingerDistancePx,
                     onDoubleTap = onLock,
                     onTwoFingerSwipeDown = onOpenNotifications,
                 ).nestedScroll(swipe)
                 .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
+        val compact = maxHeight < CompactHeight
         Column(
             modifier =
                 Modifier
                     // No overscroll stretch: pulling past the edge means "open Search", not "bounce".
                     .verticalScroll(scroll, overscrollEffect = null)
                     .heightIn(min = maxHeight)
-                    .padding(start = ReachTheme.dimens.gutter, end = ReachTheme.dimens.gutter, top = TopPadding, bottom = BottomPadding),
+                    .padding(
+                        start = ReachTheme.dimens.gutter,
+                        end = ReachTheme.dimens.gutter,
+                        top = if (compact) CompactTopPadding else TopPadding,
+                        bottom = BottomPadding,
+                    ),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column {
+            // While the fan is open, everything above the words steps back (like the
+            // inactive words do): a tall fan reaches up over the Now tiles and the clock,
+            // and full-strength text behind the pills made both hard to read.
+            Column(modifier = Modifier.alpha(if (heldIntent != null) FAN_BACKDROP_ALPHA else 1f)) {
                 Column(verticalArrangement = Arrangement.spacedBy(DateClockGap)) {
                     HomeDateLine(reading)
-                    HomeClock(reading, onOpenAppearance = onAppearance)
+                    HomeClock(reading, onOpenAppearance = onAppearance, compact = compact)
                     // Context line (spec §6.3 item 3): hidden without an event or calendar permission.
                     system.nextEvent?.let { HomeContextLine(it, reading) }
                 }
@@ -169,20 +202,21 @@ internal fun HomeScreen(
                     key(card) { OnboardingCardView(card, onboardingCallbacks, Modifier.padding(top = CardTopGap)) }
                 }
                 if (catalogLoaded && now.isNotEmpty()) {
-                    NowRow(now, onLaunch, Modifier.padding(top = NowTopGap))
+                    NowRow(now, onLaunch, Modifier.padding(top = if (compact) CompactNowTopGap else NowTopGap))
                 }
             }
             Column {
                 IntentWords(intents, catalogLoaded, thumbSide, onIntentSelected, wordModifier, heldIntent, system.media, mediaCallbacks)
                 val pillActions = homePillActions(system.gestures, onAllApps, gestureCallbacks)
+                val pillTopGap = if (compact) CompactPillTopGap else PillTopGap
                 if (heldIntent != null) {
-                    FanHint(Modifier.padding(top = PillTopGap))
+                    FanHint(Modifier.padding(top = pillTopGap))
                 } else {
                     SearchPill(
                         onClick = onSearch,
                         modifier =
                             Modifier
-                                .padding(top = PillTopGap)
+                                .padding(top = pillTopGap)
                                 // Home's gestures without a visible tap alternative (spec §6.10):
                                 // swipe-up, and — when they can work — double-tap to lock and the
                                 // two-finger swipe, as TalkBack actions on the pill.
@@ -245,6 +279,22 @@ private fun NowRow(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(NowLabelGap)) {
         MonoLabel(text = stringResource(R.string.home_now_label), modifier = Modifier.semantics { heading() })
+        if (LocalDensity.current.fontScale > STACK_NOW_FONT_SCALE) {
+            Column(verticalArrangement = Arrangement.spacedBy(ReachComponentDimens.nowTileSpacing)) {
+                now.take(NOW_ROW_SLOTS).forEach { item ->
+                    key(item.app.key) {
+                        val origin = rememberLaunchOrigin()
+                        NowTile(
+                            appLabel = item.app.label,
+                            reasonLabel = reasonLabel(item.reason),
+                            onClick = { onLaunch(item.app, origin.toLaunchOrigin()) },
+                            modifier = Modifier.fillMaxWidth().trackLaunchOrigin(origin),
+                        )
+                    }
+                }
+            }
+            return@Column
+        }
         // IntrinsicSize.Min + fillMaxHeight: all tiles as tall as the tallest one when a
         // label wraps at large font sizes (≈ IntrinsicHeight + CrossAxisAlignment.stretch).
         Row(

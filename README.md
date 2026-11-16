@@ -375,7 +375,7 @@ data flows are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 | [`docs/ANDROID_APIS.md`](docs/ANDROID_APIS.md) | Every Android API and permission used, why, how it's granted, what happens without it, Play notes (v5) |
 | [`docs/FLUTTER_TO_COMPOSE.md`](docs/FLUTTER_TO_COMPOSE.md) | Flutter → Compose/Android mapping with real code from the repo (v6) |
 | [`docs/GESTURES.md`](docs/GESTURES.md) | Press-slide-release, the letter rail, Home swipes, double-tap and two-finger swipe, and the clock long-press, step by step: pointer passes, consumption vs. the gesture arena, and how the tests drive them |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D71) |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADR-style log of non-obvious choices and spec deviations (D1–D73) |
 | [`docs/PLAN.md`](docs/PLAN.md) | Module layout, dependency rules, contracts, milestones, carried-over notes |
 | [`docs/reach-launcher-prompt.md`](docs/reach-launcher-prompt.md) | The full product and design spec (source of truth) |
 | [`PRIVACY.md`](PRIVACY.md) | Plain-language privacy policy for the Play listing |

@@ -2,6 +2,7 @@ package com.baklavapp.reachlauncher
 
 import android.app.Activity
 import android.content.res.Configuration
+import android.graphics.PixelFormat
 import android.os.Build
 import android.view.WindowManager
 import androidx.annotation.RequiresApi
@@ -74,8 +75,15 @@ class ReachWindow(
     private var blurEnabled = false
     private val blurListener = Consumer<Boolean> { enabled -> onBlurEnabledChanged(enabled) }
 
-    /** Call from `onCreate`, after `super.onCreate`, so blur availability is tracked. */
+    /** Call from `onCreate`, after `super.onCreate` and before `setContent`. */
     fun start() {
+        // The window's surface is created opaque or translucent once, from the window format
+        // at creation. An opaque start (wallpaper mode off) made a later live switch to
+        // wallpaper mode show nothing on a real device (Android 13): the flag
+        // was set and Reach was the wallpaper target, but the surface stayed opaque. So the
+        // surface is always translucent; the opaque palette background makes it look the
+        // same, at the cost of the compositor blending one full-screen layer (D72).
+        activity.window.setFormat(PixelFormat.TRANSLUCENT)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) registerBlurListener()
     }
 

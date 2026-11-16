@@ -727,3 +727,43 @@ how they get the Activity, and the gain is a few lines — left for later.
   which is off by default; drop it if Play review asks. The release build still falls back
   to unsigned/debug signing without `keystore.properties` (local builds must work); the
   Play upload is a manual, signed step.
+
+## D72 — Fixes from testing on a real device (Android 13) and a Pixel 10 Pro emulator
+Found by driving the release-candidate build on devices; none of these showed up in
+Robolectric.
+- **The fan never appeared (regression from D71).** D71 removed the two-finger detector from
+  Home's modifier chain while a fan was open. Changing an ancestor's pointer-input chain under
+  a held finger cancels that finger's gesture, so the fan closed the instant it opened. The
+  detector now stays installed and reads a `suspended` state (fan open) instead.
+  `PressSlideReleaseTest.theFanStaysOpenWhileTheTwoFingerSwipeIsAvailable` covers it.
+- **Wallpaper mode only worked if Reach started with it on.** A window whose surface is created
+  opaque stays opaque: turning `FLAG_SHOW_WALLPAPER` on later made Reach the wallpaper target
+  but nothing showed through. `ReachWindow.start()` now always requests a translucent format
+  (`PixelFormat.TRANSLUCENT`); in opaque mode the palette-coloured window background makes
+  it look the same.
+- **Home didn't fit a 360×800dp phone.** The search pill was below the fold. Below 780dp of
+  viewport Home uses a compact layout (84sp clock, smaller gaps).
+- **Mid-word line breaks.** Turkish "SON KULLANILAN" broke inside the word in a Now tile; at
+  200% font "Instagram", "Otomatik", "Mürekkep" and the search pill's "Yazıp aç" did too.
+  Fixes: the TR label became "son açılan"; Now tiles stack as full-width rows above 1.3×
+  font scale; the pill's "OR PULL DOWN" and the top search result's "ENTER" hint give way
+  above 1.3×; segmented-control labels are one auto-sized line; palette swatches may widen
+  with the font scale (84dp at 1×, as specified).
+- **Display-type tracking is in em, not sp.** The clock auto-sizes down at 200%, but a fixed
+  −10sp tracking (−5sp × 2) made its digits overlap. Converting each role's tracking to em
+  keeps 1× identical and scales with the glyphs.
+- **Smaller fixes.** Switch rows in the Appearance sheet no longer clip their first letters
+  (the pill-shaped clip cut the corners of a two-line row). The TR fan hint is shorter so it
+  fits on one line. While the fan is open, the date, clock and Now row fade to 25%: a tall fan
+  overlaps them. Intent chips in intent detail are pinned below the scrolling app list, so
+  they stay in thumb reach for intents with many apps.
+
+## D73 — Well-known apps override their declared category
+On real devices the spec's category table (§6.1) put Chrome, Clock, Gmail, Google and the
+Play Store into Make (they declare `PRODUCTIVITY`) and Samsung's Gallery into Tools (no
+category). `IntentCategorizer` now checks a short table of well-known packages (Google, AOSP
+and Samsung system apps, common messengers, browsers and media apps) after the dialer/SMS
+roles and before the category: browsers, clock, calculator, store, files and settings →
+Tools; mail and messengers → Talk; camera, gallery and notes → Make; and so on. Only the
+automatic intent changes (it is recomputed on every catalog sync); a user's "Move to…" still
+wins. Deviation from spec §6.1, which lists the category table only.

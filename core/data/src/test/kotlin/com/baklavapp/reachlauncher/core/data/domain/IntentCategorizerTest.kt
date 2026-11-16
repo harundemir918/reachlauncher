@@ -43,4 +43,22 @@ class IntentCategorizerTest {
     fun `role holders only affect their own package`() {
         assertThat(categorize(AppCategory.GAME, roles = setOf("com.android.dialer"))).isEqualTo(ReachIntent.PLAY)
     }
+
+    @Test
+    fun `well-known apps override their declared category (D73)`() {
+        // What real devices actually declare: Chrome, Clock and Gmail say PRODUCTIVITY.
+        assertThat(IntentCategorizer.categorize(AppCategory.PRODUCTIVITY, "com.android.chrome", emptySet())).isEqualTo(ReachIntent.TOOLS)
+        assertThat(
+            IntentCategorizer.categorize(AppCategory.PRODUCTIVITY, "com.google.android.deskclock", emptySet()),
+        ).isEqualTo(ReachIntent.TOOLS)
+        assertThat(IntentCategorizer.categorize(AppCategory.PRODUCTIVITY, "com.google.android.gm", emptySet())).isEqualTo(ReachIntent.TALK)
+        assertThat(IntentCategorizer.categorize(AppCategory.UNDEFINED, "com.sec.android.gallery3d", emptySet())).isEqualTo(ReachIntent.MAKE)
+    }
+
+    @Test
+    fun `the default dialer or SMS role still beats the table`() {
+        assertThat(
+            IntentCategorizer.categorize(AppCategory.UNDEFINED, "com.android.chrome", setOf("com.android.chrome")),
+        ).isEqualTo(ReachIntent.TALK)
+    }
 }

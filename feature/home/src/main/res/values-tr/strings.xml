@@ -10,7 +10,7 @@
         <item quantity="one">%d okunmamış</item>
         <item quantity="other">%d okunmamış</item>
     </plurals>
-    <string name="home_now_reason_recent">son kullanılan</string>
+    <string name="home_now_reason_recent">son açılan</string>
 
     <string name="home_all_apps_action">Tüm uygulamalar</string>
 
@@ -22,7 +22,7 @@
     <string name="home_accent_from_wallpaper">vurgu duvar kağıdından</string>
 
     <!-- Press-slide-release: hint shown in the search pill's place while the fan is open (shown upper-cased in mono). -->
-    <string name="home_fan_hint">açmak için bırak · iptal için kaydır</string>
+    <string name="home_fan_hint">bırak: aç · geri kaydır: iptal</string>
 
     <!-- Context line under the clock (spec §6.3): the next calendar event. %1$s is a time ("10:30"), %2$s the event title. -->
     <string name="home_event_today_timed">%1$s · %2$s</string>

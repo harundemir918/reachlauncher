@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -34,7 +35,8 @@ import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
  * "OR PULL DOWN". It fills the available width.
  *
  * TalkBack: "Type to launch, button, double-tap to search apps, contacts and actions".
- * At 200% font size the texts wrap and the pill grows taller instead of clipping.
+ * At large font sizes the hint is dropped: next to it "Type to launch" was squeezed to one
+ * letter per line on a 360dp-wide phone. The label then has the whole pill.
  *
  * @param showHint false hides "OR PULL DOWN" (e.g. in All Apps, where pulling down doesn't search).
  */
@@ -69,9 +71,14 @@ fun SearchPill(
             modifier = Modifier.size(ReachComponentDimens.searchPillIconSize),
         )
         Text(text = label, style = ReachTheme.typography.button, color = colors.fg, modifier = Modifier.weight(1f))
-        if (showHint) MonoLabel(text = stringResource(R.string.ds_search_pill_hint))
+        if (showHint && LocalDensity.current.fontScale <= HINT_MAX_FONT_SCALE) {
+            MonoLabel(text = stringResource(R.string.ds_search_pill_hint), maxLines = 1)
+        }
     }
 }
+
+/** Above this font scale there is no room for "OR PULL DOWN" beside the label. */
+private const val HINT_MAX_FONT_SCALE = 1.3f
 
 @Preview(name = "Search pill", widthDp = 390)
 @Composable

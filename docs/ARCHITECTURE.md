@@ -3,7 +3,7 @@
 **v5 (M5).** Describes the code as it is at the end of milestone M5 ("Polish": the optional
 accessibility service behind a `ScreenActionsHub`, private space, the `:baselineprofile` module,
 whole-app R8). No `Unavailable…` stub is left: every system source has a real implementation. The product spec is [`reach-launcher-prompt.md`](reach-launcher-prompt.md); the
-reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D71); the Flutter →
+reasons behind the choices are in [`DECISIONS.md`](DECISIONS.md) (D1–D73); the Flutter →
 Compose vocabulary is in [`FLUTTER_TO_COMPOSE.md`](FLUTTER_TO_COMPOSE.md); custom touch
 handling is explained in [`GESTURES.md`](GESTURES.md).
 

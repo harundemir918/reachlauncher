@@ -34,6 +34,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -336,11 +337,16 @@ private fun ResultRow(
                 )
             }
         }
-        if (isTop) {
+        // The visual "ENTER ↵" hint gives way at large font sizes: beside it the app name was
+        // squeezed into "Instagr/am". TalkBack still hears it (it's in the description).
+        if (isTop && LocalDensity.current.fontScale <= ENTER_HINT_MAX_FONT_SCALE) {
             MonoLabel(text = stringResource(R.string.search_enter_hint), color = colors.onAccent, maxLines = 1)
         }
     }
 }
+
+/** Above this font scale the top result drops its "ENTER" hint (see [ResultRow]). */
+private const val ENTER_HINT_MAX_FONT_SCALE = 1.3f
 
 /** Inline call / message / contact-card pills under an expanded contact. */
 @Composable
