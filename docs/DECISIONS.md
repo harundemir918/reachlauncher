@@ -842,3 +842,21 @@ The owner never used app shortcuts and asked for the apps they use most instead.
   "WhatsApp" smaller than "X" and the names sat at uneven heights (real phone, Spanish); slots aren't clipped, which cut the first and last letters. Above 1.3×
   the editor puts move/remove under the name ("Messag/es" wrapped mid-word). Disabled arrows
   are drawn at 30 % so the first/last favourite doesn't look movable.
+
+## D77 — Tapping a media player opens its app
+- **Where:** the Listen row's inline player on Home (the title and "PLAYING · APP" text, not
+  the play button) and the source/title area of Listen's Now Playing card (not the transport
+  buttons). TalkBack: "double-tap to open YouTube Music".
+- **What opens:** the session's own `sessionActivity` (the screen the app wants a tap on its
+  player to open, usually "now playing"), else the package's launch intent. It animates from
+  the tapped player like an app launch, and Reach returns to Home like after any launch; if
+  nothing can be opened, the usual "Couldn't open <app>" message shows.
+- **Android 14+:** the session's PendingIntent belongs to the media app, so Reach (the
+  foreground sender) opts in with `setPendingIntentBackgroundActivityStartMode`
+  (`ALLOW_IF_VISIBLE` on 16+, `ALLOWED` on 14–15); without it the system silently blocks it.
+- Not recorded in launch history: it isn't a choice among apps, and the session's package
+  may not map to one launcher activity.
+- **No rounded clip on the tap targets:** the text starts at the edge and the clip cut the
+  first letter ("ake Me There"), as with the favourite names (D76).
+- Tested on a Samsung phone (Android 13) with a paused YouTube Music session: both taps open
+  YouTube Music and playback stays paused.

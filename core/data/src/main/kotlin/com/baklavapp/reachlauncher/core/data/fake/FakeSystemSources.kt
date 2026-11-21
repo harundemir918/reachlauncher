@@ -156,8 +156,17 @@ class FakeMediaSessionSource : MediaSessionSource {
     val state = MutableStateFlow<MediaState?>(null)
     override val mediaState: Flow<MediaState?> = state
 
-    /** Transport commands received, in order ("playPause", "next", "previous"). */
+    /** Transport commands received, in order ("playPause", "next", "previous", "open"). */
     val commands = mutableListOf<String>()
+
+    /** What [openApp] answers while a session is shown. */
+    var openSucceeds = true
+
+    override fun openApp(origin: LaunchOrigin?): Boolean {
+        if (state.value == null) return false
+        commands += "open"
+        return openSucceeds
+    }
 
     override fun playPause() {
         commands += "playPause"

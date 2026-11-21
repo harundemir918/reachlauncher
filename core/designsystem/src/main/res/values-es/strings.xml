@@ -39,6 +39,7 @@
     <string name="ds_next_track">Pista siguiente</string>
     <string name="ds_media_playing">sonando · %1$s</string>
     <string name="ds_media_paused">en pausa · %1$s</string>
+    <string name="ds_media_open">abrir %1$s</string>
 
     <string name="ds_app_menu_open">Opciones de la app</string>
     <string name="ds_app_menu_app_info">Información de la app</string>

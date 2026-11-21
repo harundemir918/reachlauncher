@@ -1,6 +1,8 @@
 package com.baklavapp.reachlauncher.feature.home
 
+import app.cash.turbine.test
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
+import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.core.model.SystemScreen
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +55,33 @@ class HomeViewModelSystemTest {
 
             f.media.state.value = null
             assertThat(f.system.media).isNull()
+        }
+
+    @Test
+    fun `tapping the player opens the playing app and returns to Home`() =
+        runTest {
+            val f = HomeFixture(sampleApps)
+            subscribe(f)
+            f.media.state.value = dailyMix
+            f.viewModel.onIntentSelected(ReachIntent.LISTEN)
+            f.viewModel.onOpenMediaApp(origin = null)
+            assertThat(f.media.commands).containsExactly("open")
+            assertThat(f.surface).isEqualTo(HomeSurface.Home)
+        }
+
+    @Test
+    fun `a player that can't be opened names the app and stays put`() =
+        runTest {
+            val f = HomeFixture(sampleApps)
+            subscribe(f)
+            f.media.state.value = dailyMix
+            f.media.openSucceeds = false
+            f.viewModel.onIntentSelected(ReachIntent.LISTEN)
+            f.viewModel.events.test {
+                f.viewModel.onOpenMediaApp(origin = null)
+                assertThat(awaitItem()).isEqualTo(HomeEvent.LaunchFailed("Spotify"))
+            }
+            assertThat(f.surface).isEqualTo(HomeSurface.IntentDetail(ReachIntent.LISTEN))
         }
 
     @Test

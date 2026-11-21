@@ -51,6 +51,8 @@
     <!-- Status under the track title on the Listen row: "PLAYING · SPOTIFY". %1$s is the app name. -->
     <string name="ds_media_playing">playing · %1$s</string>
     <string name="ds_media_paused">paused · %1$s</string>
+    <!-- TalkBack: "double-tap to open Spotify" on the player's title. -->
+    <string name="ds_media_open">open %1$s</string>
 
     <!-- App long-press menu (AppActionsMenu), shared by All Apps and intent detail.
          ds_app_menu_open is the long-press verb TalkBack announces: "double-tap and hold to app options". -->

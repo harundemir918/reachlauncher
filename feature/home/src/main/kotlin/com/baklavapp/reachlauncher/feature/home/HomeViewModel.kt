@@ -210,6 +210,21 @@ class HomeViewModel
         fun onSkipPrevious() = mediaSessionSource.skipToPrevious()
 
         /**
+         * Tap on the Listen row's player or the Now Playing card: open the app that is playing,
+         * animating from [origin]. Like an app launch, Reach then returns to Home; if the app
+         * can't be opened, the usual "Couldn't open" message names it.
+         */
+        fun onOpenMediaApp(origin: LaunchOrigin?) {
+            val label = system.value.media?.sourceLabel
+            if (mediaSessionSource.openApp(origin)) {
+                _fan.value = null
+                _surface.value = HomeSurface.Home
+            } else if (label != null) {
+                eventChannel.trySend(HomeEvent.LaunchFailed(label))
+            }
+        }
+
+        /**
          * The primary button of an onboarding [card]. Special accesses and the home role are
          * granted in system screens, so this only opens them; the card disappears by itself
          * when the user comes back with access on. If the system screen doesn't exist on this

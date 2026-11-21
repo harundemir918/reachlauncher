@@ -225,7 +225,10 @@ private fun HomeSurfaces(
     // Media / calendar / onboarding: collected here, not in HomeFrame, so a track change
     // never counts as a new frame for the surface transition.
     val system by viewModel.system.collectAsStateWithLifecycle()
-    val mediaCallbacks = remember(viewModel) { MediaCallbacks(viewModel::onPlayPause, viewModel::onSkipNext, viewModel::onSkipPrevious) }
+    val mediaCallbacks =
+        remember(
+            viewModel,
+        ) { MediaCallbacks(viewModel::onPlayPause, viewModel::onSkipNext, viewModel::onSkipPrevious, viewModel::onOpenMediaApp) }
     val onboardingCallbacks =
         remember(viewModel) {
             OnboardingCallbacks(viewModel::onOnboardingAction, viewModel::onOnboardingDismissed, viewModel::onCalendarPermissionResult)

@@ -50,9 +50,11 @@ import com.baklavapp.reachlauncher.core.designsystem.component.PlayPauseButton
 import com.baklavapp.reachlauncher.core.designsystem.component.ReachComponentDimens
 import com.baklavapp.reachlauncher.core.designsystem.component.SkipNextButton
 import com.baklavapp.reachlauncher.core.designsystem.component.SkipPreviousButton
+import com.baklavapp.reachlauncher.core.designsystem.component.reachClickable
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
 import com.baklavapp.reachlauncher.core.designsystem.util.rememberReducedMotion
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
+import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.MediaState
 import com.baklavapp.reachlauncher.feature.home.OnboardingCard
 import com.baklavapp.reachlauncher.feature.home.R
@@ -62,6 +64,7 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import com.baklavapp.reachlauncher.core.designsystem.R as DsR
 
 /*
  * The M3 "system" pieces of Home and Listen detail: the calendar context line, the
@@ -80,16 +83,20 @@ private val ButtonGap = 8.dp
 private val ProgressHeight = 4.dp
 private const val TICK_MILLIS = 1_000L
 
-/** The media transport callbacks (`HomeViewModel.onPlayPause` …), bundled for short signatures. */
+/**
+ * The media callbacks (`HomeViewModel.onPlayPause` …), bundled for short signatures.
+ * [onOpen] opens the playing app from the tapped player's bounds.
+ */
 @Immutable
 internal data class MediaCallbacks(
     val onPlayPause: () -> Unit,
     val onNext: () -> Unit,
     val onPrevious: () -> Unit,
+    val onOpen: (LaunchOrigin?) -> Unit,
 ) {
     companion object {
         /** No-op callbacks, for previews and screens without media. */
-        val None = MediaCallbacks({}, {}, {})
+        val None = MediaCallbacks({}, {}, {}, {})
     }
 }
 
@@ -244,7 +251,8 @@ private fun OnboardingCard.texts(): CardTexts =
 
 /**
  * Listen's Now Playing card (spec §6.4): source app, title (and artist), a progress bar and
- * previous / play-pause / next.
+ * previous / play-pause / next. Tapping the source and title opens the playing app
+ * ([MediaCallbacks.onOpen]); the buttons keep their own jobs.
  *
  * Progress is extrapolated from the session's last report ([progressAt]) and re-evaluated
  * once a second — only while playing *and* while the screen is at least STARTED
@@ -271,22 +279,35 @@ internal fun NowPlayingCard(
             }
         }
     }
+    val origin = rememberLaunchOrigin()
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
+                .trackLaunchOrigin(origin)
                 .background(colors.surface, shape)
                 .padding(CardPadding),
         verticalArrangement = Arrangement.spacedBy(CardGap),
     ) {
-        MonoLabel(
-            // "Paused · YouTube Music" while paused, like the Home row (it said "now playing").
-            text = stringResource(if (media.isPlaying) R.string.home_now_playing else R.string.home_now_paused, media.sourceLabel),
-            modifier = Modifier.semantics { heading() },
-        )
-        Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
-            Text(text = media.title, style = ReachTheme.typography.body.copy(fontWeight = FontWeight.SemiBold), color = colors.fg)
-            media.artist?.let { Text(text = it, style = ReachTheme.typography.caption, color = colors.muted) }
+        // Source and title are one tap target (and one TalkBack stop) that opens the app.
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .reachClickable(
+                        onClick = { callbacks.onOpen(origin.toLaunchOrigin()) },
+                        onClickLabel = stringResource(DsR.string.ds_media_open, media.sourceLabel),
+                    ),
+            verticalArrangement = Arrangement.spacedBy(CardGap),
+        ) {
+            MonoLabel(
+                // "Paused · YouTube Music" while paused, like the Home row (it said "now playing").
+                text = stringResource(if (media.isPlaying) R.string.home_now_playing else R.string.home_now_paused, media.sourceLabel),
+            )
+            Column {
+                Text(text = media.title, style = ReachTheme.typography.body.copy(fontWeight = FontWeight.SemiBold), color = colors.fg)
+                media.artist?.let { Text(text = it, style = ReachTheme.typography.caption, color = colors.muted) }
+            }
         }
         media.progressAt(now)?.let { fraction ->
             val position = formatMediaTime((fraction * media.durationMillis).toLong())

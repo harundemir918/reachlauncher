@@ -35,6 +35,7 @@
     <string name="ds_next_track">Sonraki parça</string>
     <string name="ds_media_playing">çalıyor · %1$s</string>
     <string name="ds_media_paused">duraklatıldı · %1$s</string>
+    <string name="ds_media_open">%1$s uygulamasını aç</string>
 
     <string name="ds_app_menu_open">Uygulama seçenekleri</string>
     <string name="ds_app_menu_app_info">Uygulama bilgisi</string>

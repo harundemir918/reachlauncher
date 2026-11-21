@@ -138,6 +138,15 @@ interface MediaSessionSource {
 
     /** Skips to the previous track; no-op without a session. */
     fun skipToPrevious()
+
+    /**
+     * Opens the app that owns the shown session, animating from [origin] when given: the
+     * screen the app registered for its session (usually its player), else the app's launch
+     * screen.
+     *
+     * @return false when there is no session or neither could be started.
+     */
+    fun openApp(origin: LaunchOrigin?): Boolean
 }
 
 /**

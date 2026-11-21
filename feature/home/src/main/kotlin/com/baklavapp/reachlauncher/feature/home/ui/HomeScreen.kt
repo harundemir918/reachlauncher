@@ -411,11 +411,15 @@ private fun IntentWords(
                 extraContent =
                     if (media != null && summary.intent == ReachIntent.LISTEN && heldIntent == null) {
                         {
+                            val origin = rememberLaunchOrigin()
                             InlineMediaControl(
                                 trackTitle = media.title,
                                 appLabel = media.sourceLabel,
                                 isPlaying = media.isPlaying,
                                 onTogglePlay = mediaCallbacks.onPlayPause,
+                                // Tapping the title opens the playing app, from the player's bounds.
+                                onOpen = { mediaCallbacks.onOpen(origin.toLaunchOrigin()) },
+                                modifier = Modifier.trackLaunchOrigin(origin),
                             )
                         }
                     } else {

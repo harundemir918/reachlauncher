@@ -1,16 +1,25 @@
 package com.baklavapp.reachlauncher.core.system.media
 
+import android.app.Activity
+import android.app.ActivityOptions
+import android.app.PendingIntent
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.getSystemService
 import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
+import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.MediaState
+import com.baklavapp.reachlauncher.core.system.ActivityTracker
 import com.baklavapp.reachlauncher.core.system.notifications.NotificationAccess
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +60,12 @@ import javax.inject.Singleton
  * **Commands** go to the controller of the session currently shown, through
  * `MediaController.TransportControls`. Without a shown session (or access) they do nothing.
  *
+ * **Opening the app** sends the session's own `sessionActivity` (the screen the app wants
+ * a tap on its player to open, typically "now playing"), else starts the package's launch
+ * intent. That PendingIntent belongs to the media app, so since Android 14 the sender (Reach,
+ * in the foreground) must explicitly lend it the right to start an activity, or the system
+ * silently blocks it.
+ *
  * Flutter analogy: the native side of an `audio_service`-style "remote control" plugin: an
  * `EventChannel` stream of now-playing state plus fire-and-forget method calls.
  */
@@ -61,6 +76,7 @@ class MediaSessionsSource
     constructor(
         @param:ApplicationContext private val context: Context,
         private val access: NotificationAccess,
+        private val tracker: ActivityTracker,
     ) : MediaSessionSource {
         /** The controller of the session currently emitted; main thread writes, any thread reads. */
         @Volatile
@@ -183,6 +199,65 @@ class MediaSessionsSource
         override fun skipToNext() = command { it.transportControls.skipToNext() }
 
         override fun skipToPrevious() = command { it.transportControls.skipToPrevious() }
+
+        override fun openApp(origin: LaunchOrigin?): Boolean {
+            val controller = shown ?: return false
+            val activity = tracker.resumedActivity
+            val options = launchOptions(activity, origin)
+            val session =
+                try {
+                    controller.sessionActivity
+                } catch (e: IllegalStateException) {
+                    null
+                } catch (e: SecurityException) {
+                    null
+                }
+            if (session != null) {
+                try {
+                    session.send(activity ?: context, 0, null, null, null, null, options)
+                    return true
+                } catch (e: PendingIntent.CanceledException) {
+                    // The app cancelled it: fall back to its launch screen.
+                }
+            }
+            val launch = context.packageManager.getLaunchIntentForPackage(controller.packageName) ?: return false
+            return try {
+                if (activity != null) {
+                    activity.startActivity(launch, options)
+                } else {
+                    context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options)
+                }
+                true
+            } catch (e: ActivityNotFoundException) {
+                false
+            } catch (e: SecurityException) {
+                false
+            }
+        }
+
+        /**
+         * The clip-reveal animation from [origin] (as `SystemAppLauncher` does), plus, on
+         * Android 14+, the opt-in that lets the media app's PendingIntent start its activity.
+         */
+        private fun launchOptions(
+            activity: Activity?,
+            origin: LaunchOrigin?,
+        ): Bundle {
+            val decorView = activity?.window?.decorView
+            val options =
+                if (decorView != null && origin != null) {
+                    ActivityOptions.makeClipRevealAnimation(decorView, origin.left, origin.top, origin.width, origin.height)
+                } else {
+                    ActivityOptions.makeBasic()
+                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                @Suppress("DEPRECATION")
+                options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+            }
+            return options.toBundle()
+        }
 
         /** Runs [block] on the shown session; a session that died meanwhile is ignored. */
         private inline fun command(block: (MediaController) -> Unit) {

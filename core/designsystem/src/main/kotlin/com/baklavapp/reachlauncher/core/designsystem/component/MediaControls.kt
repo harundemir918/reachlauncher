@@ -3,6 +3,7 @@ package com.baklavapp.reachlauncher.core.designsystem.component
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -99,6 +100,8 @@ fun SkipNextButton(
  * available: the button's label carries the full title).
  *
  * @param appLabel the media app's name, natural case ("Spotify"); shown upper-cased.
+ * @param onOpen tap on the title: open the playing app. TalkBack hears "double-tap to open
+ *   Spotify". Null = the title is not tappable.
  */
 @Composable
 fun InlineMediaControl(
@@ -107,7 +110,9 @@ fun InlineMediaControl(
     isPlaying: Boolean,
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpen: (() -> Unit)? = null,
 ) {
+    val openLabel = stringResource(R.string.ds_media_open, appLabel)
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -119,8 +124,23 @@ fun InlineMediaControl(
             trackTitle = trackTitle,
             size = ReachComponentDimens.inlinePlayButtonSize,
         )
-        // One TalkBack stop for "Daily Mix 1, playing · Spotify".
-        Column(modifier = Modifier.weight(1f, fill = false).semantics(mergeDescendants = true) {}) {
+        // One TalkBack stop for "Daily Mix 1, playing · Spotify" (a clickable merges its children).
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f, fill = false)
+                    .then(
+                        if (onOpen != null) {
+                            // No rounded clip: the text starts at the edge and a clip cut its first letter.
+                            Modifier
+                                .reachClickable(onClick = onOpen, onClickLabel = openLabel)
+                                .heightIn(min = ReachDimens.minTouchTarget)
+                        } else {
+                            Modifier.semantics(mergeDescendants = true) {}
+                        },
+                    ),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Text(
                 text = trackTitle,
                 style = ReachTheme.typography.caption.copy(fontWeight = FontWeight.SemiBold),

@@ -66,19 +66,20 @@ class AccessGatedSourcesTest {
     @Test
     fun `media state is null without notification access`() =
         runTest {
-            val source = MediaSessionsSource(app, access)
+            val source = MediaSessionsSource(app, access, ActivityTracker(AccessRechecks()))
             assertThat(source.mediaState.first()).isNull()
             // Commands without a session are no-ops, not crashes.
             source.playPause()
             source.skipToNext()
             source.skipToPrevious()
+            assertThat(source.openApp(origin = null)).isFalse()
         }
 
     @Test
     fun `media state stays null with access but no sessions`() =
         runTest {
             enableListener()
-            val source = MediaSessionsSource(app, access)
+            val source = MediaSessionsSource(app, access, ActivityTracker(AccessRechecks()))
             assertThat(source.mediaState.first()).isNull()
         }
 
