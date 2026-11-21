@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.baklavapp.reachlauncher.core.data.di.DefaultDispatcher
 import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
+import com.baklavapp.reachlauncher.core.data.repository.FavoritesRepository
 import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
@@ -13,10 +14,9 @@ import com.baklavapp.reachlauncher.core.data.source.HomeRoleSource
 import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
-import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
-import com.baklavapp.reachlauncher.core.model.AppShortcut
+import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.AppearanceSettings
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
@@ -90,7 +90,7 @@ class HomeViewModel
         predictionRepository: PredictionRepository,
         private val settingsRepository: SettingsRepository,
         notificationCountSource: NotificationCountSource,
-        shortcutSource: ShortcutSource,
+        private val favoritesRepository: FavoritesRepository,
         private val launchApp: LaunchApp,
         private val homeRoleSource: HomeRoleSource,
         private val mediaSessionSource: MediaSessionSource,
@@ -116,13 +116,8 @@ class HomeViewModel
         /** One-off UI effects; collect them once, while the UI is at least STARTED. */
         val events: Flow<HomeEvent> = eventChannel.receiveAsFlow()
 
-        private val shortcuts: Flow<List<AppShortcut>> =
-            combine(shortcutSource.hasHostPermission, shortcutSource.shortcuts) { granted, list ->
-                if (granted) list else emptyList()
-            }
-
         private val catalog: Flow<CatalogSnapshot> =
-            combine(catalogRepository.apps, notificationCountSource.countsByApp, shortcuts, ::CatalogSnapshot)
+            combine(catalogRepository.apps, notificationCountSource.countsByApp, favoritesRepository.favorites, ::CatalogSnapshot)
 
         /**
          * The single source of truth for Home's *data*. Its initial value renders immediately
@@ -399,12 +394,47 @@ class HomeViewModel
             appLauncher.requestUninstall(app.key)
         }
 
-        /** Launches an app-shortcut pill; recorded against the app it belongs to. */
-        fun launchShortcut(
-            item: ShortcutItem,
-            origin: LaunchOrigin?,
+        // ---- Favourites (the round row at the top of intent detail) ------------------------
+        //
+        // Each change is one DataStore transaction; the catalog combine re-emits and the row
+        // updates by itself. Adding a favourite that is already there, or past the cap of
+        // five, changes nothing (the repository de-duplicates and caps).
+
+        /** Editor: pins [app] as the last favourite of [intent]. */
+        fun addFavorite(
+            intent: ReachIntent,
+            app: CatalogApp,
         ) {
-            onLaunchResult(launchApp.shortcut(item.shortcut, origin, recordAs = item.appKey), item.shortcut.label)
+            viewModelScope.launch { bestEffort { favoritesRepository.update(intent) { it + app.key } } }
+        }
+
+        /** Editor or the circle's TalkBack action: unpins [app] from [intent]. */
+        fun removeFavorite(
+            intent: ReachIntent,
+            app: CatalogApp,
+        ) {
+            viewModelScope.launch { bestEffort { favoritesRepository.update(intent) { it - app.key } } }
+        }
+
+        /**
+         * Editor: moves [app] one place earlier ([by] = -1) or later (+1) among [intent]'s
+         * favourites *as shown*. Favourites that are stored but not shown (an app that is
+         * uninstalled for now) keep their slots, so the swap is with the visible neighbour.
+         */
+        fun moveFavorite(
+            intent: ReachIntent,
+            app: CatalogApp,
+            by: Int,
+        ) {
+            val shown =
+                uiState.value
+                    .detailFor(intent)
+                    .favorites
+                    .map { it.app.key }
+            val neighbour = shown.getOrNull(shown.indexOf(app.key) + by) ?: return
+            viewModelScope.launch {
+                bestEffort { favoritesRepository.update(intent) { list -> list.swapped(app.key, neighbour) } }
+            }
         }
 
         private fun onLaunchResult(
@@ -484,7 +514,6 @@ class HomeViewModel
 
         private companion object {
             const val NOW_ROW_SIZE = 3
-            const val MAX_SHORTCUTS = 4
             const val STOP_TIMEOUT_MILLIS = 5_000L
 
             /**
@@ -517,12 +546,14 @@ class HomeViewModel
                         val apps = byIntent[intent].orEmpty()
                         IntentSummary(intent, appCount = apps.size, unreadCount = unreadFor(apps, catalog.unread))
                     }
+                val byKey = visible.associateBy { it.key }
                 return HomeUiState(
                     catalogLoaded = true,
                     thumbSide = settings.thumbSide,
                     intents = intents,
                     now = predictions.take(NOW_ROW_SIZE).map { NowItem(it.app, it.reason) },
-                    details = ReachIntent.entries.associateWith { detailFor(it, byIntent[it].orEmpty(), catalog) },
+                    details = ReachIntent.entries.associateWith { detailFor(it, byIntent[it].orEmpty(), byKey, catalog) },
+                    pickableApps = visible,
                 )
             }
 
@@ -539,24 +570,38 @@ class HomeViewModel
             fun detailFor(
                 intent: ReachIntent,
                 apps: List<CatalogApp>,
+                visibleByKey: Map<AppKey, CatalogApp>,
                 catalog: CatalogSnapshot,
             ): IntentDetailUi {
+                fun item(app: CatalogApp) = AppItem(app, catalog.unread[app.key.packageUser] ?: 0)
                 // sortedByDescending is stable, so equal counts keep the catalog's
                 // Collator (locale-aware alphabetical) order: frequency, then label.
                 val sorted = apps.sortedByDescending { it.launchCount }
-                val shortcutsByApp = catalog.shortcuts.groupBy { it.app }
-                val shortcuts =
-                    sorted
-                        .distinctBy { it.key.packageUser }
-                        .asSequence()
-                        .flatMap { app -> shortcutsByApp[app.key.packageUser].orEmpty().map { ShortcutItem(it, app.key) } }
-                        .take(MAX_SHORTCUTS)
-                        .toList()
                 return IntentDetailUi(
                     intent = intent,
-                    apps = sorted.map { AppItem(it, catalog.unread[it.key.packageUser] ?: 0) },
-                    shortcuts = shortcuts,
+                    apps = sorted.map(::item),
+                    // Only apps Home may show: a hidden, uninstalled or private-space favourite
+                    // stays stored but is skipped.
+                    favorites =
+                        catalog.favorites[intent]
+                            .orEmpty()
+                            .mapNotNull { visibleByKey[it] }
+                            .map(::item),
                 )
+            }
+
+            /** [this] with [a] and [b] trading places; unchanged if either is missing. */
+            fun List<AppKey>.swapped(
+                a: AppKey,
+                b: AppKey,
+            ): List<AppKey> {
+                val i = indexOf(a)
+                val j = indexOf(b)
+                if (i < 0 || j < 0) return this
+                return toMutableList().apply {
+                    this[i] = b
+                    this[j] = a
+                }
             }
         }
     }
@@ -565,5 +610,5 @@ class HomeViewModel
 private data class CatalogSnapshot(
     val apps: List<CatalogApp>,
     val unread: Map<PackageUser, Int>,
-    val shortcuts: List<AppShortcut>,
+    val favorites: Map<ReachIntent, List<AppKey>>,
 )

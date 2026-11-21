@@ -1,6 +1,7 @@
 package com.baklavapp.reachlauncher.core.data.fake
 
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
+import com.baklavapp.reachlauncher.core.data.repository.FavoritesRepository
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
@@ -129,4 +130,22 @@ class FakeSettingsRepository(
     override suspend fun setHiddenApiShadeFallback(enabled: Boolean) = state.update { it.copy(hiddenApiShadeFallback = enabled) }
 
     override suspend fun dismissTip(tipKey: String) = state.update { it.copy(dismissedTips = it.dismissedTips + tipKey) }
+}
+
+/** Favourites in memory; honours the de-duplication and cap of [FavoritesRepository.update]. */
+class FakeFavoritesRepository(
+    initial: Map<ReachIntent, List<AppKey>> = emptyMap(),
+) : FavoritesRepository {
+    /** Current favourites; tests may set it directly. */
+    val state = MutableStateFlow(initial)
+
+    override val favorites: Flow<Map<ReachIntent, List<AppKey>>> = state
+
+    override suspend fun update(
+        intent: ReachIntent,
+        transform: (List<AppKey>) -> List<AppKey>,
+    ) = state.update { all ->
+        val next = transform(all[intent].orEmpty()).distinct().take(FavoritesRepository.MAX_PER_INTENT)
+        if (next.isEmpty()) all - intent else all + (intent to next)
+    }
 }

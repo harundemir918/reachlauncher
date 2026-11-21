@@ -18,7 +18,23 @@
 
     <string name="home_launch_failed">No se pudo abrir %1$s</string>
 
-    <string name="home_detail_shortcuts">accesos directos</string>
+    <string name="home_favorites">favoritos</string>
+    <string name="home_favorites_edit">editar</string>
+    <string name="home_favorites_edit_a11y">Editar favoritos</string>
+    <string name="home_favorites_add">Añadir</string>
+    <string name="home_favorites_add_a11y">Añadir un favorito</string>
+    <string name="home_favorites_remove">Quitar de favoritos</string>
+    <string name="home_favorites_remove_named">Quitar %1$s</string>
+    <string name="home_favorites_add_named">Añadir %1$s</string>
+    <string name="home_favorites_move_left">Mover %1$s a la izquierda</string>
+    <string name="home_favorites_move_right">Mover %1$s a la derecha</string>
+    <string name="home_favorites_editor_title">Favoritos · %1$s</string>
+    <string name="home_favorites_count">%1$d / %2$d</string>
+    <string name="home_favorites_none">Aún no hay favoritos. Elige hasta cinco apps abajo.</string>
+    <string name="home_favorites_full">Ya hay cinco. Quita uno para añadir otro.</string>
+    <string name="home_favorites_find">Buscar una app</string>
+    <string name="home_favorites_no_match">Ninguna app coincide.</string>
+    <string name="home_favorites_done">Listo</string>
     <string name="home_detail_empty">Aún no hay apps aquí.</string>
 
     <string name="home_accent_from_wallpaper">acento del fondo</string>
@@ -38,7 +54,7 @@
     <string name="home_card_not_now">Ahora no</string>
     <string name="home_card_not_now_description">Ahora no, ocultar «%1$s»</string>
     <string name="home_card_home_title">Haz de Reach tu pantalla de inicio</string>
-    <string name="home_card_home_why">Así el botón de inicio te trae aquí y los accesos directos funcionan.</string>
+    <string name="home_card_home_why">Así el botón de inicio te trae aquí.</string>
     <string name="home_card_home_action">Usar como inicio</string>
     <string name="home_card_notifications_title">Contadores y controles de música</string>
     <string name="home_card_notifications_why">Con acceso a las notificaciones verás «3 NUEVAS» en las intenciones y lo que está sonando. Nada sale de tu teléfono.</string>

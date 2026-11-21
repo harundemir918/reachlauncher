@@ -4,6 +4,7 @@ import com.baklavapp.reachlauncher.core.data.domain.LaunchApp
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppCatalogRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
 import com.baklavapp.reachlauncher.core.data.fake.FakeCalendarSource
+import com.baklavapp.reachlauncher.core.data.fake.FakeFavoritesRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeHomeRoleSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeLaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeMediaSessionSource
@@ -11,7 +12,6 @@ import com.baklavapp.reachlauncher.core.data.fake.FakeNotificationCountSource
 import com.baklavapp.reachlauncher.core.data.fake.FakePredictionRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeScreenActionsSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
-import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeUsageStatsSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeWallpaperColorSource
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
@@ -83,7 +83,7 @@ class HomeFixture(
             AppearanceSettings(dismissedTips = if (onboarding) emptySet() else OnboardingCard.entries.map { it.storageKey }.toSet()),
         )
     val notifications = FakeNotificationCountSource()
-    val shortcuts = FakeShortcutSource()
+    val favorites = FakeFavoritesRepository()
     val launcher = FakeAppLauncher()
     val homeRole = FakeHomeRoleSource()
     val media = FakeMediaSessionSource()
@@ -106,8 +106,8 @@ class HomeFixture(
             predictionRepository = predictions,
             settingsRepository = settings,
             notificationCountSource = notifications,
-            shortcutSource = shortcuts,
-            launchApp = LaunchApp(launcher, shortcuts, historyRepository ?: history, clock, appScope),
+            favoritesRepository = favorites,
+            launchApp = LaunchApp(launcher, historyRepository ?: history, clock, appScope),
             homeRoleSource = homeRole,
             mediaSessionSource = media,
             calendarSource = calendar,

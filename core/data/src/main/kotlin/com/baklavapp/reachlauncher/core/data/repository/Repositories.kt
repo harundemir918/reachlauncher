@@ -114,3 +114,31 @@ interface SettingsRepository {
      */
     suspend fun dismissTip(tipKey: String)
 }
+
+/**
+ * Each intent's favourites: up to [MAX_PER_INTENT] apps the user pinned to the round row at
+ * the top of intent detail ("Phone", "Camera"…), in the user's order. Any app can be a
+ * favourite of any intent, whatever intent it belongs to. Persisted in DataStore.
+ *
+ * Keys are stored even while their app is missing (uninstalled, hidden, a locked private
+ * space): the screen skips them, and they come back if the app does.
+ */
+interface FavoritesRepository {
+    /** Favourites per intent; an intent with none is absent. Emits after every change. */
+    val favorites: Flow<Map<ReachIntent, List<AppKey>>>
+
+    /**
+     * Replaces [intent]'s favourites with [transform] of the current list, in one
+     * transaction (two quick taps can't overwrite each other). The result is de-duplicated
+     * and capped at [MAX_PER_INTENT].
+     */
+    suspend fun update(
+        intent: ReachIntent,
+        transform: (List<AppKey>) -> List<AppKey>,
+    )
+
+    companion object {
+        /** Five circles fit across a 360dp phone at a 48dp touch target each. */
+        const val MAX_PER_INTENT = 5
+    }
+}

@@ -1,8 +1,6 @@
 package com.baklavapp.reachlauncher.feature.home
 
 import androidx.compose.runtime.Immutable
-import com.baklavapp.reachlauncher.core.model.AppKey
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.MediaState
@@ -37,6 +35,8 @@ import com.baklavapp.reachlauncher.core.model.ThumbSide
  * @property now up to three Now-row predictions; empty hides the whole NOW block.
  * @property details the intent-detail content of every intent, precomputed so switching
  *   intents (word tap, chip) never waits for a recomputation; read it with [detailFor].
+ * @property pickableApps every app that can be made a favourite (not hidden, not in the
+ *   private space), alphabetical: the favourites editor's list.
  */
 @Immutable
 data class HomeUiState(
@@ -45,6 +45,7 @@ data class HomeUiState(
     val intents: List<IntentSummary> = ReachIntent.entries.map { IntentSummary(it, appCount = 0, unreadCount = 0) },
     val now: List<NowItem> = emptyList(),
     val details: Map<ReachIntent, IntentDetailUi> = emptyMap(),
+    val pickableApps: List<CatalogApp> = emptyList(),
 ) {
     /** Detail content for [intent]; empty (not null) before the catalog has loaded. */
     fun detailFor(intent: ReachIntent): IntentDetailUi = details[intent] ?: IntentDetailUi(intent, emptyList(), emptyList())
@@ -134,29 +135,18 @@ data class AppItem(
 )
 
 /**
- * An app-shortcut pill in intent detail.
- *
- * @property appKey the catalog app the shortcut was found for; a shortcut launch is
- *   recorded against it so predictions learn from shortcut use too.
- */
-@Immutable
-data class ShortcutItem(
-    val shortcut: AppShortcut,
-    val appKey: AppKey,
-)
-
-/**
  * Intent detail content.
  *
  * @property apps visible apps of [intent], most-launched first, then alphabetical.
- * @property shortcuts up to four shortcuts of the intent's most-used apps; empty (section
- *   hidden) without the shortcut host permission.
+ * @property favorites the user's favourites for this intent (up to
+ *   `FavoritesRepository.MAX_PER_INTENT`), in their order; apps that are gone, hidden or in
+ *   the private space are left out. Any app can be a favourite, not only [intent]'s own.
  */
 @Immutable
 data class IntentDetailUi(
     val intent: ReachIntent,
     val apps: List<AppItem>,
-    val shortcuts: List<ShortcutItem>,
+    val favorites: List<AppItem> = emptyList(),
 )
 
 /**
@@ -266,7 +256,7 @@ sealed interface HomeEvent {
     /** Home pressed while already on Home: scroll Home back to the top. */
     data object ScrollToTop : HomeEvent
 
-    /** An app or shortcut couldn't be opened (uninstalled, disabled, locked profile). */
+    /** An app couldn't be opened (uninstalled, disabled, locked profile). */
     data class LaunchFailed(
         val label: String,
     ) : HomeEvent

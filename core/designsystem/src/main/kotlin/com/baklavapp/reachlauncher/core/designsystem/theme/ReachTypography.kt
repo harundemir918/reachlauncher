@@ -50,7 +50,7 @@ data class ReachTypography(
     val appName: TextStyle,
     /** Pill and button labels ("Type to launch"): Inter 16sp, 500. */
     val button: TextStyle,
-    /** Context line, shortcut pills: Inter 15sp, 400. */
+    /** Context line, empty-state text: Inter 15sp, 400. */
     val body: TextStyle,
     /**
      * Subtitles and secondary lines: Inter 13sp, 400. Smaller than §5.1's 15–22sp body
@@ -58,7 +58,7 @@ data class ReachTypography(
      * subtitle. Never use it for primary content.
      */
     val caption: TextStyle,
-    /** Mono labels ("NOW", "APP SHORTCUTS"): 11sp, 500, +1.5sp. */
+    /** Mono labels ("NOW", "FAVOURITES"): 11sp, 500, +1.5sp. */
     val label: TextStyle,
     /** Smaller mono tags ("WORK", "PLAYING · SPOTIFY"): 10sp, 500, +1.5sp. */
     val labelSmall: TextStyle,

@@ -11,12 +11,10 @@ import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ProfileSource
 import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
-import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.AppLanguage
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.Contact
 import com.baklavapp.reachlauncher.core.model.ExternalAction
@@ -172,30 +170,6 @@ class FakeMediaSessionSource : MediaSessionSource {
 
     override fun skipToPrevious() {
         commands += "previous"
-    }
-}
-
-/** Fake shortcuts; [available] are only visible (and launchable) while [granted] is true. */
-class FakeShortcutSource : ShortcutSource {
-    /** Whether Reach holds the shortcut host permission (is default home). */
-    val granted = MutableStateFlow(false)
-
-    /** Shortcuts the system would report with permission. */
-    val available = MutableStateFlow<List<AppShortcut>>(emptyList())
-
-    /** Shortcuts passed to a successful [launch], in order. */
-    val launched = mutableListOf<AppShortcut>()
-
-    override val hasHostPermission: Flow<Boolean> = granted
-    override val shortcuts: Flow<List<AppShortcut>> = combine(granted, available) { g, s -> if (g) s else emptyList() }
-
-    override fun launch(
-        shortcut: AppShortcut,
-        origin: LaunchOrigin?,
-    ): Boolean {
-        if (!granted.value || shortcut !in available.value) return false
-        launched += shortcut
-        return true
     }
 }
 

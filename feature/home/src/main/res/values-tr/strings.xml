@@ -16,7 +16,23 @@
 
     <string name="home_launch_failed">%1$s açılamadı</string>
 
-    <string name="home_detail_shortcuts">uygulama kısayolları</string>
+    <string name="home_favorites">favoriler</string>
+    <string name="home_favorites_edit">düzenle</string>
+    <string name="home_favorites_edit_a11y">Favorileri düzenle</string>
+    <string name="home_favorites_add">Ekle</string>
+    <string name="home_favorites_add_a11y">Favori ekle</string>
+    <string name="home_favorites_remove">Favorilerden kaldır</string>
+    <string name="home_favorites_remove_named">%1$s uygulamasını kaldır</string>
+    <string name="home_favorites_add_named">%1$s uygulamasını ekle</string>
+    <string name="home_favorites_move_left">%1$s uygulamasını sola taşı</string>
+    <string name="home_favorites_move_right">%1$s uygulamasını sağa taşı</string>
+    <string name="home_favorites_editor_title">Favoriler · %1$s</string>
+    <string name="home_favorites_count">%1$d / %2$d</string>
+    <string name="home_favorites_none">Henüz favori yok. Aşağıdan en fazla beş uygulama seç.</string>
+    <string name="home_favorites_full">Beş oldu. Başka birini eklemek için birini kaldır.</string>
+    <string name="home_favorites_find">Uygulama bul</string>
+    <string name="home_favorites_no_match">Eşleşen uygulama yok.</string>
+    <string name="home_favorites_done">Bitti</string>
     <string name="home_detail_empty">Burada henüz uygulama yok.</string>
 
     <string name="home_accent_from_wallpaper">vurgu duvar kağıdından</string>
@@ -43,7 +59,7 @@
     <string name="home_card_not_now">Şimdi değil</string>
     <string name="home_card_not_now_description">Şimdi değil, “%1$s” kartını gizle</string>
     <string name="home_card_home_title">Reach\'i ana ekranın yap</string>
-    <string name="home_card_home_why">Ana ekran tuşu seni buraya getirsin ve uygulama kısayolları çalışsın.</string>
+    <string name="home_card_home_why">Ana ekran tuşu seni buraya getirsin.</string>
     <string name="home_card_home_action">Ana ekran yap</string>
     <string name="home_card_notifications_title">Okunmamışlar ve müzik kontrolü</string>
     <string name="home_card_notifications_why">Bildirim erişimi amaçlarda “3 YENİ” ve çalanı gösterir. Hiçbir şey telefonundan çıkmaz.</string>

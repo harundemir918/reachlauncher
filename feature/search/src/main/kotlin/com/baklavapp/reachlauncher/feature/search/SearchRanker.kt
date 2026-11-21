@@ -1,9 +1,7 @@
 package com.baklavapp.reachlauncher.feature.search
 
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.Contact
-import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.PaletteId
 import com.baklavapp.reachlauncher.core.model.Prediction
 import com.baklavapp.reachlauncher.core.model.TextFolding
@@ -15,13 +13,11 @@ import kotlin.math.min
  * Everything search ranks over, as one immutable snapshot.
  *
  * @property apps the full catalog (hidden apps included — the ranker drops them).
- * @property shortcuts shortcuts of all apps; empty without the shortcut host permission.
  * @property contacts contacts the provider returned for (roughly) the current query.
  * @property predictions the empty-query suggestions, best first.
  */
 data class SearchCorpus(
     val apps: List<CatalogApp> = emptyList(),
-    val shortcuts: List<AppShortcut> = emptyList(),
     val contacts: List<Contact> = emptyList(),
     val predictions: List<Prediction> = emptyList(),
 )
@@ -42,13 +38,12 @@ data class SearchCorpus(
  * [FREQUENCY_SATURATION] launches) — smaller than the gap between the two tiers, so it
  * reorders matches of the same quality and lets a much-used app whose *second* word
  * matches overtake a never-used app whose first word does, but never lifts a substring
- * match over a word-prefix one. Ties go to apps, then shortcuts, contacts and commands, then
+ * match over a word-prefix one. Ties go to apps, then contacts and commands, then
  * the catalog's (alphabetical) order.
  *
- * **Sources and limits:** at most [MAX_RESULTS] rows, with at most [MAX_SHORTCUTS]
- * shortcuts and [MAX_CONTACTS] contacts so apps are never crowded out, and then always the
- * "Search the web" row last. Hidden apps (and the shortcuts of apps that are hidden or not
- * in the catalog, e.g. a locked private space) never appear. Commands need at least
+ * **Sources and limits:** at most [MAX_RESULTS] rows, with at most [MAX_CONTACTS] contacts
+ * so apps are never crowded out, and then always the "Search the web" row last. Hidden apps
+ * never appear. App shortcuts are not searched (docs/DECISIONS.md D76). Commands need at least
  * [MIN_COMMAND_LENGTH] typed letters and match word prefixes only, so one stray letter
  * doesn't fill the list with "Switch to …" rows.
  *
@@ -66,9 +61,6 @@ object SearchRanker {
 
     /** Commands appear from this many typed letters/digits on (spec: palettes need ≥ 2). */
     const val MIN_COMMAND_LENGTH = 2
-
-    /** At most this many shortcut rows. */
-    const val MAX_SHORTCUTS = 3
 
     /** At most this many contact rows. */
     const val MAX_CONTACTS = 3
@@ -133,11 +125,6 @@ object SearchRanker {
         visibleApps.forEach { app ->
             score(app.label, q, app.launchCount)?.let { candidates += Candidate(SearchResult.AppItem(app), it, KIND_APP) }
         }
-        shortcutItems(corpus.shortcuts, visibleApps)
-            .mapNotNull { (item, launches) -> score(item.shortcut.label, q, launches)?.let { Candidate(item, it, KIND_SHORTCUT) } }
-            .sortedByDescending { it.score }
-            .take(MAX_SHORTCUTS)
-            .let(candidates::addAll)
         corpus.contacts
             .distinctBy { it.id }
             .mapNotNull { contact ->
@@ -177,25 +164,6 @@ object SearchRanker {
         return if (tier == MatchTier.NONE) null else tier.score + frequencyBoost(launchCount)
     }
 
-    /**
-     * Attaches every shortcut to the visible catalog app it belongs to: the app with the
-     * shortcut's activity if there is one, else the package's first visible activity.
-     * Shortcuts without a visible app (hidden, uninstalled, locked private space) are dropped.
-     * Returns each item with the owner's launch count, which drives the frequency boost.
-     */
-    private fun shortcutItems(
-        shortcuts: List<AppShortcut>,
-        visibleApps: List<CatalogApp>,
-    ): List<Pair<SearchResult.ShortcutItem, Int>> {
-        if (shortcuts.isEmpty()) return emptyList()
-        val byPackage: Map<PackageUser, List<CatalogApp>> = visibleApps.groupBy { it.key.packageUser }
-        return shortcuts.distinctBy { it.app to it.id }.mapNotNull { shortcut ->
-            val owners = byPackage[shortcut.app] ?: return@mapNotNull null
-            val owner = owners.firstOrNull { it.key.activityName == shortcut.activityName } ?: owners.first()
-            SearchResult.ShortcutItem(shortcut, owner.key, owner.label, owner.isProfilePaused) to owner.launchCount
-        }
-    }
-
     private class Candidate(
         val result: SearchResult,
         val score: Double,
@@ -203,9 +171,8 @@ object SearchRanker {
     )
 
     private const val KIND_APP = 0
-    private const val KIND_SHORTCUT = 1
-    private const val KIND_CONTACT = 2
-    private const val KIND_COMMAND = 3
+    private const val KIND_CONTACT = 1
+    private const val KIND_COMMAND = 2
 
     private val NON_WORD = Regex("[^\\p{L}\\p{N}]+")
 }

@@ -91,29 +91,6 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `a shortcut launch is recorded against its app`() =
-        runTest {
-            val whatsapp = app("WhatsApp")
-            val f = fixture(whatsapp)
-            val message = shortcut("Message Ayşe", whatsapp)
-            f.shortcuts.granted.value = true
-            f.shortcuts.available.value = listOf(message)
-            f.viewModel.events.test {
-                f.viewModel.onQueryChange("message ay")
-                val row = f.state.results.first()
-                assertThat(row).isInstanceOf(SearchResult.ShortcutItem::class.java)
-                f.viewModel.onResultClick(row, origin = null)
-                assertThat(awaitItem()).isEqualTo(SearchEvent.Close)
-            }
-            assertThat(f.shortcuts.launched).containsExactly(message)
-            runCurrent()
-            assertThat(
-                f.history.events.value
-                    .map { it.key },
-            ).containsExactly(whatsapp.key)
-        }
-
-    @Test
     fun `palette and theme commands update settings and close`() =
         runTest {
             val f = fixture()

@@ -67,6 +67,27 @@ object ReachIcons {
         }
     }
 
+    /** +: the "add a favourite" circle in intent detail. */
+    val Add: ImageVector by lazy {
+        strokeIcon("Add") {
+            moveTo(12f, 5f)
+            lineTo(12f, 19f)
+            moveTo(5f, 12f)
+            lineTo(19f, 12f)
+        }
+    }
+
+    /** Left arrow with a shaft: "Move left" in the favourites editor. */
+    val ArrowLeft: ImageVector by lazy {
+        strokeIcon("ArrowLeft") {
+            moveTo(19f, 12f)
+            lineTo(5f, 12f)
+            moveTo(11f, 6f)
+            lineTo(5f, 12f)
+            lineTo(11f, 18f)
+        }
+    }
+
     /** ×: closes Search. */
     val Close: ImageVector by lazy {
         strokeIcon("Close") {

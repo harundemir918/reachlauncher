@@ -268,7 +268,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedByKey(
 }
 
 /**
- * One result: monogram, label, a mono kind tag ("SHORTCUT · WHATSAPP"), and on the top row
+ * One result: monogram, label, a mono kind tag ("CONTACT"), and on the top row
  * the accent fill and "ENTER ↵". One semantic button whose description says what it is.
  */
 @Composable
@@ -482,15 +482,6 @@ private fun resultText(result: SearchResult): ResultText =
             )
         }
 
-        is SearchResult.ShortcutItem -> {
-            ResultText(
-                label = result.shortcut.label,
-                tag = stringResource(R.string.search_kind_shortcut, result.appLabel),
-                spoken = stringResource(R.string.search_a11y_shortcut, result.shortcut.label, result.appLabel),
-                monogram = result.appLabel,
-            )
-        }
-
         is SearchResult.ContactItem -> {
             ResultText(
                 label = result.contact.displayName,
@@ -539,7 +530,6 @@ private fun commandLabel(command: SearchCommand): String =
 private fun SearchResult.isDimmed(): Boolean =
     when (this) {
         is SearchResult.AppItem -> app.isProfilePaused
-        is SearchResult.ShortcutItem -> isProfilePaused
         else -> false
     }
 

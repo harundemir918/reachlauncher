@@ -2,10 +2,8 @@ package com.baklavapp.reachlauncher.core.data.domain
 
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
 import com.baklavapp.reachlauncher.core.data.fake.FakeLaunchHistoryRepository
-import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.model.AppKey
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.LaunchEvent
 import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.google.common.truth.Truth.assertThat
@@ -28,11 +26,10 @@ class LaunchAppTest {
 
     private fun TestScope.subject(
         launcher: FakeAppLauncher = FakeAppLauncher(),
-        shortcuts: FakeShortcutSource = FakeShortcutSource(),
         history: LaunchHistoryRepository = FakeLaunchHistoryRepository(),
         // The test scope itself stands in for the application scope: advanceUntilIdle() runs
         // the recording coroutines, and an exception escaping them would fail the test.
-    ) = LaunchApp(launcher, shortcuts, history, clock, this)
+    ) = LaunchApp(launcher, history, clock, this)
 
     @Test
     fun `a launched app is recorded at the clock's time`() =
@@ -76,20 +73,5 @@ class LaunchAppTest {
                 }
             assertThat(subject(history = failing).app(key, null)).isEqualTo(LaunchResult.LAUNCHED)
             advanceUntilIdle() // would rethrow here if the failure escaped the scope
-        }
-
-    @Test
-    fun `shortcuts record against the given app and fail without permission`() =
-        runTest {
-            val shortcut = AppShortcut("s1", key.packageUser, null, "Message Ayşe", "Chat")
-            val shortcuts = FakeShortcutSource().apply { available.value = listOf(shortcut) }
-            val history = FakeLaunchHistoryRepository()
-            val launch = subject(shortcuts = shortcuts, history = history)
-
-            assertThat(launch.shortcut(shortcut, null, recordAs = key)).isEqualTo(LaunchResult.FAILED)
-            shortcuts.granted.value = true
-            assertThat(launch.shortcut(shortcut, null, recordAs = key)).isEqualTo(LaunchResult.LAUNCHED)
-            advanceUntilIdle()
-            assertThat(history.events.value.map { it.key }).containsExactly(key)
         }
 }

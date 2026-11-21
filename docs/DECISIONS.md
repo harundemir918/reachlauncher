@@ -814,3 +814,31 @@ Tested with a long calendar title and a paused YouTube Music session on a 360×8
 - **The search pill's hint** ("or pull down") now appears only when it fits beside the label
   on one line (measured), instead of a font-scale rule: "Escribe para abrir" wrapped beside
   "O DESLIZA ABAJO" on a 360dp phone.
+
+## D76 — Favourites replace app shortcuts
+The owner never used app shortcuts and asked for the apps they use most instead.
+- **Removed:** the "App shortcuts" pills in intent detail and shortcut rows in search, with
+  everything behind them (`ShortcutSource`, `LauncherAppsShortcutSource`, `AppShortcut`,
+  `LaunchApp.shortcut`, their fakes, tests and strings). Reach no longer reads
+  `LauncherApps.getShortcuts`.
+- **Favourites row:** at the top of every intent detail, five equal slots of 52dp monogram
+  circles with the app name under them (circles fit Reach's monogram language; five fit a
+  360dp phone at ≥ 48dp each). Tap launches (recorded like any launch); a small accent dot
+  shows unread notifications. A "+" circle fills the next free slot; long-press or "edit"
+  opens the editor. TalkBack gets "Remove from favourites" on each circle.
+- **Any app, any intent:** a favourite needn't belong to the intent (Camera can sit on Talk).
+  Hidden and private-space apps are never offered or shown.
+- **Editor:** an in-screen bottom sheet (like the app menu, D64): current favourites with
+  move left / move right / remove buttons (no drag — buttons work with TalkBack and at 200 %
+  font), a search field and all apps, tap to add. Changes apply immediately; at five, adding
+  is replaced by a "remove one first" note.
+- **Storage:** `FavoritesRepository` in the settings DataStore, one key per intent
+  (`favorites_<intent>`), one `package/activity#userSerial` per line. Keys of apps that are
+  currently missing stay stored and are skipped, so a reinstalled app comes back.
+- **Large fonts (tested on the Pixel 10 Pro emulator at 200 %).** Circle names shrink to
+  fit, down to a floor of 10sp-at-1× (divided by the font scale so it is the same on screen),
+  instead of reading "Pho…". The whole row shares **one** size — the largest at which every
+  name fits its slot (`rememberSharedLabelStyle`): sizing each name on its own made
+  "WhatsApp" smaller than "X" and the names sat at uneven heights (real phone, Spanish); slots aren't clipped, which cut the first and last letters. Above 1.3×
+  the editor puts move/remove under the name ("Messag/es" wrapped mid-word). Disabled arrows
+  are drawn at 30 % so the first/last favourite doesn't look movable.

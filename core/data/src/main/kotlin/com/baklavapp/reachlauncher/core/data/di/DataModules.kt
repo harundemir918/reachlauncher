@@ -14,10 +14,12 @@ import com.baklavapp.reachlauncher.core.data.db.AppCacheDao
 import com.baklavapp.reachlauncher.core.data.db.LaunchEventDao
 import com.baklavapp.reachlauncher.core.data.db.ReachDatabase
 import com.baklavapp.reachlauncher.core.data.repository.AppCatalogRepository
+import com.baklavapp.reachlauncher.core.data.repository.FavoritesRepository
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.data.repository.impl.AppCatalogRepositoryImpl
+import com.baklavapp.reachlauncher.core.data.repository.impl.FavoritesRepositoryImpl
 import com.baklavapp.reachlauncher.core.data.repository.impl.LaunchHistoryRepositoryImpl
 import com.baklavapp.reachlauncher.core.data.repository.impl.PredictionRepositoryImpl
 import com.baklavapp.reachlauncher.core.data.repository.impl.SettingsRepositoryImpl
@@ -63,6 +65,10 @@ abstract class RepositoryModule {
     /** DataStore-backed settings. */
     @Binds
     abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+
+    /** DataStore-backed favourites (same file as the settings). */
+    @Binds
+    abstract fun bindFavoritesRepository(impl: FavoritesRepositoryImpl): FavoritesRepository
 }
 
 /** Room database and its DAOs. */

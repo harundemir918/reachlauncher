@@ -2,7 +2,6 @@ package com.baklavapp.reachlauncher.core.data.source
 
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.AppLanguage
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.Contact
 import com.baklavapp.reachlauncher.core.model.ExternalAction
@@ -139,25 +138,6 @@ interface MediaSessionSource {
 
     /** Skips to the previous track; no-op without a session. */
     fun skipToPrevious()
-}
-
-/** Launcher shortcuts (`LauncherApps.getShortcuts`). Needs Reach to be the default home. */
-interface ShortcutSource {
-    /** Whether `LauncherApps.hasShortcutHostPermission()` holds (i.e. Reach is default home). */
-    val hasHostPermission: Flow<Boolean>
-
-    /**
-     * Manifest + dynamic + pinned shortcuts of all apps; re-emits when apps publish
-     * changes (`LauncherApps.Callback.onShortcutsChanged`) or the permission changes.
-     * Empty without permission. Consumers filter by [AppShortcut.app].
-     */
-    val shortcuts: Flow<List<AppShortcut>>
-
-    /** @return false if the shortcut is disabled, gone, or permission is missing. */
-    fun launch(
-        shortcut: AppShortcut,
-        origin: LaunchOrigin?,
-    ): Boolean
 }
 
 /**

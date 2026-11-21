@@ -18,11 +18,31 @@
     <!-- TalkBack custom action on the search pill: the tap alternative to swiping up. -->
     <string name="home_all_apps_action">All apps</string>
 
-    <!-- Short inline message when an app or shortcut can't be opened. -->
+    <!-- Short inline message when an app can't be opened. -->
     <string name="home_launch_failed">Couldn\'t open %1$s</string>
 
     <!-- Intent detail. -->
-    <string name="home_detail_shortcuts">app shortcuts</string>
+    <!-- Favourites row (shown upper-cased in mono) and its editor. -->
+    <string name="home_favorites">favourites</string>
+    <string name="home_favorites_edit">edit</string>
+    <string name="home_favorites_edit_a11y">Edit favourites</string>
+    <string name="home_favorites_add">Add</string>
+    <string name="home_favorites_add_a11y">Add a favourite</string>
+    <string name="home_favorites_remove">Remove from favourites</string>
+    <!-- %1$s is an app name. -->
+    <string name="home_favorites_remove_named">Remove %1$s</string>
+    <string name="home_favorites_add_named">Add %1$s</string>
+    <string name="home_favorites_move_left">Move %1$s left</string>
+    <string name="home_favorites_move_right">Move %1$s right</string>
+    <!-- %1$s is the intent word: "Favourites · Talk". -->
+    <string name="home_favorites_editor_title">Favourites · %1$s</string>
+    <!-- "3 / 5" (shown in mono). -->
+    <string name="home_favorites_count">%1$d / %2$d</string>
+    <string name="home_favorites_none">No favourites yet. Pick up to five apps below.</string>
+    <string name="home_favorites_full">That\'s five. Remove one to add another.</string>
+    <string name="home_favorites_find">Find an app</string>
+    <string name="home_favorites_no_match">No app matches.</string>
+    <string name="home_favorites_done">Done</string>
     <string name="home_detail_empty">No apps here yet.</string>
 
     <!-- Wallpaper mode: tag after the date line, "SUN 08 NOV · ACCENT FROM WALLPAPER" (shown upper-cased in mono). -->
@@ -51,7 +71,7 @@
     <!-- TalkBack for "Not now": %1$s is the card title. -->
     <string name="home_card_not_now_description">Not now, hide “%1$s”</string>
     <string name="home_card_home_title">Make Reach your home screen</string>
-    <string name="home_card_home_why">So the Home button brings you here and app shortcuts work.</string>
+    <string name="home_card_home_why">So the Home button brings you here.</string>
     <string name="home_card_home_action">Set as home</string>
     <string name="home_card_notifications_title">Unread counts and music controls</string>
     <string name="home_card_notifications_why">Notification access shows “3 NEW” on intents and what’s playing. Nothing leaves your phone.</string>

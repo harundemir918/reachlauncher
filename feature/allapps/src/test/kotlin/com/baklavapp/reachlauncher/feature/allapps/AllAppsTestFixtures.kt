@@ -6,7 +6,6 @@ import com.baklavapp.reachlauncher.core.data.fake.FakeAppLauncher
 import com.baklavapp.reachlauncher.core.data.fake.FakeLaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeProfileSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
-import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.model.AppKey
 import com.baklavapp.reachlauncher.core.model.CatalogApp
@@ -82,7 +81,7 @@ class AllAppsFixture(
         AllAppsViewModel(
             catalogRepository = catalog,
             settingsRepository = settings,
-            launchApp = LaunchApp(launcher, FakeShortcutSource(), history, clock, appScope),
+            launchApp = LaunchApp(launcher, history, clock, appScope),
             appLauncher = launcher,
             profileSource = profiles,
             defaultDispatcher = dispatcher,

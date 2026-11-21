@@ -9,8 +9,6 @@ import com.baklavapp.reachlauncher.core.data.repository.PredictionRepository
 import com.baklavapp.reachlauncher.core.data.repository.SettingsRepository
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
 import com.baklavapp.reachlauncher.core.data.source.ContactsSource
-import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.Contact
 import com.baklavapp.reachlauncher.core.model.ExternalAction
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
@@ -46,13 +44,13 @@ import javax.inject.Inject
  *   (`StateFlow` always has a current value, like `Cubit.state`).
  * - Contacts are looked up with a short **debounce** — the same idea as rxdart's
  *   `debounceTime(150.ms)` + `switchMap`: the contacts provider is another process, so we
- *   wait until typing pauses and cancel a lookup that's overtaken (`mapLatest`). Apps,
- *   shortcuts and commands are ranked on every keystroke: they're already in memory.
+ *   wait until typing pauses and cancel a lookup that's overtaken (`mapLatest`). Apps
+ *   and commands are ranked on every keystroke: they're already in memory.
  * - [events] ≈ a `BlocListener`'s one-off effects (close search, open Appearance, a
  *   "couldn't open" message), sent through a `Channel` so each is delivered exactly once.
  *
  * Ranking itself is the pure [SearchRanker]; this class only gathers its inputs (`combine`
- * ≈ `Rx.combineLatest`) on [defaultDispatcher] and runs actions. Every app and shortcut
+ * ≈ `Rx.combineLatest`) on [defaultDispatcher] and runs actions. Every app
  * launch goes through the shared [LaunchApp] use case, which records history only on a real
  * launch (D32, D34).
  *
@@ -67,7 +65,6 @@ class SearchViewModel
     constructor(
         catalogRepository: AppCatalogRepository,
         predictionRepository: PredictionRepository,
-        shortcutSource: ShortcutSource,
         private val contactsSource: ContactsSource,
         private val settingsRepository: SettingsRepository,
         private val appLauncher: AppLauncher,
@@ -88,11 +85,6 @@ class SearchViewModel
         /** One-off effects; collect once while the UI is at least STARTED. */
         val events: Flow<SearchEvent> = eventChannel.receiveAsFlow()
 
-        private val shortcuts: Flow<List<AppShortcut>> =
-            combine(shortcutSource.hasHostPermission, shortcutSource.shortcuts) { granted, list ->
-                if (granted) list else emptyList()
-            }
-
         /**
          * Contacts for the current query: debounced, latest-wins, and never queried without
          * permission. Starts with an empty list so the first results don't wait for it.
@@ -112,11 +104,10 @@ class SearchViewModel
         private val corpus: Flow<SearchCorpus> =
             combine(
                 catalogRepository.apps,
-                shortcuts,
                 contacts,
                 predictionRepository.predictions(SearchRanker.SUGGESTION_COUNT),
-            ) { apps, shortcuts, contacts, predictions ->
-                SearchCorpus(apps, shortcuts, contacts, predictions)
+            ) { apps, contacts, predictions ->
+                SearchCorpus(apps, contacts, predictions)
             }.onEach { lastCorpus = it }
 
         /** The rows to show; ranks on [defaultDispatcher], never on the main thread. */
@@ -186,10 +177,6 @@ class SearchViewModel
             when (result) {
                 is SearchResult.AppItem -> {
                     onLaunchResult(launchApp.app(result.app.key, origin), result.app.label)
-                }
-
-                is SearchResult.ShortcutItem -> {
-                    onLaunchResult(launchApp.shortcut(result.shortcut, origin, recordAs = result.appKey), result.shortcut.label)
                 }
 
                 is SearchResult.ContactItem -> {

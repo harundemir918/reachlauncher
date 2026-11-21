@@ -29,7 +29,7 @@ data class AppKey(
 }
 
 /**
- * A package in one user profile. Notifications and shortcuts belong to a package, not an
+ * A package in one user profile. Notifications belong to a package, not an
  * activity, but the personal and work copies of an app are still different apps.
  */
 data class PackageUser(

@@ -29,24 +29,6 @@ data class MediaState(
     val playbackSpeed: Float = 1f,
 )
 
-/**
- * A launcher shortcut (`ShortcutInfo`): manifest, dynamic or pinned.
- *
- * @property id the shortcut's id, unique within its package and user.
- * @property app the package-in-profile that publishes it.
- * @property activityName the activity the shortcut is attached to; null for some pinned
- *   shortcuts (`ShortcutInfo.getActivity()` may be null).
- * @property label short label, e.g. "Message Ayşe".
- * @property appLabel source app label, shown in mono caps beside the shortcut label.
- */
-data class AppShortcut(
-    val id: String,
-    val app: PackageUser,
-    val activityName: String?,
-    val label: String,
-    val appLabel: String,
-)
-
 /** A contact found by search. Only available when `READ_CONTACTS` is granted. */
 data class Contact(
     val id: Long,

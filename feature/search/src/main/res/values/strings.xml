@@ -25,8 +25,6 @@
     <!-- Hint on the highlighted top row; shown upper-case ("ENTER ↵"). -->
     <string name="search_enter_hint">enter ↵</string>
 
-    <!-- Mono tags under a result label. %1$s is the app name: "SHORTCUT · WHATSAPP". -->
-    <string name="search_kind_shortcut">shortcut · %1$s</string>
     <string name="search_kind_contact">contact</string>
     <string name="search_kind_action">action</string>
     <string name="search_kind_web">web</string>
@@ -48,14 +46,12 @@
     <string name="search_contacts_prompt">Include contacts</string>
     <string name="search_contacts_rationale">Find people by name too. Contacts are read on this phone only and never leave it.</string>
 
-    <!-- Short messages. %1$s is an app or shortcut name. -->
+    <!-- Short messages. %1$s is an app name. -->
     <string name="search_launch_failed">Couldn\'t open %1$s</string>
     <string name="search_action_unavailable">No app on this phone can do that</string>
 
     <!-- TalkBack descriptions. -->
     <string name="search_a11y_top_result">top result, press Enter to open</string>
-    <!-- %1$s shortcut label, %2$s app name: "New message, WhatsApp shortcut". -->
-    <string name="search_a11y_shortcut">%1$s, %2$s shortcut</string>
     <string name="search_a11y_contact">%1$s, contact</string>
     <!-- "Double tap to show call and message options". -->
     <string name="search_a11y_contact_options">show call and message options</string>

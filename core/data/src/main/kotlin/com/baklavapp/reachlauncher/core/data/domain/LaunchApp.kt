@@ -3,9 +3,7 @@ package com.baklavapp.reachlauncher.core.data.domain
 import com.baklavapp.reachlauncher.core.data.di.ApplicationScope
 import com.baklavapp.reachlauncher.core.data.repository.LaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.source.AppLauncher
-import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.model.AppKey
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.LaunchResult
 import kotlinx.coroutines.CancellationException
@@ -15,7 +13,7 @@ import java.time.Clock
 import javax.inject.Inject
 
 /**
- * Launches an app or shortcut and records it in launch history — the one place every
+ * Launches an app and records it in launch history — the one place every
  * screen (Home, intent detail, Search, All Apps, the press-slide-release fan) goes through,
  * so they all count launches the same way.
  *
@@ -33,7 +31,6 @@ class LaunchApp
     @Inject
     constructor(
         private val appLauncher: AppLauncher,
-        private val shortcutSource: ShortcutSource,
         private val history: LaunchHistoryRepository,
         private val clock: Clock,
         @param:ApplicationScope private val appScope: CoroutineScope,
@@ -46,21 +43,6 @@ class LaunchApp
             val result = appLauncher.launchApp(key, origin)
             if (result == LaunchResult.LAUNCHED) record(key)
             return result
-        }
-
-        /**
-         * Launches [shortcut]. On success the launch is recorded against [recordAs] — the
-         * app the shortcut belongs to — when the caller knows it (a pinned shortcut may have
-         * no activity, so it can't always be mapped to an [AppKey] here).
-         */
-        fun shortcut(
-            shortcut: AppShortcut,
-            origin: LaunchOrigin?,
-            recordAs: AppKey?,
-        ): LaunchResult {
-            if (!shortcutSource.launch(shortcut, origin)) return LaunchResult.FAILED
-            recordAs?.let(::record)
-            return LaunchResult.LAUNCHED
         }
 
         private fun record(key: AppKey) {

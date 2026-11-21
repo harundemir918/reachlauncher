@@ -2,7 +2,6 @@ package com.baklavapp.reachlauncher.core.data.fake
 
 import app.cash.turbine.test
 import com.baklavapp.reachlauncher.core.model.AppKey
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CalendarEvent
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.PackageUser
@@ -112,20 +111,5 @@ class FakesTest {
                 source.granted.value = true
                 assertThat(awaitItem()).containsExactly(key.packageUser, 3)
             }
-        }
-
-    @Test
-    fun `shortcuts are hidden and unlaunchable without host permission`() =
-        runTest {
-            val source = FakeShortcutSource()
-            val shortcut = AppShortcut("s1", PackageUser("com.example.chat", 0), null, "Message Ayşe", "Chat")
-            source.available.value = listOf(shortcut)
-            assertThat(source.launch(shortcut, origin = null)).isFalse()
-            source.shortcuts.test {
-                assertThat(awaitItem()).isEmpty()
-                source.granted.value = true
-                assertThat(awaitItem()).containsExactly(shortcut)
-            }
-            assertThat(source.launch(shortcut, origin = null)).isTrue()
         }
 }

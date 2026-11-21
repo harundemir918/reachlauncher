@@ -7,12 +7,9 @@ import com.baklavapp.reachlauncher.core.data.fake.FakeContactsSource
 import com.baklavapp.reachlauncher.core.data.fake.FakeLaunchHistoryRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakePredictionRepository
 import com.baklavapp.reachlauncher.core.data.fake.FakeSettingsRepository
-import com.baklavapp.reachlauncher.core.data.fake.FakeShortcutSource
 import com.baklavapp.reachlauncher.core.model.AppKey
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.Contact
-import com.baklavapp.reachlauncher.core.model.PackageUser
 import com.baklavapp.reachlauncher.core.model.ProfileType
 import com.baklavapp.reachlauncher.core.model.ReachIntent
 import kotlinx.coroutines.CoroutineDispatcher
@@ -43,20 +40,6 @@ fun app(
         isProfilePaused = paused,
     )
 
-/** A shortcut published by [owner]. */
-fun shortcut(
-    label: String,
-    owner: CatalogApp,
-    id: String = label.lowercase(),
-): AppShortcut =
-    AppShortcut(
-        id = id,
-        app = PackageUser(owner.key.packageName, owner.key.userSerial),
-        activityName = owner.key.activityName,
-        label = label,
-        appLabel = owner.label,
-    )
-
 /** A contact with a phone number by default. */
 fun contact(
     name: String,
@@ -76,7 +59,6 @@ class SearchFixture(
 ) {
     val catalog = FakeAppCatalogRepository(apps)
     val predictions = FakePredictionRepository()
-    val shortcuts = FakeShortcutSource()
     val contacts = FakeContactsSource()
     val settings = FakeSettingsRepository()
     val launcher = FakeAppLauncher()
@@ -87,11 +69,10 @@ class SearchFixture(
         SearchViewModel(
             catalogRepository = catalog,
             predictionRepository = predictions,
-            shortcutSource = shortcuts,
             contactsSource = contacts,
             settingsRepository = settings,
             appLauncher = launcher,
-            launchApp = LaunchApp(launcher, shortcuts, history, clock, appScope),
+            launchApp = LaunchApp(launcher, history, clock, appScope),
             defaultDispatcher = dispatcher,
         )
 

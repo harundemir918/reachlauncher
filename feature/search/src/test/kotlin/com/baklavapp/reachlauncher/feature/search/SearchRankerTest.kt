@@ -22,7 +22,6 @@ class SearchRankerTest {
         results.map {
             when (it) {
                 is SearchResult.AppItem -> it.app.label
-                is SearchResult.ShortcutItem -> it.shortcut.label
                 is SearchResult.ContactItem -> it.contact.displayName
                 is SearchResult.CommandItem -> it.command.toString()
                 is SearchResult.WebSearch -> "web:${it.query}"
@@ -140,29 +139,11 @@ class SearchRankerTest {
     }
 
     @Test
-    fun `hidden apps and their shortcuts are excluded`() {
-        val hidden = app("Secret Chat", hidden = true)
-        val visible = app("Signal")
-        val corpus =
-            SearchCorpus(
-                apps = listOf(hidden, visible),
-                shortcuts = listOf(shortcut("Secret new chat", hidden), shortcut("Signal new chat", visible)),
-            )
+    fun `hidden apps are excluded`() {
+        val corpus = SearchCorpus(apps = listOf(app("Secret Chat", hidden = true), app("Signal")))
         val result = labels(rank("s", corpus))
         assertThat(result).doesNotContain("Secret Chat")
-        assertThat(result).doesNotContain("Secret new chat")
-        assertThat(result).contains("Signal new chat")
-    }
-
-    @Test
-    fun `shortcuts without a catalog app are dropped and others record against their app`() {
-        val whatsapp = app("WhatsApp", launchCount = 4)
-        val orphan = shortcut("Orphan message", app("Gone"))
-        val corpus = SearchCorpus(apps = listOf(whatsapp), shortcuts = listOf(shortcut("Message Ayşe", whatsapp), orphan))
-        val items = rank("mes", corpus).filterIsInstance<SearchResult.ShortcutItem>()
-        assertThat(items.map { it.shortcut.label }).containsExactly("Message Ayşe")
-        assertThat(items.single().appKey).isEqualTo(whatsapp.key)
-        assertThat(items.single().appLabel).isEqualTo("WhatsApp")
+        assertThat(result).contains("Signal")
     }
 
     @Test

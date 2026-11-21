@@ -2,7 +2,6 @@ package com.baklavapp.reachlauncher.feature.home
 
 import app.cash.turbine.test
 import com.baklavapp.reachlauncher.core.data.fake.FakeAppCatalogRepository
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.LaunchOrigin
 import com.baklavapp.reachlauncher.core.model.LaunchResult
 import com.baklavapp.reachlauncher.core.model.PackageUser
@@ -403,62 +402,62 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `shortcuts appear only with host permission, max four, from the top apps`() =
+    fun `favourites keep the user's order, may come from any intent and skip hidden apps`() =
         runTest {
-            val top = app("Signal", ReachIntent.TALK, launchCount = 9, packageName = "org.signal")
-            val second = app("WhatsApp", ReachIntent.TALK, launchCount = 3, packageName = "com.whatsapp")
-            val f = HomeFixture(listOf(top, second))
+            val phone = app("Phone", ReachIntent.TALK)
+            val camera = app("Camera", ReachIntent.MAKE)
+            val secret = app("Secret", ReachIntent.TALK, hidden = true)
+            val f = HomeFixture(listOf(phone, camera, secret))
             subscribe(f)
+            f.viewModel.addFavorite(ReachIntent.TALK, camera)
+            f.viewModel.addFavorite(ReachIntent.TALK, phone)
+            f.viewModel.addFavorite(ReachIntent.TALK, phone) // already there: no duplicate
+            f.favorites.update(ReachIntent.TALK) { it + secret.key }
 
-            fun shortcut(
-                id: String,
-                pkg: String,
-            ) = AppShortcut(id, PackageUser(pkg, 0), null, "Shortcut $id", pkg)
-            f.shortcuts.available.value =
-                listOf(
-                    shortcut("w1", "com.whatsapp"),
-                    shortcut("w2", "com.whatsapp"),
-                    shortcut("s1", "org.signal"),
-                    shortcut("s2", "org.signal"),
-                    shortcut("s3", "org.signal"),
-                    shortcut("x", "com.other"),
-                )
-            f.viewModel.onIntentSelected(ReachIntent.TALK)
-            assertThat(f.state.detailFor(ReachIntent.TALK).shortcuts).isEmpty()
-
-            f.shortcuts.granted.value = true
-            val ids =
+            fun talk() =
                 f.state
                     .detailFor(ReachIntent.TALK)
-                    .shortcuts
-                    .map { it.shortcut.id }
-            assertThat(ids).containsExactly("s1", "s2", "s3", "w1").inOrder()
+                    .favorites
+                    .map { it.app.label }
+            assertThat(talk()).containsExactly("Camera", "Phone").inOrder()
+            assertThat(f.state.detailFor(ReachIntent.MAKE).favorites).isEmpty()
 
-            val item =
-                f.state
-                    .detailFor(ReachIntent.TALK)
-                    .shortcuts
-                    .first()
-            f.viewModel.launchShortcut(item, null)
-            assertThat(f.shortcuts.launched).containsExactly(item.shortcut)
-            assertThat(
-                f.history.events.value
-                    .map { it.key },
-            ).containsExactly(top.key)
-            assertThat(f.surface).isEqualTo(HomeSurface.Home)
+            f.viewModel.moveFavorite(ReachIntent.TALK, phone, by = -1)
+            assertThat(talk()).containsExactly("Phone", "Camera").inOrder()
+            f.viewModel.moveFavorite(ReachIntent.TALK, phone, by = -1) // already first: no-op
+            assertThat(talk()).containsExactly("Phone", "Camera").inOrder()
+
+            f.viewModel.removeFavorite(ReachIntent.TALK, camera)
+            assertThat(talk()).containsExactly("Phone")
+            // The hidden app stays stored, just not shown.
+            assertThat(f.favorites.state.value[ReachIntent.TALK]).containsExactly(phone.key, secret.key).inOrder()
+            assertThat(f.state.pickableApps.map { it.label }).containsExactly("Camera", "Phone")
         }
 
     @Test
-    fun `launch failures surface the label, shortcut failures too`() =
+    fun `favourites are capped at five`() =
+        runTest {
+            val apps = (1..7).map { app("App $it", ReachIntent.TOOLS) }
+            val f = HomeFixture(apps)
+            subscribe(f)
+            apps.forEach { f.viewModel.addFavorite(ReachIntent.TOOLS, it) }
+            assertThat(
+                f.state
+                    .detailFor(ReachIntent.TOOLS)
+                    .favorites
+                    .map { it.app.label },
+            ).containsExactly("App 1", "App 2", "App 3", "App 4", "App 5")
+                .inOrder()
+        }
+
+    @Test
+    fun `launch failures surface the label`() =
         runTest {
             val f = HomeFixture(sampleApps)
             f.launcher.result = LaunchResult.FAILED
             f.viewModel.events.test {
                 f.viewModel.launch(sampleApps.first(), null)
                 assertThat(awaitItem()).isEqualTo(HomeEvent.LaunchFailed("WhatsApp"))
-                val shortcut = AppShortcut("x", PackageUser("pkg.whatsapp", 0), null, "Call Ayşe", "WhatsApp")
-                f.viewModel.launchShortcut(ShortcutItem(shortcut, sampleApps.first().key), null)
-                assertThat(awaitItem()).isEqualTo(HomeEvent.LaunchFailed("Call Ayşe"))
             }
         }
 

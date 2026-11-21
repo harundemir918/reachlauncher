@@ -16,7 +16,6 @@
     <string name="search_empty_suggestions">Empieza a escribir para buscar una app.</string>
     <string name="search_enter_hint">intro ↵</string>
 
-    <string name="search_kind_shortcut">acceso directo · %1$s</string>
     <string name="search_kind_contact">contacto</string>
     <string name="search_kind_action">acción</string>
     <string name="search_kind_web">web</string>
@@ -38,7 +37,6 @@
     <string name="search_action_unavailable">Ninguna app de este teléfono puede hacerlo</string>
 
     <string name="search_a11y_top_result">primer resultado, pulsa Intro para abrir</string>
-    <string name="search_a11y_shortcut">%1$s, acceso directo de %2$s</string>
     <string name="search_a11y_contact">%1$s, contacto</string>
     <string name="search_a11y_contact_options">mostrar opciones de llamada y mensaje</string>
     <string name="search_a11y_contact_call">Llamar a %1$s</string>

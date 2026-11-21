@@ -11,7 +11,6 @@ import com.baklavapp.reachlauncher.core.data.source.MediaSessionSource
 import com.baklavapp.reachlauncher.core.data.source.NotificationCountSource
 import com.baklavapp.reachlauncher.core.data.source.ProfileSource
 import com.baklavapp.reachlauncher.core.data.source.ScreenActionsSource
-import com.baklavapp.reachlauncher.core.data.source.ShortcutSource
 import com.baklavapp.reachlauncher.core.data.source.UsageStatsSource
 import com.baklavapp.reachlauncher.core.data.source.WallpaperColorSource
 import com.baklavapp.reachlauncher.core.system.apps.LauncherAppsInstalledAppsSource
@@ -25,7 +24,6 @@ import com.baklavapp.reachlauncher.core.system.profile.UserManagerProfileSource
 import com.baklavapp.reachlauncher.core.system.roles.RoleHomeRoleSource
 import com.baklavapp.reachlauncher.core.system.roles.TelephonyDefaultAppsSource
 import com.baklavapp.reachlauncher.core.system.screen.AccessibilityScreenActionsSource
-import com.baklavapp.reachlauncher.core.system.shortcuts.LauncherAppsShortcutSource
 import com.baklavapp.reachlauncher.core.system.usage.UsageStatsManagerSource
 import com.baklavapp.reachlauncher.core.system.wallpaper.WallpaperManagerColorSource
 import dagger.Binds
@@ -78,11 +76,6 @@ abstract class SystemModule {
     @Binds
     @Singleton
     abstract fun bindMediaSessionSource(impl: MediaSessionsSource): MediaSessionSource
-
-    /** `LauncherApps.getShortcuts`, readable while Reach is the default home app. */
-    @Binds
-    @Singleton
-    abstract fun bindShortcutSource(impl: LauncherAppsShortcutSource): ShortcutSource
 
     /** `UsageStatsManager` foreground events, with usage access. */
     @Binds

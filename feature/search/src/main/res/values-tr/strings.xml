@@ -14,7 +14,6 @@
     <string name="search_empty_suggestions">Bir uygulama bulmak için yazmaya başlayın.</string>
     <string name="search_enter_hint">enter ↵</string>
 
-    <string name="search_kind_shortcut">kısayol · %1$s</string>
     <string name="search_kind_contact">kişi</string>
     <string name="search_kind_action">eylem</string>
     <string name="search_kind_web">web</string>
@@ -36,7 +35,6 @@
     <string name="search_action_unavailable">Bu telefonda bunu yapabilecek bir uygulama yok</string>
 
     <string name="search_a11y_top_result">ilk sonuç, açmak için Enter\'a basın</string>
-    <string name="search_a11y_shortcut">%1$s, %2$s kısayolu</string>
     <string name="search_a11y_contact">%1$s, kişi</string>
     <string name="search_a11y_contact_options">arama ve mesaj seçeneklerini göster</string>
     <string name="search_a11y_contact_call">%1$s kişisini ara</string>

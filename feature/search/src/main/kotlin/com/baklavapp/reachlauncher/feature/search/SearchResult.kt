@@ -1,8 +1,6 @@
 package com.baklavapp.reachlauncher.feature.search
 
 import androidx.compose.runtime.Immutable
-import com.baklavapp.reachlauncher.core.model.AppKey
-import com.baklavapp.reachlauncher.core.model.AppShortcut
 import com.baklavapp.reachlauncher.core.model.CatalogApp
 import com.baklavapp.reachlauncher.core.model.Contact
 import com.baklavapp.reachlauncher.core.model.PaletteId
@@ -14,7 +12,7 @@ import com.baklavapp.reachlauncher.core.model.ThemeMode
  * branch is missing.
  *
  * Flutter analogy: a Freezed union (`@freezed sealed class SearchResult` with
- * `.app(...)`, `.shortcut(...)`, …) matched with `switch` / `when`.
+ * `.app(...)`, `.contact(...)`, …) matched with `switch` / `when`.
  */
 
 /** One row in the search results. */
@@ -28,19 +26,6 @@ sealed interface SearchResult {
         val app: CatalogApp,
     ) : SearchResult {
         override val key: String get() = "app:${app.key.packageName}/${app.key.activityName}#${app.key.userSerial}"
-    }
-
-    /**
-     * An app shortcut ("New message"). [appKey] is the catalog app it belongs to, so a
-     * launch is recorded for that app and paused-profile state can be shown.
-     */
-    data class ShortcutItem(
-        val shortcut: AppShortcut,
-        val appKey: AppKey,
-        val appLabel: String,
-        val isProfilePaused: Boolean,
-    ) : SearchResult {
-        override val key: String get() = "shortcut:${shortcut.app.packageName}#${shortcut.app.userSerial}/${shortcut.id}"
     }
 
     /** A contact (only with `READ_CONTACTS`); tapping it offers call / message / card. */

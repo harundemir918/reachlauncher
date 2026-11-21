@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,9 +42,6 @@ import com.baklavapp.reachlauncher.core.designsystem.component.AppMenuActions
 import com.baklavapp.reachlauncher.core.designsystem.component.AppRow
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentChip
 import com.baklavapp.reachlauncher.core.designsystem.component.IntentDetailHeader
-import com.baklavapp.reachlauncher.core.designsystem.component.MonoLabel
-import com.baklavapp.reachlauncher.core.designsystem.component.PillButton
-import com.baklavapp.reachlauncher.core.designsystem.component.PillButtonStyle
 import com.baklavapp.reachlauncher.core.designsystem.component.appMenuAccessibilityActions
 import com.baklavapp.reachlauncher.core.designsystem.component.appMenuOpenLabel
 import com.baklavapp.reachlauncher.core.designsystem.theme.ReachTheme
@@ -57,11 +53,10 @@ import com.baklavapp.reachlauncher.core.model.ReachIntent
 import com.baklavapp.reachlauncher.feature.home.AppItem
 import com.baklavapp.reachlauncher.feature.home.IntentDetailUi
 import com.baklavapp.reachlauncher.feature.home.R
-import com.baklavapp.reachlauncher.feature.home.ShortcutItem
 
 /*
- * Intent detail (spec §6.4): back header, accent dot + intent word, app shortcuts, Listen's
- * Now Playing card, the app list and the intent chips.
+ * Intent detail (spec §6.4): back header, accent dot + intent word, the favourites row
+ * (docs/DECISIONS.md D76), Listen's Now Playing card, the app list and the intent chips.
  *
  * Flutter analogy: same layout trick as Home — a `SingleChildScrollView` with a min-height
  * child and `spaceBetween`, so the app list sits at the bottom (in thumb reach) when it fits
@@ -77,8 +72,6 @@ private val TitleTopGap = 16.dp
 private val TitleDotGap = 14.dp
 private val AccentDotSize = 14.dp
 private val SectionTopGap = 20.dp
-private val SectionLabelGap = 10.dp
-private val ShortcutSpacing = 8.dp
 private val ChipsTopGap = 16.dp
 private val ChipSpacing = 6.dp
 private val EmptyPadding = 14.dp
@@ -110,29 +103,34 @@ private data class DetailMenu(
  *
  * @param media the active media session; shown as the Now Playing card on Listen only.
  * @param appMenu long-press menu actions for the app rows; null = no menu.
+ * @param favoriteCallbacks edits this intent's favourites; null = the row is read-only.
+ * @param pickableApps the apps the favourites editor offers.
  */
 @Composable
 internal fun IntentDetailScreen(
     detail: IntentDetailUi,
     onBack: () -> Unit,
     onLaunch: (CatalogApp, LaunchOrigin?) -> Unit,
-    onLaunchShortcut: (ShortcutItem, LaunchOrigin?) -> Unit,
     onIntentSelected: (ReachIntent) -> Unit,
     modifier: Modifier = Modifier,
     media: MediaState? = null,
     mediaCallbacks: MediaCallbacks = MediaCallbacks.None,
     appMenu: AppMenuCallbacks? = null,
+    favoriteCallbacks: FavoriteCallbacks? = null,
+    pickableApps: List<CatalogApp> = emptyList(),
 ) {
     // Keyed on the intent: switching intents via the chips closes a menu left open.
     var menu by remember(detail.intent) { mutableStateOf<DetailMenu?>(null) }
+    var editingFavorites by remember(detail.intent) { mutableStateOf(false) }
+    val overlayOpen = menu != null || editingFavorites
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    // While the menu is open, the list behind it is not reachable by TalkBack.
-                    .then(if (menu != null) Modifier.clearAndSetSemantics { } else Modifier),
+                    // While the menu or editor is open, the screen behind is not reachable by TalkBack.
+                    .then(if (overlayOpen) Modifier.clearAndSetSemantics { } else Modifier),
         ) {
             BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Column(
@@ -146,9 +144,13 @@ internal fun IntentDetailScreen(
                     Column {
                         IntentDetailHeader(appCount = detail.apps.size, onBack = onBack)
                         DetailTitle(detail.intent, Modifier.padding(top = TitleTopGap))
-                        if (detail.shortcuts.isNotEmpty()) {
-                            Shortcuts(detail.shortcuts, onLaunchShortcut, Modifier.padding(top = SectionTopGap))
-                        }
+                        FavoritesRow(
+                            favorites = detail.favorites,
+                            onLaunch = onLaunch,
+                            onEdit = if (favoriteCallbacks != null) ({ editingFavorites = true }) else null,
+                            onRemove = favoriteCallbacks?.onRemove,
+                            modifier = Modifier.padding(top = SectionTopGap),
+                        )
                         if (detail.intent == ReachIntent.LISTEN && media != null) {
                             NowPlayingCard(media, mediaCallbacks, Modifier.padding(top = SectionTopGap))
                         }
@@ -178,6 +180,15 @@ internal fun IntentDetailScreen(
         val open = menu
         if (open != null && appMenu != null) {
             DetailAppMenu(open, appMenu, onClose = { menu = null })
+        }
+        if (editingFavorites && favoriteCallbacks != null) {
+            FavoritesEditor(
+                intent = detail.intent,
+                favorites = detail.favorites,
+                pickable = pickableApps,
+                callbacks = favoriteCallbacks,
+                onClose = { editingFavorites = false },
+            )
         }
     }
 }
@@ -236,34 +247,6 @@ private fun DetailTitle(
             color = ReachTheme.colors.fg,
             modifier = Modifier.semantics { heading() },
         )
-    }
-}
-
-@Composable
-private fun Shortcuts(
-    shortcuts: List<ShortcutItem>,
-    onLaunchShortcut: (ShortcutItem, LaunchOrigin?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(SectionLabelGap)) {
-        MonoLabel(text = stringResource(R.string.home_detail_shortcuts), modifier = Modifier.semantics { heading() })
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(ShortcutSpacing),
-            verticalArrangement = Arrangement.spacedBy(ShortcutSpacing),
-        ) {
-            shortcuts.forEach { item ->
-                key(item.shortcut.app, item.shortcut.id) {
-                    val origin = rememberLaunchOrigin()
-                    PillButton(
-                        text = item.shortcut.label,
-                        onClick = { onLaunchShortcut(item, origin.toLaunchOrigin()) },
-                        style = PillButtonStyle.Outlined,
-                        secondaryLabel = item.shortcut.appLabel,
-                        modifier = Modifier.trackLaunchOrigin(origin),
-                    )
-                }
-            }
-        }
     }
 }
 

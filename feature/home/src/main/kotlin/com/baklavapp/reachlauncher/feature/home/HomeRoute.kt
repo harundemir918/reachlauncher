@@ -50,6 +50,7 @@ import com.baklavapp.reachlauncher.feature.allapps.AllAppsRoute
 import com.baklavapp.reachlauncher.feature.appearance.AppearanceRoute
 import com.baklavapp.reachlauncher.feature.home.ui.AppMenuCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.FanCallbacks
+import com.baklavapp.reachlauncher.feature.home.ui.FavoriteCallbacks
 import com.baklavapp.reachlauncher.feature.home.ui.HomeWithFan
 import com.baklavapp.reachlauncher.feature.home.ui.IntentDetailScreen
 import com.baklavapp.reachlauncher.feature.home.ui.MediaCallbacks
@@ -280,11 +281,19 @@ private fun HomeSurfaces(
                     detail = state.detailFor(surface.intent),
                     onBack = viewModel::onBack,
                     onLaunch = viewModel::launch,
-                    onLaunchShortcut = viewModel::launchShortcut,
                     onIntentSelected = viewModel::onIntentSelected,
                     media = system.media,
                     mediaCallbacks = mediaCallbacks,
                     appMenu = appMenuCallbacks,
+                    favoriteCallbacks =
+                        remember(surface.intent) {
+                            FavoriteCallbacks(
+                                onAdd = { viewModel.addFavorite(surface.intent, it) },
+                                onRemove = { viewModel.removeFavorite(surface.intent, it) },
+                                onMove = { app, by -> viewModel.moveFavorite(surface.intent, app, by) },
+                            )
+                        },
+                    pickableApps = state.pickableApps,
                 )
             }
 
